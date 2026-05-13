@@ -123,6 +123,15 @@ Deno.serve(async (req) => {
           .upsert({ id: userId, email: null, phone }, { onConflict: "id" });
       }
 
+      await admin
+        .from("profiles")
+        .upsert({ id: userId, email: null, phone }, { onConflict: "id", ignoreDuplicates: false });
+      await admin
+        .from("user_roles")
+        .insert({ user_id: userId, role: "customer" })
+        .select("id")
+        .maybeSingle();
+
       // Sign in to obtain tokens we can return to the client
       const anonClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
