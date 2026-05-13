@@ -135,7 +135,7 @@ const Partner = () => {
           </Link>
           <div className="text-sm">
             <span className="font-display font-bold text-brown">Partner</span>
-            <span className="text-muted-foreground"> · {user?.email || user?.phone}</span>
+            <span className="text-muted-foreground"> · {(user?.email && !/@auth\.eggscellent\.app$/i.test(user.email)) ? user.email : user?.phone}</span>
           </div>
           <Button variant="ghost" size="sm" onClick={signOut}><LogOut className="w-4 h-4" /> Sign out</Button>
         </div>
