@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { userService } from "@/lib/services/user.service";
 
 type AuthCtx = {
   session: Session | null;
@@ -20,7 +21,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [roleLoading, setRoleLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const resolveRoleNow = async (uid: string) => {
+  const resolveRoleNow = useCallback(async (uid: string) => {
     setRoleLoading(true);
     const { data } = await supabase
       .from("user_roles")
@@ -30,7 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .maybeSingle();
     setIsAdmin(!!data);
     setRoleLoading(false);
-  };
+  }, []);
 
   const refreshRole = async () => {
     if (session?.user?.id) await resolveRoleNow(session.user.id);
@@ -39,25 +40,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let lastUserId: string | null = null;
     let rolesChannel: ReturnType<typeof supabase.channel> | null = null;
+    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    const subscribeRoleChanges = (uid: string) => {
+    const refreshSessionAndRole = async (uid: string) => {
+      try { await supabase.auth.refreshSession(); } catch {}
+      await resolveRoleNow(uid);
+    };
+
+    const subscribeUserChanges = (uid: string) => {
       if (rolesChannel) supabase.removeChannel(rolesChannel);
+      if (profileChannel) supabase.removeChannel(profileChannel);
       rolesChannel = supabase
         .channel(`user_roles_${uid}`)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "user_roles", filter: `user_id=eq.${uid}` },
-          async () => {
-            // Refresh JWT so any role-based claims update, then re-resolve role state.
-            try { await supabase.auth.refreshSession(); } catch {}
-            await resolveRoleNow(uid);
-          },
+          () => { void refreshSessionAndRole(uid); },
+        )
+        .subscribe();
+      profileChannel = supabase
+        .channel(`profiles_${uid}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "profiles", filter: `id=eq.${uid}` },
+          () => { void refreshSessionAndRole(uid); },
         )
         .subscribe();
     };
 
-    const resolveRole = (uid: string) => {
-      setTimeout(() => { resolveRoleNow(uid); subscribeRoleChanges(uid); }, 0);
+    const resolveRole = (sess: Session) => {
+      setTimeout(() => {
+        void userService.ensureProfile(sess.user).catch(() => {});
+        void resolveRoleNow(sess.user.id);
+        subscribeUserChanges(sess.user.id);
+      }, 0);
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, sess) => {
@@ -65,12 +81,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const uid = sess?.user?.id ?? null;
       if (uid && uid !== lastUserId) {
         lastUserId = uid;
-        resolveRole(uid);
+        resolveRole(sess!);
       } else if (!uid) {
         lastUserId = null;
         setIsAdmin(false);
         setRoleLoading(false);
         if (rolesChannel) { supabase.removeChannel(rolesChannel); rolesChannel = null; }
+        if (profileChannel) { supabase.removeChannel(profileChannel); profileChannel = null; }
       }
       setLoading(false);
     });
@@ -80,7 +97,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const uid = s?.user?.id ?? null;
       if (uid && uid !== lastUserId) {
         lastUserId = uid;
-        resolveRole(uid);
+        resolveRole(s!);
       }
       setLoading(false);
     });
@@ -88,8 +105,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       subscription.unsubscribe();
       if (rolesChannel) supabase.removeChannel(rolesChannel);
+      if (profileChannel) supabase.removeChannel(profileChannel);
     };
-  }, []);
+  }, [resolveRoleNow]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
