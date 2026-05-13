@@ -145,6 +145,7 @@ const AdminSubscriptions = () => {
       setEditing(null); setCreating(false); setDraft(emptyPlan);
       qc.invalidateQueries({ queryKey: ["admin_subscription_plans"] });
       qc.invalidateQueries({ queryKey: ["subscription_plans"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -158,6 +159,7 @@ const AdminSubscriptions = () => {
       toast.success("Plan deleted");
       qc.invalidateQueries({ queryKey: ["admin_subscription_plans"] });
       qc.invalidateQueries({ queryKey: ["subscription_plans"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: any) => toast.error(e.message),
   });
