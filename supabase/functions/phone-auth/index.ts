@@ -34,6 +34,13 @@ const findUserByPhone = async (phone: string) => {
   return null;
 };
 
+const ensureCustomerRole = async (userId: string) => {
+  const { error } = await admin
+    .from("user_roles")
+    .insert({ user_id: userId, role: "customer" });
+  if (error && !error.message.toLowerCase().includes("duplicate")) throw error;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
