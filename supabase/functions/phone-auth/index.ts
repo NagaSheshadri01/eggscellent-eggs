@@ -136,6 +136,11 @@ Deno.serve(async (req) => {
       if (profileErr) return json({ error: profileErr.message }, 500);
       await ensureCustomerRole(userId);
 
+      const { data: authLookup, error: authLookupErr } = await admin.auth.admin.getUserById(userId);
+      if (authLookupErr || !authLookup.user?.email) {
+        return json({ error: authLookupErr?.message || "Could not resolve user" }, 500);
+      }
+
       // Sign in to obtain tokens we can return to the client
       const anonClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
@@ -145,7 +150,7 @@ Deno.serve(async (req) => {
 
       // Sign in via whichever email we have for this user (real one if linked,
       // synthetic one for phone-only accounts).
-      const signInEmail = userEmail || synthEmail(phone);
+      const signInEmail = authLookup.user.email;
       const { data: signInData, error: signInErr } = await anonClient.auth.signInWithPassword({
         email: signInEmail,
         password,
