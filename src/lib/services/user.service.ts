@@ -31,7 +31,7 @@ export const userService = {
     userId: string,
     patch: Partial<Pick<ProfileRow, "full_name" | "email" | "avatar_url">>,
   ) {
-    const clean: Record<string, unknown> = {};
+    const clean: { full_name?: string | null; email?: string | null; avatar_url?: string | null } = {};
     if (patch.full_name !== undefined) clean.full_name = patch.full_name?.trim() || null;
     if (patch.email !== undefined) clean.email = patch.email?.trim() || null;
     if (patch.avatar_url !== undefined) clean.avatar_url = patch.avatar_url || null;
