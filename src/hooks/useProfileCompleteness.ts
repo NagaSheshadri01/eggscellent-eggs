@@ -5,12 +5,13 @@ import { userService, isSyntheticEmail, type ProfileRow } from "@/lib/services/u
 export type { ProfileRow };
 
 export const useProfileCompleteness = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const q = useQuery({
     queryKey: ["profile", user?.id ?? "anon"],
-    enabled: !!user,
-    queryFn: () => userService.getProfile(user!.id),
+    enabled: !loading && !!user,
+    queryFn: async () => userService.ensureProfile(user!),
     staleTime: 30_000,
+    retry: 1,
   });
 
   const profile = q.data ?? null;
