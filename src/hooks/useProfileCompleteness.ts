@@ -1,34 +1,22 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { userService, isSyntheticEmail, type ProfileRow } from "@/lib/services/user.service";
 
-export type ProfileRow = {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  phone: string | null;
-  avatar_url: string | null;
-};
+export type { ProfileRow };
 
 export const useProfileCompleteness = () => {
   const { user } = useAuth();
   const q = useQuery({
     queryKey: ["profile", user?.id ?? "anon"],
     enabled: !!user,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone, avatar_url")
-        .eq("id", user!.id)
-        .maybeSingle();
-      if (error) throw error;
-      return (data ?? null) as ProfileRow | null;
-    },
+    queryFn: () => userService.getProfile(user!.id),
+    staleTime: 30_000,
   });
 
   const profile = q.data ?? null;
   const hasName = !!profile?.full_name?.trim();
-  const hasEmail = !!profile?.email?.trim();
+  // Synthetic emails (from phone-only auth) don't count.
+  const hasEmail = !!profile?.email?.trim() && !isSyntheticEmail(profile.email);
   const hasPhone = !!profile?.phone?.trim();
   let missing: "phone" | "email" | "name" | null = null;
   if (profile) {
