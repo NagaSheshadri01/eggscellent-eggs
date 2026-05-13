@@ -111,6 +111,7 @@ const Profile = () => {
       <Seo title="My profile — Eggscellent" />
       <Header />
       <main className="container max-w-3xl py-10 space-y-6">
+        <ProfileErrorBoundary>
         {showSkeleton ? (
           <>
             <div className="flex items-center gap-4">
@@ -123,6 +124,24 @@ const Profile = () => {
             <Skeleton className="h-64 rounded-3xl" />
             <Skeleton className="h-40 rounded-3xl" />
           </>
+        ) : isError ? (
+          <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 space-y-4">
+            <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Complete your Profile</h1>
+            <p className="text-sm text-muted-foreground">{(error as Error)?.message || "We couldn't load your profile details."}</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Display name</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" />
+              </div>
+            </div>
+            <Button variant="hero" onClick={() => { void saveName(); if (email.trim()) void saveEmail(); }}>
+              Save profile
+            </Button>
+          </section>
         ) : (
           <>
             <div className="flex items-center gap-4">
@@ -197,6 +216,7 @@ const Profile = () => {
             </div>
           </>
         )}
+        </ProfileErrorBoundary>
       </main>
 
       <JitVerifySheet
