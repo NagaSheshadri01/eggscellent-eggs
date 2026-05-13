@@ -34,6 +34,13 @@ const findUserByPhone = async (phone: string) => {
   return null;
 };
 
+const ensureCustomerRole = async (userId: string) => {
+  const { error } = await admin
+    .from("user_roles")
+    .insert({ user_id: userId, role: "customer" });
+  if (error && !error.message.toLowerCase().includes("duplicate")) throw error;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -123,6 +130,17 @@ Deno.serve(async (req) => {
           .upsert({ id: userId, email: null, phone }, { onConflict: "id" });
       }
 
+      const { error: profileErr } = await admin
+        .from("profiles")
+        .upsert({ id: userId, email: userEmail ?? null, phone }, { onConflict: "id", ignoreDuplicates: false });
+      if (profileErr) return json({ error: profileErr.message }, 500);
+      await ensureCustomerRole(userId);
+
+      const { data: authLookup, error: authLookupErr } = await admin.auth.admin.getUserById(userId);
+      if (authLookupErr || !authLookup.user?.email) {
+        return json({ error: authLookupErr?.message || "Could not resolve user" }, 500);
+      }
+
       // Sign in to obtain tokens we can return to the client
       const anonClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
@@ -132,7 +150,7 @@ Deno.serve(async (req) => {
 
       // Sign in via whichever email we have for this user (real one if linked,
       // synthetic one for phone-only accounts).
-      const signInEmail = userEmail || synthEmail(phone);
+      const signInEmail = authLookup.user.email;
       const { data: signInData, error: signInErr } = await anonClient.auth.signInWithPassword({
         email: signInEmail,
         password,

@@ -9,6 +9,7 @@ import { Loader2, Mail, Phone, User as UserIcon, ShieldCheck } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useInvalidateProfile } from "@/hooks/useProfileCompleteness";
+import { userService } from "@/lib/services/user.service";
 
 type Missing = "phone" | "email" | "name" | null;
 
@@ -82,9 +83,13 @@ const JitVerifySheet = ({ open, missing, blocking = false, onOpenChange, onCompl
     const patch: { email?: string; full_name?: string } = {};
     if (missing === "email") patch.email = e;
     if (missing === "name") patch.full_name = n;
-    const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
+    try {
+      await userService.updateProfile(user.id, patch);
+    } catch (error: any) {
+      setBusy(false);
+      return toast.error(error.message);
+    }
     setBusy(false);
-    if (error) return toast.error(error.message);
     toast.success(missing === "email" ? "Email saved" : "Name saved");
     await invalidateProfile();
     onComplete?.();
