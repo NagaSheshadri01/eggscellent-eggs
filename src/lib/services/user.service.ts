@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 export type ProfileRow = {
   id: string;
@@ -26,6 +27,29 @@ export const userService = {
     return (data ?? null) as ProfileRow | null;
   },
 
+  async ensureProfile(authUser: User): Promise<ProfileRow> {
+    const existing = await this.getProfile(authUser.id);
+    if (existing) return existing;
+
+    const metadata = authUser.user_metadata ?? {};
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: authUser.id,
+          full_name: (metadata.full_name as string | undefined) ?? (metadata.name as string | undefined) ?? null,
+          email: null,
+          phone: (authUser.phone || (metadata.phone as string | undefined) || null),
+          avatar_url: (metadata.avatar_url as string | undefined) ?? null,
+        },
+        { onConflict: "id" },
+      )
+      .select("id, full_name, email, phone, avatar_url")
+      .single();
+    if (error) throw error;
+    return data as ProfileRow;
+  },
+
   /** Updates whitelisted profile fields. Phone is intentionally NOT editable here. */
   async updateProfile(
     userId: string,
@@ -35,7 +59,7 @@ export const userService = {
     if (patch.full_name !== undefined) clean.full_name = patch.full_name?.trim() || null;
     if (patch.email !== undefined) clean.email = patch.email?.trim() || null;
     if (patch.avatar_url !== undefined) clean.avatar_url = patch.avatar_url || null;
-    const { error } = await supabase.from("profiles").update(clean).eq("id", userId);
+    const { error } = await supabase.from("profiles").upsert({ id: userId, ...clean }, { onConflict: "id" });
     if (error) throw error;
   },
 
