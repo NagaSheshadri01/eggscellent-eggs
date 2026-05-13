@@ -130,14 +130,11 @@ Deno.serve(async (req) => {
           .upsert({ id: userId, email: null, phone }, { onConflict: "id" });
       }
 
-      await admin
+      const { error: profileErr } = await admin
         .from("profiles")
-        .upsert({ id: userId, email: null, phone }, { onConflict: "id", ignoreDuplicates: false });
-      await admin
-        .from("user_roles")
-        .insert({ user_id: userId, role: "customer" })
-        .select("id")
-        .maybeSingle();
+        .upsert({ id: userId, email: userEmail ?? null, phone }, { onConflict: "id", ignoreDuplicates: false });
+      if (profileErr) return json({ error: profileErr.message }, 500);
+      await ensureCustomerRole(userId);
 
       // Sign in to obtain tokens we can return to the client
       const anonClient = createClient(
