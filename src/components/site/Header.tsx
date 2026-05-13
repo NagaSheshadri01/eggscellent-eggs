@@ -6,7 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import StaffPortalLink from "@/components/site/StaffPortalLink";
 
-const isSyntheticEmail = (e?: string | null) => !!e && /@auth\.eggscellent\.app$/i.test(e);
+import { isSyntheticEmail } from "@/lib/services/user.service";
 
 const Header = () => {
   const { count, setOpen } = useCart();
