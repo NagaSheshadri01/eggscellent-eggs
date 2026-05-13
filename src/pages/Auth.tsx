@@ -19,6 +19,8 @@ const toE164 = (raw: string): string | null => {
   return null;
 };
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const Auth = () => {
   const nav = useNavigate();
   const [params] = useSearchParams();
@@ -32,7 +34,7 @@ const Auth = () => {
   const [resendIn, setResendIn] = useState(0);
   const [normalized, setNormalized] = useState("");
 
-  useEffect(() => { if (!loading && user) nav(next, { replace: true }); }, [user, loading, nav, next]);
+  useEffect(() => { if (!loading && user && !busy) nav(next, { replace: true }); }, [user, loading, busy, nav, next]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -77,8 +79,9 @@ const Auth = () => {
       refresh_token: data.refresh_token,
     });
     if (sErr) { toast.error(sErr.message); setBusy(false); return; }
-    // Refresh once so any role claims propagate before AuthContext resolves admin.
+    // Refresh once, then wait briefly so profile/role writes are visible before redirect.
     try { await supabase.auth.refreshSession(); } catch {}
+    await wait(500);
     toast.success("Signed in");
     setBusy(false);
   };
