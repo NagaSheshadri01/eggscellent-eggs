@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const refreshSessionAndRole = async (uid: string) => {
       try { await supabase.auth.refreshSession(); } catch {}
       await resolveRoleNow(uid);
+      setSession((current) => current ? { ...current } : current);
     };
 
     const subscribeUserChanges = (uid: string) => {
