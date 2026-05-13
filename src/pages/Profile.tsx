@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, ReactNode, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Header from "@/components/site/Header";
 import Seo from "@/components/Seo";
@@ -15,6 +15,24 @@ import { useProfileCompleteness } from "@/hooks/useProfileCompleteness";
 import { Link, useSearchParams } from "react-router-dom";
 import { userService, displayEmail, isSyntheticEmail } from "@/lib/services/user.service";
 
+class ProfileErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error) { console.error("Profile page failed", error); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-card rounded-3xl shadow-soft p-6 space-y-3">
+          <h2 className="font-display font-bold text-brown text-xl">Complete your Profile</h2>
+          <p className="text-sm text-muted-foreground">We couldn't load your profile. Refresh the page or add your details again.</p>
+          <Button variant="hero" onClick={() => window.location.reload()}>Reload profile</Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const Badge = ({ ok, label }: { ok: boolean; label: string }) => (
   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${ok ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"}`}>
     {ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />} {label}
@@ -22,8 +40,8 @@ const Badge = ({ ok, label }: { ok: boolean; label: string }) => (
 );
 
 const Profile = () => {
-  const { user, signOut, isAdmin } = useAuth();
-  const { profile, hasName, hasEmail, hasPhone, refetch, isLoading } = useProfileCompleteness();
+  const { user, signOut, isAdmin, loading: authLoading } = useAuth();
+  const { profile, hasName, hasEmail, hasPhone, refetch, isLoading, isError, error } = useProfileCompleteness();
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [verifyOpen, setVerifyOpen] = useState<null | "phone" | "email" | "name">(null);
@@ -40,6 +58,12 @@ const Profile = () => {
       hydrated.current = true;
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (!authLoading && user && !profile && !isLoading && !isError) {
+      refetch();
+    }
+  }, [authLoading, user, profile, isLoading, isError, refetch]);
 
   useEffect(() => {
     if (params.get("addAddress") === "1" && addrRef.current) {
@@ -80,7 +104,7 @@ const Profile = () => {
     finally { setSavingEmail(false); }
   };
 
-  const showSkeleton = isLoading && !profile;
+  const showSkeleton = (authLoading || isLoading) && !profile;
 
   return (
     <div className="min-h-screen bg-background">
