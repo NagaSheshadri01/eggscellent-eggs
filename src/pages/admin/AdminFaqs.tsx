@@ -17,7 +17,7 @@ const AdminFaqs = () => {
   const invalidate = useInvalidateFaqs();
 
   const load = async () => {
-    const { data } = await supabase.from("faq").select("*").order("display_order");
+    const { data } = await supabase.from("faq").select("*").order("created_at", { ascending: false });
     setFaqs(data ?? []);
     invalidate();
   };

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Plus, MapPin, Truck, Building2, Megaphone } from "lucide-react";
+import { Trash2, Plus, MapPin, Truck, Building2, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useAppSettings, useUpdateAppSetting } from "@/hooks/useAppSettings";
 import { usePincodes, useUpsertPincode, useDeletePincode } from "@/hooks/useServiceablePincodes";
@@ -18,18 +20,16 @@ const Section = ({ icon: Icon, title, children }: any) => (
 );
 
 const AdminSettings = () => {
-  const { data, isLoading } = useAppSettings();
+  const { data, isLoading, isError } = useAppSettings();
   const update = useUpdateAppSetting();
 
   const [delivery, setDelivery] = useState<any>(null);
   const [business, setBusiness] = useState<any>(null);
-  const [announcement, setAnnouncement] = useState<any>(null);
 
   useEffect(() => {
     if (data) {
       setDelivery(data.delivery);
       setBusiness(data.business);
-      setAnnouncement(data.announcement);
     }
   }, [data]);
 
@@ -43,7 +43,24 @@ const AdminSettings = () => {
   const delPin = useDeletePincode();
   const [newPin, setNewPin] = useState({ pincode: "", area_name: "" });
 
-  if (isLoading || !delivery) return <Skeleton className="h-96 rounded-2xl" />;
+  if (isLoading) return <Skeleton className="h-96 rounded-2xl" />;
+  
+  if (isError || (!data && !isLoading)) {
+    return (
+      <div className="p-8 text-center bg-amber-50 rounded-2xl border border-amber-100">
+        <h2 className="text-amber-700 font-bold">System Setup Needed</h2>
+        <p className="text-amber-600 text-sm mt-1">The site_settings table was not found. Please run the provided SQL migration to initialize the system.</p>
+        <div className="mt-4 flex gap-3 justify-center">
+          <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100" onClick={() => window.location.reload()}>Retry Sync</Button>
+          <a href="https://supabase.com/dashboard/project/_/editor" target="_blank" rel="noreferrer">
+            <Button variant="hero" className="bg-amber-600 hover:bg-amber-700">Go to SQL Editor</Button>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (!delivery) return null;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -77,17 +94,6 @@ const AdminSettings = () => {
         <Button variant="hero" onClick={() => save("business", business)}>Save business</Button>
       </Section>
 
-      <Section icon={Megaphone} title="Announcement banner">
-        <div className="flex items-center justify-between"><Label>Show banner</Label><Switch checked={!!announcement?.enabled} onCheckedChange={(b) => setAnnouncement({ ...announcement, enabled: b })} /></div>
-        <div><Label>Text</Label><Input value={announcement?.text || ""} onChange={e => setAnnouncement({ ...announcement, text: e.target.value })} /></div>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <div><Label>Background</Label><Input type="color" value={announcement?.background_color || "#FFE6B5"} onChange={e => setAnnouncement({ ...announcement, background_color: e.target.value })} /></div>
-          <div><Label>Text color</Label><Input type="color" value={announcement?.text_color || "#5C4327"} onChange={e => setAnnouncement({ ...announcement, text_color: e.target.value })} /></div>
-          <div><Label>Link (optional)</Label><Input value={announcement?.link || ""} onChange={e => setAnnouncement({ ...announcement, link: e.target.value })} /></div>
-        </div>
-        <Button variant="hero" onClick={() => save("announcement", announcement)}>Save banner</Button>
-      </Section>
-
       <Section icon={MapPin} title="Serviceable pincodes">
         <div className="grid sm:grid-cols-[1fr_2fr_auto] gap-2">
           <Input placeholder="Pincode" value={newPin.pincode} onChange={e => setNewPin({ ...newPin, pincode: e.target.value })} />
@@ -110,6 +116,141 @@ const AdminSettings = () => {
           {pincodes.data?.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No serviceable pincodes yet.</p>}
         </div>
       </Section>
+
+      <Section icon={Clock} title="Delivery Slots Management">
+        <p className="text-sm text-muted-foreground mb-4">Configure operational shifts and their corresponding cutoff times.</p>
+        <div className="space-y-3">
+          <DeliverySlotsManager />
+        </div>
+      </Section>
+
+      <Section icon={MapPin} title="Warehouse Location">
+        <p className="text-sm text-muted-foreground mb-4">Set the physical origin for delivery radius calculations.</p>
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                  const { latitude, longitude } = pos.coords;
+                  try {
+                    await save("warehouse_config", { lat: latitude, lng: longitude });
+                    toast.success("Warehouse location updated");
+                  } catch (e: any) { toast.error(e.message); }
+                },
+                (err) => toast.error("Geolocation failed: " + err.message)
+              );
+            }}
+          >
+            <MapPin className="w-4 h-4 mr-2" /> Detect Warehouse Location
+          </Button>
+          <div className="flex gap-4 text-sm font-mono bg-secondary/50 px-4 py-2 rounded-lg">
+            <div>Lat: <span className="text-brown font-bold">{data.warehouse?.lat?.toFixed(6) || "Not set"}</span></div>
+            <div>Lng: <span className="text-brown font-bold">{data.warehouse?.lng?.toFixed(6) || "Not set"}</span></div>
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
+};
+
+const DeliverySlotsManager = () => {
+  const { data: slots, refetch } = useQuery({
+    queryKey: ["admin_delivery_slots"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("delivery_slots") as any).select("*").order("cutoff_time", { ascending: true });
+      if (error) throw error;
+      return data as any[];
+    }
+  });
+
+  const updateSlot = async (id: string, updates: any) => {
+    const { error } = await (supabase.from("delivery_slots") as any).update(updates).eq("id", id);
+    if (error) toast.error(error.message);
+    else { toast.success("Slot updated"); refetch(); }
+  };
+
+  const addSlot = async (newSlot: any) => {
+    if (!newSlot.slot_key || !newSlot.label || !newSlot.cutoff_time) return toast.error("Fill all fields");
+    const { error } = await (supabase.from("delivery_slots") as any).insert([newSlot]);
+    if (error) toast.error(error.message);
+    else { toast.success("Slot added"); refetch(); }
+  };
+
+  const deleteSlot = async (id: string) => {
+    if (!confirm("Delete this slot?")) return;
+    const { error } = await (supabase.from("delivery_slots") as any).delete().eq("id", id);
+    if (error) toast.error(error.message);
+    else { toast.success("Slot deleted"); refetch(); }
+  };
+
+  const [newSlot, setNewSlot] = useState({ slot_key: "", label: "", cutoff_time: "09:30:00" });
+
+  return (
+    <div className="space-y-4">
+      {/* Add New Slot Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_120px_auto] gap-3 p-4 rounded-xl border-2 border-dashed border-primary/20 bg-primary/5">
+        <div>
+          <Label className="text-[10px] uppercase font-bold text-primary">Unique Key</Label>
+          <Input placeholder="e.g. slot_morning" value={newSlot.slot_key} onChange={e => setNewSlot({...newSlot, slot_key: e.target.value})} className="h-9 mt-1" />
+        </div>
+        <div>
+          <Label className="text-[10px] uppercase font-bold text-primary">Display Label</Label>
+          <Input placeholder="e.g. Morning Shift" value={newSlot.label} onChange={e => setNewSlot({...newSlot, label: e.target.value})} className="h-9 mt-1" />
+        </div>
+        <div>
+          <Label className="text-[10px] uppercase font-bold text-primary">Cutoff</Label>
+          <Input type="time" step="1" value={newSlot.cutoff_time} onChange={e => setNewSlot({...newSlot, cutoff_time: e.target.value})} className="h-9 mt-1" />
+        </div>
+        <div className="pt-5">
+          <Button onClick={() => addSlot(newSlot)} className="bg-primary text-white font-bold h-9 px-4">
+            <Plus className="w-4 h-4 mr-1" /> Add
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {(slots || []).map((slot: any) => (
+          <div key={slot.id} className="flex flex-col sm:flex-row items-center gap-3 p-4 rounded-xl border border-border bg-secondary/5 group">
+            <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Label</Label>
+                <Input 
+                  value={slot.label} 
+                  onChange={e => updateSlot(slot.id, { label: e.target.value })}
+                  className="h-9 mt-1"
+                />
+              </div>
+              <div className="opacity-60">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Key (Read Only)</Label>
+                <Input value={slot.slot_key} disabled className="h-9 mt-1 bg-muted" />
+              </div>
+            </div>
+            <div className="w-full sm:w-32">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Cutoff</Label>
+              <Input 
+                type="time" 
+                step="1"
+                value={slot.cutoff_time} 
+                onChange={e => updateSlot(slot.id, { cutoff_time: e.target.value })}
+                className="h-9 mt-1"
+              />
+            </div>
+            <div className="flex items-center gap-3 pt-5">
+              <div className="flex items-center gap-2">
+                <Switch 
+                  checked={slot.is_active} 
+                  onCheckedChange={(b) => updateSlot(slot.id, { is_active: b })}
+                />
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">{slot.is_active ? "Active" : "Hidden"}</span>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => deleteSlot(slot.id)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

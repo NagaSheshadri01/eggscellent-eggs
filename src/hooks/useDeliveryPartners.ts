@@ -21,6 +21,7 @@ export type DeliveryPartner = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  profile?: any;
 };
 
 export const useDeliveryPartners = (status?: string) =>
@@ -31,8 +32,24 @@ export const useDeliveryPartners = (status?: string) =>
       if (status) q = q.eq("status", status);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as DeliveryPartner[];
+      
+      const partners = (data ?? []) as DeliveryPartner[];
+      
+      // Attempt to join profiles to get the latest avatar/name from auth
+      const userIds = partners.map(p => p.user_id).filter(Boolean) as string[];
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase.from("profiles").select("id, full_name, avatar_url, phone").in("id", userIds);
+        const pMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+        return partners.map(p => {
+          if (p.user_id && pMap[p.user_id]) {
+            return { ...p, profile: pMap[p.user_id] };
+          }
+          return p;
+        });
+      }
+      return partners;
     },
+    staleTime: 2 * 60_000, // 2 min — admin approval mutations always invalidate
   });
 
 export const useUpdateDeliveryPartner = () => {
@@ -52,9 +69,8 @@ export const useApproveDeliveryPartner = () => {
     mutationFn: async (partner: DeliveryPartner) => {
       const { error } = await supabase.from("delivery_partners").update({ status: "approved", active: true }).eq("id", partner.id);
       if (error) throw error;
-      if (partner.user_id) {
-        await supabase.from("user_roles").insert({ user_id: partner.user_id, role: "partner" as any });
-      }
+      // Removed broken insert into user_roles (partner is not in app_role enum). 
+      // AuthContext handles access strictly via delivery_partners status.
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["delivery_partners"] }),
   });

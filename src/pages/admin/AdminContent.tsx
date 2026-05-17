@@ -10,13 +10,15 @@ import { toast } from "sonner";
 import ImageUploader from "@/components/admin/ImageUploader";
 import { useSiteContent, useUpdateSiteSection } from "@/hooks/useSiteContent";
 
-type Section = { key: string; title: string; description?: string; fields: { name: string; label: string; type?: "text" | "textarea" | "switch" | "image" | "links" }[] };
+type Section = { key: string; title: string; description?: string; fields: { name: string; label: string; type?: "text" | "textarea" | "switch" | "image" | "links" | "color" }[] };
 
 const SECTIONS: Section[] = [
   { key: "announcement", title: "Announcement banner", description: "Top-of-page strip. Toggle off to hide.", fields: [
     { name: "enabled", label: "Show banner", type: "switch" },
     { name: "text", label: "Banner text" },
     { name: "link", label: "Link URL (optional)" },
+    { name: "bg_color", label: "Background color", type: "color" },
+    { name: "text_color", label: "Text color", type: "color" },
   ]},
   { key: "hero", title: "Hero section", fields: [
     { name: "eyebrow", label: "Eyebrow / pill text" },
@@ -44,8 +46,9 @@ const SECTIONS: Section[] = [
     { name: "subhead", label: "Subhead", type: "textarea" },
     { name: "cta_label", label: "CTA button text" },
   ]},
-  { key: "footer", title: "Footer", fields: [
-    { name: "copyright", label: "Copyright text" },
+  { key: "footer", title: "Footer", description: "The year is automatically managed.", fields: [
+    { name: "copyright", label: "Copyright text (after the year)" },
+    { name: "show_support", label: "Show Support Info (Phone/Email/WhatsApp)", type: "switch" },
     { name: "links", label: "Links", type: "links" },
   ]},
 ];
@@ -82,6 +85,17 @@ const SectionEditor = ({ section, initial }: { section: Section; initial: any })
           if (f.type === "textarea") {
             return <div key={f.name}><Label>{f.label}</Label><Textarea value={val ?? ""} onChange={e => setField(f.name, e.target.value)} /></div>;
           }
+          if (f.type === "color") {
+            return (
+              <div key={f.name} className="flex items-center justify-between gap-4">
+                <Label>{f.label}</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-muted-foreground">{val || "#000000"}</span>
+                  <Input type="color" className="w-12 h-8 p-0 border-none bg-transparent cursor-pointer" value={val ?? "#000000"} onChange={e => setField(f.name, e.target.value)} />
+                </div>
+              </div>
+            );
+          }
           if (f.type === "image") {
             return (
               <div key={f.name}>
@@ -117,12 +131,23 @@ const SectionEditor = ({ section, initial }: { section: Section; initial: any })
 };
 
 const AdminContent = () => {
-  const { data, isLoading } = useSiteContent();
+  const { data, isLoading, isError } = useSiteContent();
   return (
     <div className="space-y-6 max-w-3xl">
       <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Site content</h1>
       <p className="text-sm text-muted-foreground -mt-3">Edit copy and imagery shown on the live site. Changes appear instantly after save.</p>
-      {isLoading ? <Skeleton className="h-80 rounded-2xl" /> : SECTIONS.map(s => (
+      {isLoading ? <Skeleton className="h-80 rounded-2xl" /> : isError ? (
+        <div className="p-8 text-center bg-amber-50 rounded-2xl border border-amber-100">
+          <h2 className="text-amber-700 font-bold">System Setup Needed</h2>
+          <p className="text-amber-600 text-sm mt-1">The cms_content table was not found. Please run the provided SQL migration to initialize the system.</p>
+          <div className="mt-4 flex gap-3 justify-center">
+            <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-100" onClick={() => window.location.reload()}>Retry Sync</Button>
+            <a href="https://supabase.com/dashboard/project/_/editor" target="_blank" rel="noreferrer">
+              <Button variant="hero" className="bg-amber-600 hover:bg-amber-700">Go to SQL Editor</Button>
+            </a>
+          </div>
+        </div>
+      ) : SECTIONS.map(s => (
         <SectionEditor key={s.key} section={s} initial={data?.[s.key] ?? {}} />
       ))}
     </div>

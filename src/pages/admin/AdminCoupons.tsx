@@ -9,13 +9,13 @@ import { Plus, Trash2 } from "lucide-react";
 
 const AdminCoupons = () => {
   const [list, setList] = useState<any[] | null>(null);
-  const [draft, setDraft] = useState({ code: "", discount_type: "percent", discount_value: 10, min_order_amount: 0 });
+  const [draft, setDraft] = useState({ code: "", discount_type: "percent", discount_value: 10, min_order_amount: 0, usage_limit: 500 });
   const load = () => supabase.from("coupons").select("*").order("created_at", { ascending: false }).then(({data}) => setList(data ?? []));
   useEffect(() => { load(); }, []);
   const add = async () => {
     if (!draft.code) return;
-    const { error } = await supabase.from("coupons").insert({ ...draft, code: draft.code.toUpperCase(), discount_type: draft.discount_type as any });
-    if (error) toast.error(error.message); else { setDraft({ code: "", discount_type: "percent", discount_value: 10, min_order_amount: 0 }); load(); }
+    const { error } = await supabase.from("coupons").insert({ ...draft, code: draft.code.toUpperCase(), discount_type: draft.discount_type as any, active: true, usage_limit: draft.usage_limit } as any);
+    if (error) toast.error(error.message); else { setDraft({ code: "", discount_type: "percent", discount_value: 10, min_order_amount: 0, usage_limit: 500 }); load(); }
   };
   const del = async (id: string) => { await supabase.from("coupons").delete().eq("id", id); load(); };
   return (
@@ -31,8 +31,18 @@ const AdminCoupons = () => {
               <SelectItem value="flat">Flat ₹</SelectItem>
             </SelectContent>
           </Select>
-          <Input type="number" placeholder="Value" value={draft.discount_value} onChange={e => setDraft({...draft, discount_value: +e.target.value})} />
-          <Input type="number" placeholder="Min order" value={draft.min_order_amount} onChange={e => setDraft({...draft, min_order_amount: +e.target.value})} />
+          <div>
+            <Input type="number" placeholder="Value" value={draft.discount_value} onChange={e => setDraft({...draft, discount_value: +e.target.value})} />
+            <p className="text-[10px] text-muted-foreground mt-1">Amount in ₹ or % to deduct.</p>
+          </div>
+          <div>
+            <Input type="number" placeholder="Min order" value={draft.min_order_amount} onChange={e => setDraft({...draft, min_order_amount: +e.target.value})} />
+            <p className="text-[10px] text-muted-foreground mt-1">Min order value required.</p>
+          </div>
+          <div>
+            <Input type="number" placeholder="Usage Limit" value={draft.usage_limit} onChange={e => setDraft({...draft, usage_limit: +e.target.value})} />
+            <p className="text-[10px] text-muted-foreground mt-1">Total global uses.</p>
+          </div>
         </div>
         <Button variant="hero" onClick={add}><Plus className="w-4 h-4" /> Create coupon</Button>
       </div>

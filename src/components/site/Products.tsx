@@ -12,10 +12,13 @@ const Products = () => {
     name: p.name,
     slug: p.slug,
     benefit: p.benefit ?? "",
+    description: p.description ?? null,
     unit: p.unit ?? "",
     price: Number(p.original_price),
     discountPrice: Number(p.discounted_price),
+    stock_quantity: Number(p.stock_quantity),
     image: p.image_url || "",
+    images: p.images || [],
   }));
 
   return (

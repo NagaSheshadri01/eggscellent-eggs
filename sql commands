@@ -1,0 +1,6 @@
+INSERT INTO public.user_roles (user_id, role)
+SELECT id, 'admin' 
+FROM auth.users 
+WHERE phone = '+919876543210' -- ⚠️ Replace with the actual phone number (include country code!)
+ON CONFLICT (user_id) 
+DO UPDATE SET role = 'admin';

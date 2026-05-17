@@ -192,13 +192,15 @@ const Profile = () => {
                 )}
               </div>
 
-              <div className="p-3 rounded-xl border border-border flex items-center gap-3 bg-secondary/30">
-                <Phone className="w-4 h-4 text-primary" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1"><Lock className="w-3 h-3" /> Phone (verified — locked)</div>
-                  <div className="font-semibold text-brown text-sm truncate">{profile?.phone || "Not added"}</div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5"><Phone className="w-4 h-4 text-primary" /> Phone (verified — locked)</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Lock className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+                    <Input disabled value={profile?.phone || ""} className="pl-9 bg-secondary/30 text-muted-foreground" placeholder="Not added" />
+                  </div>
+                  {!hasPhone && <Button variant="outline" onClick={() => setVerifyOpen("phone")}>Verify</Button>}
                 </div>
-                {!hasPhone && <Button size="sm" variant="outline" onClick={() => setVerifyOpen("phone")}>Verify</Button>}
               </div>
             </section>
 

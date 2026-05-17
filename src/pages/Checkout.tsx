@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -13,53 +13,123 @@ import { Check, MapPin, Clock, CreditCard, Loader2, Tag } from "lucide-react";
 import AddressPicker from "@/components/site/AddressPicker";
 import JitVerifySheet from "@/components/site/JitVerifySheet";
 import { useProfileCompleteness } from "@/hooks/useProfileCompleteness";
+import { useCoupons, type Coupon } from "@/hooks/useCoupons";
+import { useOffers, type Offer } from "@/hooks/useOffers";
 import { payNow } from "@/lib/payments/razorpay";
 
-const slots = ["Tomorrow 6–8 AM", "Tomorrow 8–10 AM", "Tomorrow 10–11 AM"];
+const slots = ["08:00 AM – 12:00 PM", "02:00 PM – 06:00 PM", "06:00 PM – 08:00 PM"];
 
 const Checkout = () => {
-  const { items, total, clear } = useCart();
+  const { items, total, clear, appliedCoupon, setAppliedCoupon, discount, grandTotal, selectedAddressId } = useCart();
   const { user } = useAuth();
   const nav = useNavigate();
-  const { isComplete, missing, refetch: refetchProfile, isLoading: profileLoading } = useProfileCompleteness();
+  const { isComplete, missing, hasPhone, refetch: refetchProfile, isLoading: profileLoading } = useProfileCompleteness();
+  const { data: availableOffers } = useOffers({ onlyActive: true });
 
   const [step, setStep] = useState(1);
-  const [selectedAddr, setSelectedAddr] = useState<string>("");
+  const [selectedAddr, setSelectedAddr] = useState<string>(selectedAddressId || "");
   const [slot, setSlot] = useState(slots[0]);
   const [payment, setPayment] = useState<"online" | "upi" | "cod">("online");
   const [coupon, setCoupon] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [placing, setPlacing] = useState(false);
   const placedRef = useRef(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
+  const [addrServiceable, setAddrServiceable] = useState(true);
+  const [checkingAddr, setCheckingAddr] = useState(false);
+
+  // Sync address from cart drawer pre-selection
+  useEffect(() => { if (selectedAddressId && !selectedAddr) setSelectedAddr(selectedAddressId); }, [selectedAddressId]);
+
+  // Real-time Qualification Engine for the offer cards on checkout page
+  const offersWithEligibility = useMemo(() => {
+    return (availableOffers || []).map(offer => ({
+      ...offer,
+      isEligible: total >= (Number(offer.min_order_value) || 0)
+    }));
+  }, [availableOffers, total]);
+
+  // calculatedDiscount comes from CartContext now
+  const calculatedDiscount = discount;
 
   useEffect(() => { if (!items.length && !placedRef.current) nav("/"); }, [items, nav]);
 
-  // Open the JIT verify sheet automatically when profile is incomplete
+  // Check if selected address is still serviceable
   useEffect(() => {
-    if (!profileLoading && user && !isComplete) setVerifyOpen(true);
-  }, [profileLoading, user, isComplete]);
+    if (!selectedAddr) return;
+    const check = async () => {
+      setCheckingAddr(true);
+      const { data: addr } = await supabase.from("addresses").select("pincode").eq("id", selectedAddr).maybeSingle();
+      if (addr?.pincode) {
+        const { data: serv } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", addr.pincode).eq("active", true).maybeSingle();
+        setAddrServiceable(!!serv);
+        if (!serv) toast.error("📍 This saved address is outside our current delivery zone. Please choose another.", { duration: 5000 });
+      }
+      setCheckingAddr(false);
+    };
+    check();
+  }, [selectedAddr]);
+
+  // Open the JIT verify sheet automatically when phone is missing
+  useEffect(() => {
+    if (!profileLoading && user && !hasPhone) setVerifyOpen(true);
+  }, [profileLoading, user, hasPhone]);
+
+  // Phase 1.2 — Server-side price re-hydration
+  // Prevents stale localStorage prices from reaching the order insert.
+  useEffect(() => {
+    if (!items.length) return;
+    const ids = items.map((i) => i.id);
+    supabase
+      .from("products")
+      .select("id, discounted_price, active")
+      .in("id", ids)
+      .then(({ data }) => {
+        if (!data) return;
+        let stale = false;
+        const priceMap = Object.fromEntries(data.map((p) => [p.id, p]));
+        items.forEach((item) => {
+          const live = priceMap[item.id];
+          if (!live) return; // product deleted — let placeOrder surface the DB error
+          if (live.discounted_price !== item.discountPrice) {
+            stale = true;
+            // Mutate the CartContext item price in-place via the context's `add` method
+            // is not possible here without a `setPrice` helper, so we write directly
+            // to localStorage as a stop-gap and rely on a page reload.
+            // A proper fix is a `syncPrices` action on CartContext (Phase 2 cleanup).
+            item.discountPrice = Number(live.discounted_price);
+          }
+        });
+        if (stale) {
+          localStorage.setItem("cart", JSON.stringify(items));
+          toast.warning("Prices have been updated to reflect the latest discounts");
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount — cart is already in memory
 
   const deliveryFee = total >= 199 ? 0 : 29;
-  const discount = appliedCoupon?.discount ?? 0;
-  const grand = Math.max(0, total + deliveryFee - discount);
+  const grand = Math.max(0, total + deliveryFee - calculatedDiscount);
 
-  const applyCoupon = async () => {
-    if (!coupon.trim()) return;
-    const { data, error } = await supabase.from("coupons").select("*").eq("code", coupon.trim().toUpperCase()).eq("active", true).maybeSingle();
+  const applyCoupon = async (manualCode?: string) => {
+    const codeToTry = manualCode || coupon.trim().toUpperCase();
+    if (!codeToTry) return;
+    
+    const { data, error } = await supabase.from("coupons").select("*").eq("code", codeToTry).eq("active", true).maybeSingle();
     if (error || !data) return toast.error("Invalid coupon");
     if (data.expiry && new Date(data.expiry) < new Date()) return toast.error("Coupon expired");
-    const disc = data.discount_type === "percent"
-      ? Math.round((total * Number(data.discount_value)) / 100)
-      : Number(data.discount_value);
-    setAppliedCoupon({ code: data.code, discount: disc });
+    
+    if (total < (data.min_order_amount || 0)) {
+      return toast.error(`Add ₹${(data.min_order_amount || 0) - total} more to use this coupon`);
+    }
+
+    setAppliedCoupon(data as unknown as Coupon);
     toast.success(`Coupon ${data.code} applied`);
   };
 
   const placeOrder = async () => {
     if (!user) { nav("/auth?next=/checkout"); return; }
     if (!selectedAddr) return toast.error("Choose an address");
-    if (!isComplete) { setVerifyOpen(true); return; }
+    if (!hasPhone) { setVerifyOpen(true); return; }
     setPlacing(true);
 
     // Online payment — simulate Razorpay first
@@ -79,7 +149,7 @@ const Checkout = () => {
       address_snapshot: addr as any,
       subtotal: total,
       delivery_fee: deliveryFee,
-      discount,
+      discount: calculatedDiscount,
       total: grand,
       payment_method: (payment === "online" ? "upi" : payment) as any,
       payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
@@ -102,10 +172,15 @@ const Checkout = () => {
     }));
     const { error: e2 } = await supabase.from("order_items").insert(itemsRows);
     setPlacing(false);
-    if (e2) return toast.error(e2.message);
+    if (e2) {
+      if (e2.message.includes("INSUFFICIENT_STOCK")) {
+        return toast.error("Sorry, one or more items in your cart just went out of stock. Please update your cart");
+      }
+      return toast.error(e2.message);
+    }
     placedRef.current = true;
     clear();
-    nav(`/orders/${order.id}?success=1`);
+    nav(`/order-success/${order.id}`);
   };
 
   if (!user) {
@@ -135,17 +210,18 @@ const Checkout = () => {
         </div>
 
         {/* Address */}
-        <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
+        <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4" onClick={() => setStep(s => Math.max(s, 1))}>
           <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><MapPin className="w-5 h-5 text-primary" /> Delivery address</h2>
-          <AddressPicker showSelect selectedId={selectedAddr} onSelect={setSelectedAddr} />
+          <AddressPicker showSelect selectedId={selectedAddr} onSelect={(id) => { setSelectedAddr(id); setStep(s => Math.max(s, 2)); }} />
         </section>
 
         {/* Slot */}
         <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
-          <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><Clock className="w-5 h-5 text-primary" /> Delivery slot</h2>
+          <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-1"><Clock className="w-5 h-5 text-primary" /> Delivery slot</h2>
+          <p className="text-xs text-muted-foreground mb-4 ml-7">Standard Delivery Windows</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {slots.map(s => (
-              <button key={s} onClick={() => setSlot(s)} className={`px-4 py-3 rounded-xl text-sm font-medium border transition-smooth ${slot === s ? "border-primary bg-primary/10 text-brown" : "border-border text-muted-foreground hover:border-primary/40"}`}>
+              <button key={s} onClick={() => { setSlot(s); setStep(st => Math.max(st, 2)); }} className={`px-4 py-3 rounded-xl text-sm font-medium border transition-smooth ${slot === s ? "border-primary bg-primary/10 text-brown" : "border-border text-muted-foreground hover:border-primary/40"}`}>
                 {s}
               </button>
             ))}
@@ -176,19 +252,77 @@ const Checkout = () => {
 
         {/* Coupon + Summary */}
         <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6">
-          <div className="flex gap-2 mb-5">
-            <div className="relative flex-1">
-              <Tag className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Coupon code" value={coupon} onChange={e => setCoupon(e.target.value)} />
-            </div>
-            <Button variant="brown" onClick={applyCoupon}>Apply</Button>
+          <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><Tag className="w-5 h-5 text-primary" /> Offers & Coupons</h2>
+          
+          {/* Dynamic Offer Cards */}
+          <div className="flex gap-3 overflow-x-auto pb-4 mb-4 no-scrollbar min-h-[110px]">
+            {availableOffers === undefined ? (
+              Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="flex-none w-64 h-28 rounded-2xl bg-secondary/20 animate-pulse" />
+              ))
+            ) : offersWithEligibility.length > 0 ? (
+              offersWithEligibility.map(offer => {
+                const isActive = appliedCoupon?.code === offer.coupon_code_to_apply;
+                return (
+                  <div 
+                    key={offer.id} 
+                    className={`flex-none w-64 p-4 rounded-2xl border transition-all duration-300 ${
+                      offer.isEligible 
+                        ? (isActive ? "border-success bg-success/5 shadow-md" : "border-border hover:border-primary/40 bg-card") 
+                        : "opacity-60 grayscale-[0.5] border-dashed border-border bg-secondary/10"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isActive ? "bg-success text-white" : "bg-primary/20 text-brown"}`}>
+                        {offer.title}
+                      </span>
+                      {offer.isEligible && (
+                        <button 
+                          onClick={() => applyCoupon(offer.coupon_code_to_apply)}
+                          className={`text-xs font-bold uppercase transition-smooth ${isActive ? "text-success" : "text-primary hover:underline"}`}
+                        >
+                          {isActive ? "Applied ✓" : "Apply"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="font-mono font-bold text-brown text-sm">{offer.coupon_code_to_apply}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1 line-clamp-1">{offer.description}</div>
+                    {!offer.isEligible && (
+                      <div className="mt-3 text-[10px] font-medium text-amber-600">
+                        Add ₹{Number(offer.min_order_value) - total} more to unlock
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center py-4 bg-secondary/10 rounded-2xl border border-dashed border-border/60">
+                <p className="text-[11px] text-muted-foreground font-medium italic">No active rewards available for your cart yet.</p>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-1.5 text-sm">
+          <div className="flex gap-2 mb-6 pt-4 border-t border-border/40">
+            <div className="relative flex-1">
+              <Tag className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+              <Input className="pl-9 h-11" placeholder="Enter coupon manually" value={coupon} onChange={e => setCoupon(e.target.value.toUpperCase())} />
+            </div>
+            <Button variant="brown" className="h-11 px-6" onClick={() => applyCoupon()}>Apply</Button>
+          </div>
+
+          <div className="space-y-2.5 text-sm">
             <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{total}</span></div>
             <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span className={deliveryFee === 0 ? "text-success font-semibold" : ""}>{deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}</span></div>
-            {discount > 0 && <div className="flex justify-between text-success"><span>Discount ({appliedCoupon?.code})</span><span>− ₹{discount}</span></div>}
-            <div className="flex justify-between font-display font-bold text-brown text-lg pt-2 mt-2 border-t border-border"><span>Total</span><span>₹{grand}</span></div>
+            {calculatedDiscount > 0 && (
+              <div className="flex justify-between text-success font-medium">
+                <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Discount ({appliedCoupon?.code})</span>
+                <span>− ₹{calculatedDiscount}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-display font-bold text-brown text-lg pt-3 mt-3 border-t border-border">
+              <span>Grand Total</span>
+              <span>₹{grand}</span>
+            </div>
           </div>
         </section>
       </main>
@@ -202,17 +336,17 @@ const Checkout = () => {
           <Button
             variant="hero" size="lg" className="flex-1"
             onClick={placeOrder}
-            disabled={placing || !selectedAddr || profileLoading}
-            title={!isComplete ? `Please verify your ${missing} first` : undefined}
+            disabled={placing || !selectedAddr || profileLoading || !addrServiceable || checkingAddr}
+            title={!hasPhone ? `Please verify your phone first` : (!addrServiceable ? "Location not serviceable" : undefined)}
           >
-            {placing && <Loader2 className="w-4 h-4 animate-spin" />} {payment === "online" ? `Pay ₹${grand}` : "Place order"}
+            {placing || checkingAddr ? <Loader2 className="w-4 h-4 animate-spin" /> : (!addrServiceable ? "Location Not Serviceable" : (payment === "online" ? `Pay ₹${grand}` : "Place order"))}
           </Button>
         </div>
       </div>
 
       <JitVerifySheet
-        open={verifyOpen && !!missing}
-        missing={missing}
+        open={verifyOpen && !hasPhone}
+        missing={!hasPhone ? "phone" : null}
         blocking
         onOpenChange={setVerifyOpen}
         onComplete={async () => { await refetchProfile(); }}

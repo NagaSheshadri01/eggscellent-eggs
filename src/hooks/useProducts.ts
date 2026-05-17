@@ -11,6 +11,7 @@ export type AdminProduct = {
   discounted_price: number;
   stock_quantity: number;
   image_url: string | null;
+  images: string[];
   description?: string | null;
   active: boolean;
   display_order: number;

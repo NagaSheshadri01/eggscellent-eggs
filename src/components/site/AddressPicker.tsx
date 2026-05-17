@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProfileCompleteness } from "@/hooks/useProfileCompleteness";
+import { userService } from "@/lib/services/user.service";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +27,9 @@ export type Address = {
 
 type Mode = "list" | "choose" | "auto" | "manual";
 
-const empty: Partial<Address> = { label: "Home" };
+type DraftAddress = Partial<Address> & { email?: string; lat?: number; lng?: number };
+
+const empty: DraftAddress = { label: "Home" };
 
 type Props = {
   selectedId?: string;
@@ -39,8 +43,12 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
   const [list, setList] = useState<Address[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mode, setMode] = useState<Mode>("list");
-  const [draft, setDraft] = useState<Partial<Address>>(empty);
+  const [draft, setDraft] = useState<DraftAddress>(empty);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isPincodeValid, setIsPincodeValid] = useState(true);
+  const [checkingPincode, setCheckingPincode] = useState(false);
+  
+  const { profile, hasEmail, refetch: refetchProfile } = useProfileCompleteness();
   const [busy, setBusy] = useState(false);
   const [blockedOpen, setBlockedOpen] = useState(false);
 
@@ -61,7 +69,38 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user]);
 
-  const reset = () => { setDraft(empty); setEditingId(null); };
+  // Simple Profile Auto-fill (phone, name, email)
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user?.id) return;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("phone, full_name, email")
+        .eq("id", user.id)
+        .single();
+
+      if (data && !error) {
+        setDraft(prev => ({
+          ...prev,
+          phone: prev.phone || data.phone || "",
+          full_name: prev.full_name || data.full_name || "",
+          // Pre-fill email from profile so it's ready without manual typing
+          email: prev.email || (data.email && !/auth\.eggscellent\.app$/i.test(data.email) ? data.email : "") || "",
+        }));
+      }
+    };
+    fetchProfile();
+  }, [user]);
+
+  const reset = () => {
+    setDraft({
+      label: "Home",
+      full_name: profile?.full_name || "",
+      phone: profile?.phone || "",
+      email: profile?.email || "",
+    });
+    setEditingId(null);
+  };
 
   const startEdit = (a: Address) => {
     setDraft(a);
@@ -77,13 +116,33 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
         const j = await r.json();
         const a = j.address || {};
         const area = [a.suburb, a.neighbourhood, a.road].filter(Boolean).join(", ");
+        const postcode = a.postcode || "";
+        
+        // Step 1: Immediately run isServiceable
+        if (postcode) {
+          const { data: serv } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", postcode).eq("active", true).maybeSingle();
+          if (!serv) {
+            toast.error(`📍 We detected pincode ${postcode}, but we don't serve this area yet. Please enter your address manually.`, { duration: 5000 });
+            setMode("manual");
+            setDraft(d => ({ ...d, pincode: "" }));
+            setIsPincodeValid(false);
+            return;
+          }
+        }
+
         setDraft({
           label: "Home",
+          full_name: profile?.full_name || "",
+          phone: profile?.phone || "",
+          email: profile?.email || "",
           address_line_2: area,
           city: a.city || a.town || a.village || a.county || "",
           state: a.state || "",
-          pincode: a.postcode || "",
+          pincode: postcode,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
         });
+        setIsPincodeValid(true);
         setMode("manual");
       } catch {
         toast.error("Couldn't detect location, enter manually");
@@ -97,6 +156,17 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
         toast.error("Couldn't get your location");
       }
     });
+  };
+
+  const validatePincode = async (pc: string) => {
+    if (!pc || !/^\d{6}$/.test(pc)) {
+      setIsPincodeValid(false);
+      return;
+    }
+    setCheckingPincode(true);
+    const { data } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", pc).eq("active", true).maybeSingle();
+    setCheckingPincode(false);
+    setIsPincodeValid(!!data);
   };
 
   const detect = async () => {
@@ -119,8 +189,26 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
   const save = async () => {
     if (!user) return;
     const required = ["full_name","phone","address_line_1","city","state","pincode"] as const;
-    for (const k of required) if (!draft[k]) return toast.error("Please fill all required fields");
+    for (const k of required) if (!draft[k]?.trim()) return toast.error("Please fill all required fields");
+
+    if (!draft.email?.trim()) return toast.error("Please provide an email for order receipts");
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim());
+    if (!emailOk) return toast.error("Please enter a valid email address");
+
     setBusy(true);
+    
+    // Save profile atomic updates if needed
+    let profileUpdated = false;
+    if (draft.full_name && draft.full_name !== profile?.full_name) {
+      await userService.updateProfile(user.id, { full_name: draft.full_name });
+      profileUpdated = true;
+    }
+    if (!hasEmail && draft.email) {
+      await userService.updateProfile(user.id, { email: draft.email });
+      profileUpdated = true;
+    }
+    if (profileUpdated) refetchProfile();
+
     const payload = {
       user_id: user.id,
       label: draft.label || "Home",
@@ -130,7 +218,9 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
       city: draft.city!, state: draft.state!, pincode: draft.pincode!,
       landmark: draft.landmark || null,
       is_default: draft.is_default ?? list.length === 0,
-    };
+      lat: draft.lat, lng: draft.lng,
+      email: draft.email?.trim() || null,
+    } as any;
     let res;
     if (editingId) {
       res = await supabase.from("addresses").update(payload).eq("id", editingId).select().single();
@@ -221,17 +311,88 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
         </div>
 
         <div className="grid sm:grid-cols-2 gap-3">
-          <div><Label>Full name *</Label><Input value={draft.full_name || ""} onChange={e => setDraft({ ...draft, full_name: e.target.value })} /></div>
-          <div><Label>Mobile *</Label><Input value={draft.phone || ""} onChange={e => setDraft({ ...draft, phone: e.target.value })} placeholder="+91 …" /></div>
-          <div className="sm:col-span-2"><Label>House / Flat / Door no *</Label><Input value={draft.address_line_1 || ""} onChange={e => setDraft({ ...draft, address_line_1: e.target.value })} placeholder="Flat 302, Building name" /></div>
-          <div className="sm:col-span-2"><Label>Area / Street</Label><Input value={draft.address_line_2 || ""} onChange={e => setDraft({ ...draft, address_line_2: e.target.value })} /></div>
-          <div><Label>City *</Label><Input value={draft.city || ""} onChange={e => setDraft({ ...draft, city: e.target.value })} /></div>
-          <div><Label>State *</Label><Input value={draft.state || ""} onChange={e => setDraft({ ...draft, state: e.target.value })} /></div>
-          <div><Label>Pincode *</Label><Input value={draft.pincode || ""} onChange={e => setDraft({ ...draft, pincode: e.target.value })} /></div>
-          <div><Label>Landmark</Label><Input value={draft.landmark || ""} onChange={e => setDraft({ ...draft, landmark: e.target.value })} /></div>
+          <div>
+            <Label>Full name *</Label>
+            <Input
+              value={draft.full_name || ""}
+              onChange={e => setDraft(d => ({ ...d, full_name: e.target.value }))}
+              placeholder="Your full name"
+            />
+          </div>
+          <div>
+            <Label>Email *</Label>
+            <Input
+              type="email"
+              value={draft.email || ""}
+              onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
+              placeholder="your@email.com"
+            />
+          </div>
+          <div>
+            <Label>Mobile *</Label>
+            <Input
+              value={draft.phone || ""}
+              onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))}
+              placeholder="+91 …"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label>House / Flat / Door no *</Label>
+            <Input
+              value={draft.address_line_1 || ""}
+              onChange={e => setDraft(d => ({ ...d, address_line_1: e.target.value }))}
+              placeholder="Flat 302, Building name"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Area / Street</Label>
+            <Input
+              value={draft.address_line_2 || ""}
+              onChange={e => setDraft(d => ({ ...d, address_line_2: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>City *</Label>
+            <Input
+              value={draft.city || ""}
+              onChange={e => setDraft(d => ({ ...d, city: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>State *</Label>
+            <Input
+              value={draft.state || ""}
+              onChange={e => setDraft(d => ({ ...d, state: e.target.value }))}
+            />
+          </div>
+          <div className="relative">
+            <Label>Pincode *</Label>
+            <Input
+              value={draft.pincode || ""}
+              onChange={e => {
+                const val = e.target.value.slice(0, 6);
+                setDraft(d => ({ ...d, pincode: val }));
+                if (val.length === 6) validatePincode(val);
+                else setIsPincodeValid(true);
+              }}
+              onBlur={e => validatePincode(e.target.value)}
+              className={!isPincodeValid && draft.pincode?.length === 6 ? "border-destructive focus-visible:ring-destructive" : ""}
+            />
+            {!isPincodeValid && draft.pincode?.length === 6 && (
+              <p className="text-[10px] text-destructive font-bold mt-1 animate-in fade-in slide-in-from-top-1">This pincode is outside our delivery zone.</p>
+            )}
+            {checkingPincode && <Loader2 className="w-3 h-3 animate-spin absolute right-3 top-9 text-muted-foreground" />}
+          </div>
+          <div>
+            <Label>Landmark</Label>
+            <Input
+              value={draft.landmark || ""}
+              onChange={e => setDraft(d => ({ ...d, landmark: e.target.value }))}
+            />
+          </div>
         </div>
-        <Button variant="hero" className="w-full" onClick={save} disabled={busy}>
-          {busy && <Loader2 className="w-4 h-4 animate-spin" />} {editingId ? "Update address" : "Save address"}
+        <Button variant="hero" className="w-full" onClick={save} disabled={busy || !isPincodeValid || checkingPincode}>
+          {busy || checkingPincode ? <Loader2 className="w-4 h-4 animate-spin" /> : (!isPincodeValid ? "Location Not Serviceable" : (editingId ? "Update address" : "Save address"))}
         </Button>
       </div>
     );

@@ -9,6 +9,7 @@ type AuthCtx = {
   loading: boolean;
   roleLoading: boolean;
   isAdmin: boolean;
+  isPartner: boolean;
   refreshRole: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -20,17 +21,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [roleLoading, setRoleLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPartner, setIsPartner] = useState(false);
 
   const resolveRoleNow = useCallback(async (uid: string) => {
     setRoleLoading(true);
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", uid)
-      .eq("role", "admin")
-      .maybeSingle();
-    setIsAdmin(!!data);
-    setRoleLoading(false);
+    try {
+      const [{ data: adminData }, { data: partnerData }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", uid).eq("role", "admin").maybeSingle(),
+        supabase.from("delivery_partners").select("id").eq("user_id", uid).eq("status", "approved").eq("active", true).maybeSingle(),
+      ]);
+      setIsAdmin(!!adminData);
+      setIsPartner(!!partnerData);
+    } finally {
+      setRoleLoading(false);
+      setLoading(false);
+    }
   }, []);
 
   const refreshRole = async () => {
@@ -49,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const subscribeUserChanges = (uid: string) => {
+      // ① Tear down existing channels before re-subscribing (user switch guard)
       if (rolesChannel) supabase.removeChannel(rolesChannel);
       if (profileChannel) supabase.removeChannel(profileChannel);
       rolesChannel = supabase
@@ -70,9 +76,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const resolveRole = (sess: Session) => {
-      setTimeout(() => {
+      setTimeout(async () => {
+        try { await supabase.auth.refreshSession(); } catch {}
         void userService.ensureProfile(sess.user).catch(() => {});
-        void resolveRoleNow(sess.user.id);
+        await resolveRoleNow(sess.user.id);
         subscribeUserChanges(sess.user.id);
       }, 0);
     };
@@ -86,7 +93,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else if (!uid) {
         lastUserId = null;
         setIsAdmin(false);
+        setIsPartner(false);
         setRoleLoading(false);
+        // ② Tear down on sign-out so channels don't linger after the user logs off
         if (rolesChannel) { supabase.removeChannel(rolesChannel); rolesChannel = null; }
         if (profileChannel) { supabase.removeChannel(profileChannel); profileChannel = null; }
       }
@@ -104,6 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => {
+      // ③ Effect-level teardown — fires on unmount or when resolveRoleNow identity changes
       subscription.unsubscribe();
       if (rolesChannel) supabase.removeChannel(rolesChannel);
       if (profileChannel) supabase.removeChannel(profileChannel);
@@ -115,7 +125,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <Ctx.Provider value={{ session, user: session?.user ?? null, loading, roleLoading, isAdmin, refreshRole, signOut }}>
+    <Ctx.Provider value={{ session, user: session?.user ?? null, loading, roleLoading, isAdmin, isPartner, refreshRole, signOut }}>
       {children}
     </Ctx.Provider>
   );

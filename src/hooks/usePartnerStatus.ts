@@ -29,15 +29,17 @@ export const usePartnerStatus = () => {
     queryKey: ["partner_status", user?.id ?? "anon"],
     enabled: !!user,
     queryFn: async () => {
-      const [{ data: dp, error: e1 }, { data: roles, error: e2 }] = await Promise.all([
-        supabase.from("delivery_partners").select("id, status, active").eq("user_id", user!.id).maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", user!.id).eq("role", "partner"),
-      ]);
-      if (e1) throw e1;
-      if (e2) throw e2;
+      // Partner status is authoritative from delivery_partners table.
+      // The 'partner' role value in user_roles is a dead path — app_role ENUM
+      // only contains 'customer' | 'admin'. No query needed for user_roles here.
+      const { data: dp, error } = await supabase
+        .from("delivery_partners")
+        .select("id, status, active")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
       const approvedPartner = !!dp && dp.active && dp.status === "approved";
-      const hasPartnerRole = (roles ?? []).length > 0;
-      return { partner: dp, isPartner: approvedPartner || hasPartnerRole };
+      return { partner: dp, isPartner: approvedPartner };
     },
   });
 };

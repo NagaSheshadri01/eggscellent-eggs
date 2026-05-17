@@ -26,12 +26,21 @@ const loadGoogleMaps = (): Promise<any> => {
 
 const parseComponents = (components: any[]): Partial<ParsedAddress> => {
   const get = (type: string) => components.find((c) => c.types?.includes(type));
-  const sublocality = get("sublocality_level_1") || get("sublocality") || get("neighborhood");
+  
+  // Force the parser to look for precise local identifiers first
+  const pincode = get("postal_code")?.long_name;
+  const sublocality = get("sublocality_level_1")?.long_name || get("sublocality")?.long_name;
+  const neighborhood = get("neighborhood")?.long_name;
+  const locality = get("locality")?.long_name;
+
+  // Construct address prioritizing hyper-local over city-wide
+  const displayArea = sublocality || neighborhood || locality;
+
   return {
-    area: sublocality?.long_name,
-    city: get("locality")?.long_name || get("administrative_area_level_2")?.long_name,
+    area: displayArea,
+    city: locality || get("administrative_area_level_2")?.long_name,
     state: get("administrative_area_level_1")?.long_name,
-    pincode: get("postal_code")?.long_name,
+    pincode: pincode,
     country: get("country")?.long_name,
   };
 };

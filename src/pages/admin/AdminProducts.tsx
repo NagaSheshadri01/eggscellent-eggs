@@ -13,7 +13,7 @@ import { AdminProduct, useProducts, useProductMutations } from "@/hooks/useProdu
 
 const empty: AdminProduct = {
   name: "", slug: "", benefit: "", unit: "", original_price: 0, discounted_price: 0,
-  stock_quantity: 0, image_url: "", description: "", active: true, display_order: 0,
+  stock_quantity: 0, image_url: "", images: [], description: "", active: true, display_order: 0,
 };
 
 const AdminProducts = () => {
@@ -71,13 +71,31 @@ const AdminProducts = () => {
                 <div><Label>Name</Label><Input value={editing.name} onChange={e => setEditing({...editing, name: e.target.value})} /></div>
                 <div><Label>Slug</Label><Input value={editing.slug} onChange={e => setEditing({...editing, slug: e.target.value})} /></div>
                 <div>
-                  <Label>Image</Label>
-                  <ImageUploader
-                    value={editing.image_url}
-                    onChange={(url) => setEditing({ ...editing, image_url: url })}
-                    bucket="product-images"
-                    pathPrefix={editing.slug || "uncategorised"}
-                  />
+                  <Label>Product Gallery</Label>
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    {(editing.images || []).map((url, idx) => (
+                      <div key={idx} className="relative group rounded-xl overflow-hidden border border-border aspect-square bg-secondary/20">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => setEditing({ ...editing, images: editing.images.filter((_, i) => i !== idx) })}
+                          className="absolute top-2 right-2 p-1.5 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="aspect-square">
+                      <ImageUploader
+                        value={null}
+                        onChange={(url) => {
+                          if (url) setEditing({ ...editing, images: [...(editing.images || []), url] });
+                        }}
+                        bucket="product-images"
+                        pathPrefix={editing.slug || "products"}
+                        className="h-full"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Unit</Label><Input value={editing.unit ?? ""} onChange={e => setEditing({...editing, unit: e.target.value})} /></div>
@@ -102,8 +120,8 @@ const AdminProducts = () => {
         {products?.map((p, i) => (
           <div key={p.id} className="bg-card rounded-2xl shadow-soft p-4">
             <div className="flex gap-3">
-              {p.image_url
-                ? <img src={p.image_url} className="w-16 h-16 rounded-lg object-cover" alt={p.name} />
+              {p.images?.length > 0 || p.image_url
+                ? <img src={p.images?.[0] || p.image_url!} className="w-16 h-16 rounded-lg object-cover" alt={p.name} />
                 : <div className="w-16 h-16 rounded-lg bg-secondary grid place-items-center text-xs text-muted-foreground">No image</div>}
               <div className="flex-1 min-w-0">
                 <div className="font-display font-semibold text-brown truncate">{p.name}</div>

@@ -20,5 +20,5 @@ export const useDeliverySlots = (onlyActive = true) =>
       if (error) throw error;
       return (data ?? []) as DeliverySlot[];
     },
-    staleTime: 60_000,
+    staleTime: 10 * 60_000, // 10 min — slot configs are set-and-forget by admin
   });

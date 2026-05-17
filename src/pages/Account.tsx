@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import OrdersList from "@/components/site/OrdersList";
 import AddressPicker from "@/components/site/AddressPicker";
+import AccountSubscriptions from "@/components/site/AccountSubscriptions";
 import { LogOut } from "lucide-react";
 
 const Account = () => {
@@ -45,13 +46,18 @@ const Account = () => {
         <p className="text-muted-foreground mb-8">{profile?.email || profile?.phone || ""}</p>
 
         <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })}>
-          <TabsList className="grid grid-cols-3 w-full mb-6">
+          <TabsList className="grid grid-cols-4 w-full mb-6">
             <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
             <TabsTrigger value="addresses">Addresses</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders"><OrdersList /></TabsContent>
+
+          <TabsContent value="subscriptions">
+            <AccountSubscriptions />
+          </TabsContent>
 
           <TabsContent value="addresses">
             <div className="bg-card rounded-3xl shadow-soft p-5 sm:p-6">

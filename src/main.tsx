@@ -8,4 +8,10 @@ try {
   document.documentElement.classList.remove("dark");
 } catch {}
 
+// Prevent accidental scroll-wheel changes on number inputs site-wide
+document.addEventListener("wheel", () => {
+  const el = document.activeElement as HTMLInputElement | null;
+  if (el?.type === "number") el.blur();
+}, { passive: true });
+
 createRoot(document.getElementById("root")!).render(<App />);

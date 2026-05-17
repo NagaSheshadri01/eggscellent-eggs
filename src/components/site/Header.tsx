@@ -1,4 +1,4 @@
-import { MapPin, ShoppingBag, ChevronDown, User, LogOut, Package, Home as HomeIcon, UserCircle } from "lucide-react";
+import { MapPin, ShoppingBag, ChevronDown, User, LogOut, Package, Home as HomeIcon, UserCircle, Calendar } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -6,12 +6,17 @@ import { Link, useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import StaffPortalLink from "@/components/site/StaffPortalLink";
 
+import { useAppSettings } from "@/hooks/useAppSettings";
+
 import { isSyntheticEmail } from "@/lib/services/user.service";
 
 const Header = () => {
   const { count, setOpen } = useCart();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isPartner } = useAuth();
   const nav = useNavigate();
+  const { data: settings } = useAppSettings();
+  const businessName = settings?.business?.business_name || "Eggscellent";
+
   const displayId = isSyntheticEmail(user?.email)
     ? (user?.phone || user?.user_metadata?.phone || "")
     : (user?.email || user?.phone || "");
@@ -21,9 +26,9 @@ const Header = () => {
       <div className="container flex items-center justify-between h-[68px]">
         <Link to="/" className="flex items-center gap-2.5 group">
           <div className="w-10 h-10 rounded-full gradient-yolk grid place-items-center shadow-yolk group-hover:rotate-12 transition-smooth">
-            <span className="text-brown font-display font-bold text-lg">e</span>
+            <span className="text-brown font-display font-bold text-lg">{businessName.charAt(0).toLowerCase()}</span>
           </div>
-          <span className="font-display font-bold text-brown text-xl tracking-tight">Eggscellent</span>
+          <span className="font-display font-bold text-brown text-xl tracking-tight">{businessName}</span>
         </Link>
 
         <button className="hidden sm:flex items-center gap-1.5 text-sm text-brown/80 hover:text-brown transition-smooth">
@@ -32,6 +37,12 @@ const Header = () => {
           <span className="font-semibold">Bandra W, 400050</span>
           <ChevronDown className="w-4 h-4" />
         </button>
+
+        <div className="hidden md:flex items-center">
+          <Link to="/subscriptions" className="text-sm font-semibold hover:text-brown transition-smooth flex items-center gap-1.5 bg-primary/10 px-3.5 py-1.5 rounded-full border border-primary/20 text-brown">
+            <span className="text-primary font-bold">⭐</span> Subscribe & Save
+          </Link>
+        </div>
 
         <div className="flex items-center gap-1">
           <StaffPortalLink />
@@ -46,7 +57,11 @@ const Header = () => {
                 <DropdownMenuLabel className="truncate">{displayId}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => nav("/profile")}><UserCircle className="w-4 h-4 mr-2" /> Profile</DropdownMenuItem>
+                {isPartner && (
+                  <DropdownMenuItem onClick={() => nav("/partner/history")}><Package className="w-4 h-4 mr-2" /> Delivery History</DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => nav("/account?tab=orders")}><Package className="w-4 h-4 mr-2" /> Recent orders</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => nav("/account?tab=subscriptions")}><Calendar className="w-4 h-4 mr-2" /> My Subscriptions</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => nav("/account?tab=addresses")}><HomeIcon className="w-4 h-4 mr-2" /> Saved addresses</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut()}><LogOut className="w-4 h-4 mr-2" /> Sign out</DropdownMenuItem>

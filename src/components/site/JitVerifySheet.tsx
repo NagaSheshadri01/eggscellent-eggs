@@ -11,7 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useInvalidateProfile } from "@/hooks/useProfileCompleteness";
 import { userService } from "@/lib/services/user.service";
 
-type Missing = "phone" | "email" | "name" | null;
+type Missing = "phone" | null;
 
 type Props = {
   open: boolean;
@@ -32,13 +32,9 @@ const JitVerifySheet = ({ open, missing, blocking = false, onOpenChange, onCompl
   const [stage, setStage] = useState<"input" | "code">("input");
   const [otp, setOtp] = useState("");
 
-  // email + name
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-
   useEffect(() => {
     if (!open) {
-      setStage("input"); setOtp(""); setPhone(""); setEmail(""); setName("");
+      setStage("input"); setOtp(""); setPhone("");
     }
   }, [open]);
 
@@ -69,41 +65,11 @@ const JitVerifySheet = ({ open, missing, blocking = false, onOpenChange, onCompl
     onComplete?.();
   };
 
-  const saveEmailName = async () => {
-    if (!user) return;
-    const e = email.trim();
-    const n = name.trim();
-    if (missing === "email" && !/^\S+@\S+\.\S+$/.test(e)) return toast.error("Enter a valid email");
-    if (missing === "name" && n.length < 2) return toast.error("Enter your name");
-    setBusy(true);
-    if (missing === "email") {
-      const { data: exists } = await supabase.rpc("email_exists", { _email: e });
-      if (exists) { setBusy(false); return toast.error("This email is already used"); }
-    }
-    const patch: { email?: string; full_name?: string } = {};
-    if (missing === "email") patch.email = e;
-    if (missing === "name") patch.full_name = n;
-    try {
-      await userService.updateProfile(user.id, patch);
-    } catch (error: any) {
-      setBusy(false);
-      return toast.error(error.message);
-    }
-    setBusy(false);
-    toast.success(missing === "email" ? "Email saved" : "Name saved");
-    await invalidateProfile();
-    onComplete?.();
-  };
-
   const titleMap: Record<Exclude<Missing, null>, string> = {
     phone: "Verify your phone number",
-    email: "Add your email",
-    name: "What should we call you?",
   };
   const iconMap: Record<Exclude<Missing, null>, JSX.Element> = {
     phone: <Phone className="w-5 h-5 text-brown" />,
-    email: <Mail className="w-5 h-5 text-brown" />,
-    name: <UserIcon className="w-5 h-5 text-brown" />,
   };
 
   if (!missing) return null;
@@ -160,25 +126,6 @@ const JitVerifySheet = ({ open, missing, blocking = false, onOpenChange, onCompl
             </div>
           ))}
 
-          {(missing === "email" || missing === "name") && (
-            <div className="space-y-3">
-              {missing === "email" && (
-                <div className="space-y-1.5">
-                  <Label>Email</Label>
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" />
-                </div>
-              )}
-              {missing === "name" && (
-                <div className="space-y-1.5">
-                  <Label>Full name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
-                </div>
-              )}
-              <Button variant="hero" className="w-full" onClick={saveEmailName} disabled={busy}>
-                {busy && <Loader2 className="w-4 h-4 animate-spin" />} Save
-              </Button>
-            </div>
-          )}
         </div>
       </SheetContent>
     </Sheet>

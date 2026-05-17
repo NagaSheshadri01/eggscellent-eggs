@@ -1,0 +1,73 @@
+This updated roadmap is designed to transform your current codebase from a functional demo into a high-integrity, production-ready platform. It incorporates your recent UI observations, fixes the "Identity Leak" (Phone vs. Email), and prepares the system for high-concurrency traffic while staying within Supabase and Vercel Free Tier limits.
+
+Save the following content as updates.txt in your project root.
+
+🥚 Eggscellent — Integrated Engineering & UX Roadmap (v2.0)
+Objective: Hardening the "Engine," streamlining JIT (Just-In-Time) identity, and building the Logistics/Partner infrastructure for 1,000+ simultaneous users.
+
+Phase 1: The "Fortress" Layer (Integrity & Reliability)
+Focus: Protecting your money and your stock while fixing "Blank Page" regressions.
+
+1.1 Database-Level Inventory Guard: * Implement a PostgreSQL trigger fn_decrement_inventory() on order_items.
+
+Logic: Decrement products.stock_quantity on insert. It must RAISE EXCEPTION to roll back the order if stock < quantity to prevent overselling during high-traffic spikes.
+
+1.2 Checkout Price Re-hydration: * In Checkout.tsx, force a server-side price check on mount.
+
+Sync CartContext with real-time discounted_price from the DB to prevent "Price Hijacking" with stale localStorage data.
+
+1.3 View Restoration & Data Binding:
+
+Orders Page: Fix the /orders blank render; ensure it maps order_items correctly.
+
+Profile Hub: Fix the blank /profile page. Bind profiles table data so Name, Email, and Addresses are visible/editable while keeping Phone Number locked as the Primary Key.
+
+1.4 Product Metadata: Fix UnifiedProductCard to display the product description, which is currently missing from the UI.
+
+Phase 2: Streamlined JIT Identity & Geospatial Accuracy
+Focus: Removing user friction and improving delivery precision.
+
+2.1 Integrated JIT Flow: * Remove separate "Input Name" and "Input Email" steps.
+
+Merge these into the Address Input form during the first checkout. Saving the address will trigger a background update to profiles.full_name and profiles.email.
+
+2.2 Precise Geolocation (Lat/Lng): * Replace pincode-based estimations with a "Detect My Location" button using the Browser Geolocation API.
+
+Ensure addresses and orders tables capture exact lat and lng for logistics mapping.
+
+2.3 Order Confirmation State: Replace the "Empty Page" bug with a dedicated /order-success/{id} page featuring an Order Status Stepper (Placed → Confirmed → Out for Delivery).
+
+Phase 3: Operational Logistics & Partner Portal
+Focus: Making the "Staff Portal" fully functional for Admins and Delivery Partners.
+
+3.1 Partner Synchronization: * Fix the bug where promoted users don't appear in the Admin Partner list.
+
+Ensure the AuthContext uses supabase.channel to reactively update user roles (Customer → Admin/Partner) without requiring a logout.
+
+3.2 Admin Logistics Dashboard: * Add a Google Maps Link to every order in the Admin Panel using the precise lat/lng captured in Phase 2.
+
+Enable "Assign to Partner" functionality based on partner availability and proximity.
+
+3.3 Partner Portal & Route Optimization:
+
+Assigned Orders: Ensure /partner displays a list of assigned orders sorted by ascending distance from the partner's current location.
+
+Multi-Stop Routing: Implement a button that generates a single Google Maps URL containing all "Out for Delivery" stops in one route.
+
+Phase 4: Free-Tier Optimization & Scalability
+Focus: Ensuring the app doesn't crash or incur costs during a 1,000-user spike.
+
+4.1 Connection Leak Prevention: * Audit all supabase.channel() instances. Every subscription must have a removeChannel() call in the useEffect cleanup to stay under the 200 concurrent connection limit.
+
+4.2 Performance Indexing: * Add PostgreSQL Indexes to profiles.phone, orders.user_id, and order_items.order_id to ensure queries stay under the 10s serverless timeout limit.
+
+4.3 Ghost Code Purge: Delete orphaned files: Razorpay.tsx ghost components, mockOtp.ts, and dead enum paths in usePartnerStatus.ts.
+
+4.4 Live Payment Swap: Prepare the payment.service.ts to swap the 1.5s "Demo Simulation" with the real Razorpay SDK once credentials are ready.
+
+🚦 Instructions for Antigravity:
+Context Loading: Always read updates.txt before suggesting changes.
+
+Order of Operations: Do not move to Phase 3 (Logistics) until Phase 1 (Inventory/Price Integrity) is verified.
+
+Tier Awareness: Every time a new Realtime channel is added, confirm the cleanup logic to protect the Free Tier quota.

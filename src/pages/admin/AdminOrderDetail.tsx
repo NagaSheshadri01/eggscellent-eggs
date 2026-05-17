@@ -68,6 +68,16 @@ const AdminOrderDetail = () => {
             <div>{a.address_line_1}{a.address_line_2 ? `, ${a.address_line_2}` : ""}</div>
             <div>{a.city}, {a.state} {a.pincode}</div>
             {order.delivery_slot && <div className="mt-2 text-brown">{order.delivery_slot}</div>}
+            {order.lat && order.lng && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${order.lat},${order.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors"
+              >
+                <MapPin className="w-3 h-3" /> Open in Google Maps
+              </a>
+            )}
           </div>
         </div>
       </div>

@@ -11,6 +11,7 @@ export const useFaqs = (opts?: { onlyActive?: boolean }) => {
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 10 * 60_000, // 10 min — FAQs are editorial, rarely change
   });
 };
 

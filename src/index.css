@@ -133,3 +133,13 @@
     border: 1px solid hsl(0 0% 100% / 0.6);
   }
 }
+
+/* ── Global: remove number input spin arrows & block scroll-wheel changes ── */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}

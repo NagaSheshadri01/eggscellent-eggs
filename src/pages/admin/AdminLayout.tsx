@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Users, HelpCircle, FileText, Tag, ArrowLeft, Settings, Truck, Repeat, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, HelpCircle, FileText, Tag, ArrowLeft, Settings, Truck, Repeat, ShieldCheck, Sparkles } from "lucide-react";
 import Seo from "@/components/Seo";
 
 const items = [
@@ -7,10 +7,11 @@ const items = [
   { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/customers", label: "Customers", icon: Users },
-  { to: "/admin/subscriptions", label: "Subscriptions", icon: Repeat },
+  { to: "/admin/subscriptions", label: "Subscription Orders", icon: Repeat },
   { to: "/admin/delivery-partners", label: "Partners", icon: Truck },
   { to: "/admin/staff", label: "Staff & roles", icon: ShieldCheck },
   { to: "/admin/coupons", label: "Coupons", icon: Tag },
+  { to: "/admin/offers", label: "Offers", icon: Sparkles },
   { to: "/admin/faqs", label: "FAQs", icon: HelpCircle },
   { to: "/admin/content", label: "Content", icon: FileText },
   { to: "/admin/settings", label: "Settings", icon: Settings },

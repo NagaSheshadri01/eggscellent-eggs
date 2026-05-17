@@ -6,7 +6,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 const AdminCustomers = () => {
   const [list, setList] = useState<any[] | null>(null);
   useEffect(() => {
-    supabase.from("profiles").select("*").order("created_at", { ascending: false }).then(({ data }) => setList(data ?? []));
+    Promise.all([
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      supabase.from("user_roles").select("user_id, role")
+    ]).then(([profsRes, rolesRes]) => {
+      if (profsRes.error) {
+        console.error("Error fetching profiles:", profsRes.error.message);
+        return;
+      }
+      const excludedUsers = new Set(
+        (rolesRes.data || [])
+          .filter((r: any) => r.role === "admin" || r.role === "partner")
+          .map((r: any) => r.user_id)
+      );
+      const customers = (profsRes.data || []).filter((p: any) => !excludedUsers.has(p.id));
+      setList(customers);
+    });
   }, []);
   return (
     <div>

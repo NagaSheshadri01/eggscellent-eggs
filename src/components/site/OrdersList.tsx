@@ -16,7 +16,7 @@ const OrdersList = ({ limit }: { limit?: number }) => {
 
   useEffect(() => {
     if (!user) return;
-    let q = supabase.from("orders").select("id,total,order_status,created_at,coupon_code").eq("user_id", user.id).order("created_at", { ascending: false });
+    let q = supabase.from("orders").select("id,total,order_status,created_at,coupon_code,order_items(product_name,product_image)").eq("user_id", user.id).order("created_at", { ascending: false });
     if (limit) q = q.limit(limit);
     q.then(({ data }) => setOrders(data ?? []));
   }, [user, limit]);
@@ -38,13 +38,31 @@ const OrdersList = ({ limit }: { limit?: number }) => {
     <div className="space-y-3">
       {orders.map(o => (
         <Link key={o.id} to={`/orders/${o.id}`} className="flex items-center gap-4 bg-card rounded-2xl p-4 shadow-soft hover:shadow-card transition-smooth">
-          <div className="w-12 h-12 rounded-xl gradient-yolk grid place-items-center shrink-0"><Package className="w-5 h-5 text-brown" /></div>
+          <div className="flex -space-x-4 shrink-0">
+            {o.order_items?.slice(0, 3).map((item: any, i: number) => (
+              <div key={i} className="w-12 h-12 rounded-xl border-2 border-card overflow-hidden bg-secondary">
+                {item.product_image ? (
+                  <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full grid place-items-center"><Package className="w-5 h-5 text-brown" /></div>
+                )}
+              </div>
+            ))}
+            {(o.order_items?.length || 0) > 3 && (
+              <div className="w-12 h-12 rounded-xl border-2 border-card bg-secondary text-brown font-semibold text-xs grid place-items-center">
+                +{(o.order_items?.length || 0) - 3}
+              </div>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <div className="font-display font-semibold text-brown">#{o.id.slice(0, 8).toUpperCase()}</div>
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-secondary text-brown">{statusLabel[o.order_status]}</span>
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">{new Date(o.created_at).toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground mt-0.5 truncate">
+              {o.order_items?.map((it: any) => it.product_name).join(", ")}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{new Date(o.created_at).toLocaleString()}</div>
           </div>
           <div className="text-right">
             <div className="font-display font-bold text-brown">₹{o.total}</div>

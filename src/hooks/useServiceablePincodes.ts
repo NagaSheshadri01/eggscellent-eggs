@@ -11,6 +11,7 @@ export const usePincodes = () =>
       if (error) throw error;
       return (data ?? []) as Pincode[];
     },
+    staleTime: 10 * 60_000, // 10 min — pincodes change only when admin edits them
   });
 
 export const useIsPincodeServiceable = (pincode?: string) =>
@@ -21,6 +22,7 @@ export const useIsPincodeServiceable = (pincode?: string) =>
       const { data } = await supabase.from("serviceable_pincodes").select("*").eq("pincode", pincode!).eq("active", true).maybeSingle();
       return data as Pincode | null;
     },
+    staleTime: 5 * 60_000, // 5 min — per-pincode check, still slow-changing
   });
 
 export const useUpsertPincode = () => {
