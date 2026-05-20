@@ -87,7 +87,7 @@ const Checkout = () => {
   // Prevents stale localStorage prices from reaching the order insert.
   useEffect(() => {
     if (!items.length) return;
-    const ids = items.map((i) => i.id);
+    const ids = items.map((i) => i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id);
     supabase
       .from("products")
       .select("id, discounted_price, active")
@@ -97,7 +97,8 @@ const Checkout = () => {
         let stale = false;
         const priceMap = Object.fromEntries(data.map((p) => [p.id, p]));
         items.forEach((item) => {
-          const live = priceMap[item.id];
+          const actualId = item.id.includes('-sub-') ? item.id.split('-sub-')[0] : item.id;
+          const live = priceMap[actualId];
           if (!live) return; // product deleted — let placeOrder surface the DB error
           if (live.discounted_price !== item.discountPrice) {
             stale = true;
