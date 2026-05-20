@@ -6,16 +6,15 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ProductImageModal from "./ProductImageModal";
+import { useWallet } from "@/hooks/useWallet";
 import {
-  useSubscriptionPlans,
-  computeDiscountedPrice,
   FREQUENCY_META,
   type SubFrequency,
 } from "@/hooks/useSubscriptionPlans";
 
-const FREQS: SubFrequency[] = ["daily", "alternate", "weekly"];
+const FREQS: SubFrequency[] = ["daily", "alternate"];
 
 type Props = { product: Product; index: number };
 
@@ -23,66 +22,141 @@ const UnifiedProductCard = ({ product, index }: Props) => {
   const { add } = useCart();
   const nav = useNavigate();
   const { user } = useAuth();
-  const { data: plans } = useSubscriptionPlans();
-  const { data: activeSubs = [] } = useQuery({
+  const queryClient = useQueryClient();
+  const { data: wallet } = useWallet();
+
+  const { data: activeSubs = [], refetch: refetchActiveSubs } = useQuery({
     queryKey: ['active-user-contracts', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data } = await supabase
+      
+      // Fetch subscriptions
+      const { data: subsData, error: subsError } = await (supabase as any)
         .from('subscriptions')
-        .select('id, status')
+        .select('id, product_slug, status, quantity, selected_days')
         .in('status', ['active', 'paused'])
         .eq('user_id', user.id);
-      return data || [];
+
+      if (subsError) throw subsError;
+      if (!subsData || subsData.length === 0) return [];
+
+      // Fetch products to map parent_group_id
+      const { data: prodsData } = await (supabase as any)
+        .from('products')
+        .select('slug, parent_group_id, name');
+
+      return subsData.map((sub: any) => {
+        const matchingProduct = prodsData?.find((p: any) => p.slug === sub.product_slug);
+        return {
+          ...sub,
+          parent_group_id: matchingProduct?.parent_group_id || null,
+          product_name: matchingProduct?.name || sub.product_slug
+        };
+      });
     },
     enabled: !!user
   });
 
-  const hasOngoingSubscription = activeSubs.length > 0;
+  // Query parent_group_id for this product
+  const { data: productDbInfo } = useQuery({
+    queryKey: ['product-db-info', product.slug],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('products')
+        .select('parent_group_id')
+        .eq('slug', product.slug)
+        .maybeSingle();
+      return data || null;
+    }
+  });
+
+  const parentGroupId = productDbInfo?.parent_group_id || null;
+  const hasOngoingSubscriptionForProduct = activeSubs.some((s: any) => s.product_slug === product.slug);
 
   const [mode, setMode] = useState<"once" | "subscribe">("once");
   const [freq, setFreq] = useState<SubFrequency>("daily");
-  const [selectedAltOption, setSelectedAltOption] = useState<'A' | 'B'>('A');
-  const [selectedWeeklyDay, setSelectedWeeklyDay] = useState<number>(1);
   const [busy, setBusy] = useState(false);
+
+  const [overlapModal, setOverlapModal] = useState<{
+    open: boolean;
+    existingSubName: string;
+    targetDaysArray: number[];
+  }>({ open: false, existingSubName: "", targetDaysArray: [] });
+
+  const [rechargeModal, setRechargeModal] = useState<{
+    open: boolean;
+    currentBalance: number;
+  }>({ open: false, currentBalance: 0 });
   
   const [lightbox, setLightbox] = useState<{ open: boolean; index: number }>({ open: false, index: 0 });
 
   const off = Math.round(((product.price - product.discountPrice) / product.price) * 100);
 
-  const plan = useMemo(
-    () => plans?.find((p: any) => p.product_slug === product.slug && p.frequency_type === freq),
-    [plans, product.slug, freq],
-  );
-  const subPrice = computeDiscountedPrice(product.discountPrice, freq, plan);
-  const perDelivery = product.discountPrice - subPrice;
+  const subPrice = product.discountPrice;
+  const perDelivery = product.price - subPrice;
   const monthly = perDelivery * FREQUENCY_META[freq].perMonth;
   
   const isSoldOut = (product.stock_quantity ?? 1) <= 0;
 
-  const subscribe = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    // Determine target days array based on active selected frequency tab
-    let targetDays: number[] = [1, 2, 3, 4, 5, 6, 0]; // Default for Daily
-    
-    if (freq === 'alternate') {
-      targetDays = selectedAltOption === 'A' ? [1, 3, 5] : [2, 4, 0];
-    } else if (freq === 'weekly') {
-      targetDays = [selectedWeeklyDay];
-    }
+  const [selectedAltOption, setSelectedAltOption] = useState<'A' | 'B'>('A');
 
-    const cartProduct = {
+  const executeSubscriptionTemplate = async (selectedDaysArray: number[]) => {
+    // Add to cart instead of direct DB insert
+    add({
       ...product,
-      name: plan?.title || product.name,
+      id: `${product.id}-sub-${freq}`,
+      name: product.name,
+      price: product.price,
       discountPrice: subPrice,
       frequency_type: freq,
-      unit: plan ? `Pack of ${plan.quantity}` : product.unit
-    };
+      slug: product.slug
+    }, 'subscription', selectedDaysArray);
+    
+    setOpen(true);
+  };
 
-    add(cartProduct, "subscription", targetDays);
-    toast.success(`Added ${product.name} subscription to cart!`);
+  const subscribe = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (!user) {
+      toast.error("Please sign in to subscribe.");
+      nav("/auth");
+      return;
+    }
+    
+    // Determine target days array based on active selected frequency tab
+    let targetDaysArray: number[] = [1, 2, 3, 4, 5, 6, 0]; // Default for Daily
+    
+    if (freq === 'alternate') {
+      targetDaysArray = selectedAltOption === 'A' ? [0, 2, 4] : [1, 3, 5];
+    }
+
+    // Step A: (Cart checkout handles wallet/payment)
+
+    // Step B: Hard-Block Identical Duplicates
+    const duplicateSub = activeSubs.find((s: any) => s.product_slug === product.slug);
+    if (duplicateSub) {
+      toast.error("You already have an active subscription for this product. Please manage or upgrade your existing plan in your Account Dashboard.", {
+        duration: 5000
+      });
+      return;
+    }
+
+    // Step C: Soft-Warn Category Group Overlaps
+    if (parentGroupId) {
+      const familyOverlap = activeSubs.find((s: any) => s.parent_group_id === parentGroupId && s.product_slug !== product.slug);
+      if (familyOverlap) {
+        setOverlapModal({
+          open: true,
+          existingSubName: familyOverlap.product_name,
+          targetDaysArray
+        });
+        return;
+      }
+    }
+
+    await executeSubscriptionTemplate(targetDaysArray);
   };
 
   return (
@@ -227,7 +301,7 @@ const UnifiedProductCard = ({ product, index }: Props) => {
                   }`}
                 >
                   <div className="text-[10px] font-bold">Option A</div>
-                  <div className="text-[9px] mt-0.5 font-semibold leading-tight text-muted-foreground">Mon, Wed, Fri</div>
+                  <div className="text-[9px] mt-0.5 font-semibold leading-tight text-muted-foreground">Sun, Tue, Thu</div>
                 </button>
                 <button
                   type="button"
@@ -239,35 +313,8 @@ const UnifiedProductCard = ({ product, index }: Props) => {
                   }`}
                 >
                   <div className="text-[10px] font-bold">Option B</div>
-                  <div className="text-[9px] mt-0.5 font-semibold leading-tight text-muted-foreground">Tue, Thu, Sun</div>
+                  <div className="text-[9px] mt-0.5 font-semibold leading-tight text-muted-foreground">Mon, Wed, Fri</div>
                 </button>
-              </div>
-            )}
-
-            {freq === "weekly" && (
-              <div className="mt-3 space-y-1">
-                <div className="text-[9px] text-muted-foreground font-bold tracking-wider uppercase text-center">Delivery Day</div>
-                <div className="flex justify-between gap-1 bg-background/50 p-1 rounded-full border border-border/50">
-                  {["S", "M", "T", "W", "T", "F", "S"].map((day, idx) => {
-                    const isSelected = selectedWeeklyDay === idx;
-                    const dayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][idx];
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setSelectedWeeklyDay(idx)}
-                        title={dayName}
-                        className={`w-7 h-7 rounded-full text-[10px] font-bold transition-all flex items-center justify-center ${
-                          isSelected
-                            ? "bg-primary text-brown shadow"
-                            : "bg-transparent text-muted-foreground hover:bg-secondary/40"
-                        }`}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             )}
             {monthly > 0 && (
@@ -289,12 +336,10 @@ const UnifiedProductCard = ({ product, index }: Props) => {
             </div>
             <div className="flex items-baseline gap-2">
               <span className="font-display font-bold text-brown text-2xl">
-                ₹{mode === "subscribe" ? subPrice : product.discountPrice}
+                ₹{mode === "subscribe" ? subPrice : product.price}
               </span>
-              {mode === "subscribe" ? (
-                <span className="text-sm text-muted-foreground line-through">₹{product.discountPrice}</span>
-              ) : (
-                off > 0 && <span className="text-sm text-muted-foreground line-through">₹{product.price}</span>
+              {mode === "subscribe" && (
+                <span className="text-sm text-muted-foreground line-through">₹{product.price}</span>
               )}
             </div>
           </div>
@@ -302,13 +347,13 @@ const UnifiedProductCard = ({ product, index }: Props) => {
             <Button
               size={isSoldOut ? "default" : "sm"} variant="hero"
               className={isSoldOut ? "h-11 rounded-full px-4" : "h-11 w-11 p-0 rounded-full shadow-yolk"}
-              onClick={(e) => { e.stopPropagation(); add(product, "instant"); }}
+              onClick={(e) => { e.stopPropagation(); add({ ...product, discountPrice: product.price }, "instant"); }}
               disabled={isSoldOut}
               aria-label={`Add ${product.name}`}
             >
               {isSoldOut ? "Out of Stock" : <Plus className="w-5 h-5" />}
             </Button>
-          ) : hasOngoingSubscription ? (
+          ) : hasOngoingSubscriptionForProduct ? (
             <Button
               onClick={(e) => {
                 e.stopPropagation();
@@ -332,6 +377,78 @@ const UnifiedProductCard = ({ product, index }: Props) => {
           )}
         </div>
       </div>
+
+      {overlapModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-card border border-border rounded-3xl p-6 max-w-sm w-full shadow-card animate-scale-in text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 grid place-items-center mx-auto text-xl">
+              ⚠️
+            </div>
+            <h4 className="font-display font-bold text-lg text-brown leading-tight">Category Group Overlap</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Notice: You already have an active subscription for <span className="font-semibold text-brown">{overlapModal.existingSubName}</span> in this category.
+            </p>
+            <p className="text-xs font-semibold text-brown/90 leading-relaxed">
+              Do you want to establish this parallel subscription as a separate recurring delivery line?
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="ghost"
+                className="flex-1 rounded-xl text-xs font-bold border border-border"
+                onClick={() => setOverlapModal({ open: false, existingSubName: "", targetDaysArray: [] })}
+              >
+                No, cancel
+              </Button>
+              <Button
+                variant="hero"
+                className="flex-1 rounded-xl text-xs font-bold shadow-yolk"
+                onClick={() => {
+                  setOverlapModal({ open: false, existingSubName: "", targetDaysArray: [] });
+                  executeSubscriptionTemplate(overlapModal.targetDaysArray);
+                }}
+              >
+                Yes, establish
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rechargeModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-card border border-border rounded-3xl p-6 max-w-sm w-full shadow-card animate-scale-in text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 grid place-items-center mx-auto text-xl">
+              👛
+            </div>
+            <h4 className="font-display font-bold text-lg text-brown leading-tight">Prepaid Balance Top-Up Required</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              To activate a recurring morning delivery schedule, your wallet requires a minimum balance of <span className="font-semibold text-brown">₹200.00</span> to secure warehouse packing manifests.
+            </p>
+            <p className="text-xs font-semibold text-rose-600 leading-relaxed bg-rose-50/50 p-2.5 rounded-xl border border-rose-100/50">
+              Your current balance is ₹{rechargeModal.currentBalance.toFixed(2)}.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="ghost"
+                className="flex-1 rounded-xl text-xs font-bold border border-border"
+                onClick={() => setRechargeModal({ open: false, currentBalance: 0 })}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="hero"
+                className="flex-1 rounded-xl text-xs font-bold shadow-yolk"
+                onClick={() => {
+                  setRechargeModal({ open: false, currentBalance: 0 });
+                  nav("/account?tab=wallet");
+                }}
+              >
+                Top Up Wallet
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ProductImageModal 
         open={lightbox.open}

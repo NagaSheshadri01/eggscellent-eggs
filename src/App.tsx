@@ -38,6 +38,7 @@ const AdminCustomerDetail = lazy(() => import("./pages/admin/AdminCustomerDetail
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminDeliveryPartners = lazy(() => import("./pages/admin/AdminDeliveryPartners"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
+const AdminLogistics = lazy(() => import("./pages/admin/AdminLogistics"));
 const AdminStaff = lazy(() => import("./pages/admin/AdminStaff"));
 
 const queryClient = new QueryClient();
@@ -58,6 +59,7 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/unauthorized" element={<Unauthorized />} />
                 <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+                <Route path="/account/wallet" element={<RequireAuth><Account defaultTab="wallet" /></RequireAuth>} />
                 <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
                 <Route path="/subscriptions" element={<SubscriptionShop />} />
                 <Route path="/checkout" element={<Checkout />} />
@@ -70,6 +72,7 @@ const App = () => (
 
                 <Route path="/admin" element={<RequireAuth adminOnly><AdminLayout /></RequireAuth>}>
                   <Route index element={<Dashboard />} />
+                  <Route path="logistics" element={<AdminLogistics />} />
                   <Route path="orders" element={<AdminOrders />} />
                   <Route path="orders/:id" element={<AdminOrderDetail />} />
                   <Route path="products" element={<AdminProducts />} />

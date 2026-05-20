@@ -21,6 +21,8 @@ const slots = ["08:00 AM – 12:00 PM", "02:00 PM – 06:00 PM", "06:00 PM – 0
 
 const Checkout = () => {
   const { items, total, clear, appliedCoupon, setAppliedCoupon, discount, grandTotal, selectedAddressId } = useCart();
+  const hasSubscriptionInCart = items.some(item => item.purchase_type === 'subscription');
+  const hasOnlySubscriptions = items.length > 0 && items.every(i => i.purchase_type === 'subscription');
   const { user } = useAuth();
   const nav = useNavigate();
   const { isComplete, missing, hasPhone, refetch: refetchProfile, isLoading: profileLoading } = useProfileCompleteness();
@@ -28,7 +30,7 @@ const Checkout = () => {
 
   const [step, setStep] = useState(1);
   const [selectedAddr, setSelectedAddr] = useState<string>(selectedAddressId || "");
-  const [slot, setSlot] = useState(slots[0]);
+  const [slot, setSlot] = useState(hasSubscriptionInCart ? "early_morning" : slots[0]);
   const [payment, setPayment] = useState<"online" | "upi" | "cod">("online");
   const [coupon, setCoupon] = useState("");
   const [placing, setPlacing] = useState(false);
@@ -38,7 +40,14 @@ const Checkout = () => {
   const [checkingAddr, setCheckingAddr] = useState(false);
 
   // Sync address from cart drawer pre-selection
-  useEffect(() => { if (selectedAddressId && !selectedAddr) setSelectedAddr(selectedAddressId); }, [selectedAddressId]);
+  useEffect(() => {
+    if (selectedAddressId && !selectedAddr) setSelectedAddr(selectedAddressId);
+  }, [selectedAddressId]);
+
+  // Ensure early morning slot when subscription present
+  useEffect(() => {
+    if (hasSubscriptionInCart) setSlot("early_morning");
+  }, [hasSubscriptionInCart]);
 
   // Real-time Qualification Engine for the offer cards on checkout page
   const offersWithEligibility = useMemo(() => {
@@ -140,47 +149,91 @@ const Checkout = () => {
       onlinePaid = true;
     }
 
+    const subItems = items.filter(i => i.purchase_type === 'subscription');
+    const instantItems = items.filter(i => i.purchase_type === 'instant');
+
     const { data: addr } = await supabase.from("addresses").select("*").eq("id", selectedAddr).maybeSingle();
     const lat = (addr as any)?.lat ?? null;
     const lng = (addr as any)?.lng ?? null;
-    const { data: order, error } = await supabase.from("orders").insert({
-      user_id: user.id,
-      address_id: selectedAddr,
-      address_snapshot: addr as any,
-      subtotal: total,
-      delivery_fee: deliveryFee,
-      discount: calculatedDiscount,
-      total: grand,
-      payment_method: (payment === "online" ? "upi" : payment) as any,
-      payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
-      order_status: "placed",
-      delivery_slot: slot,
-      coupon_code: appliedCoupon?.code,
-      lat, lng,
-      pincode: (addr as any)?.pincode ?? null,
-    } as any).select().single();
-    if (error || !order) { setPlacing(false); return toast.error(error?.message || "Could not place order"); }
 
-    const itemsRows = items.map(i => ({
-      order_id: order.id,
-      product_id: i.id,
-      product_name: i.name,
-      product_image: i.image,
-      unit: i.unit,
-      quantity: i.qty,
-      price: i.discountPrice,
-    }));
-    const { error: e2 } = await supabase.from("order_items").insert(itemsRows);
-    setPlacing(false);
-    if (e2) {
-      if (e2.message.includes("INSUFFICIENT_STOCK")) {
-        return toast.error("Sorry, one or more items in your cart just went out of stock. Please update your cart");
+    let orderIdToNavigate = "sub-success";
+
+    if (subItems.length > 0) {
+      const { data: profile } = await (supabase as any).from('profiles').select('is_vip').eq('id', user.id).maybeSingle();
+      const subRows = subItems.map(i => {
+        // id was set as `${product.id}-sub-${freq}`
+        const actualProductId = i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id;
+        return {
+          user_id: user.id,
+          product_slug: i.slug || '',
+          product_id: actualProductId,
+          quantity: i.qty,
+          selected_days: i.subscription_days || [1,3,5],
+          status: 'active',
+          is_vip: profile?.is_vip || false,
+          wallet_mode: true,
+          address_id: selectedAddr
+        };
+      });
+      
+      const { error: subErr } = await (supabase as any).from('subscriptions').insert(subRows);
+      if (subErr) {
+        setPlacing(false);
+        return toast.error("Failed to setup subscriptions: " + subErr.message);
       }
-      return toast.error(e2.message);
     }
+
+    if (instantItems.length > 0 || (subItems.length === 0 && items.length === 0)) {
+      const { data: order, error } = await supabase.from("orders").insert({
+        user_id: user.id,
+        address_id: selectedAddr,
+        address_snapshot: addr as any,
+        subtotal: total,
+        delivery_fee: deliveryFee,
+        discount: calculatedDiscount,
+        total: grand,
+        payment_method: (payment === "online" ? "upi" : payment) as any,
+        payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
+        order_status: "placed",
+        delivery_slot: slot,
+        coupon_code: appliedCoupon?.code,
+        lat, lng,
+        pincode: (addr as any)?.pincode ?? null,
+      } as any).select().single();
+      
+      if (error || !order) { setPlacing(false); return toast.error(error?.message || "Could not place order"); }
+      orderIdToNavigate = order.id;
+
+      if (instantItems.length > 0) {
+        const itemsRows = instantItems.map(i => ({
+          order_id: order.id,
+          product_id: i.id,
+          product_name: i.name,
+          product_image: i.image,
+          unit: i.unit,
+          quantity: i.qty,
+          price: i.discountPrice,
+        }));
+        const { error: e2 } = await supabase.from("order_items").insert(itemsRows);
+        if (e2) {
+          setPlacing(false);
+          if (e2.message.includes("INSUFFICIENT_STOCK")) {
+            return toast.error("Sorry, one or more items in your cart just went out of stock. Please update your cart");
+          }
+          return toast.error(e2.message);
+        }
+      }
+    }
+
+    setPlacing(false);
     placedRef.current = true;
     clear();
-    nav(`/order-success/${order.id}`);
+    if (orderIdToNavigate === "sub-success") {
+      toast.success("Subscriptions activated successfully!");
+      nav("/account?tab=subscriptions");
+    } else {
+      nav(`/order-success/${orderIdToNavigate}`);
+    }
   };
 
   if (!user) {
@@ -216,17 +269,34 @@ const Checkout = () => {
         </section>
 
         {/* Slot */}
-        <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
-          <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-1"><Clock className="w-5 h-5 text-primary" /> Delivery slot</h2>
-          <p className="text-xs text-muted-foreground mb-4 ml-7">Standard Delivery Windows</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {slots.map(s => (
-              <button key={s} onClick={() => { setSlot(s); setStep(st => Math.max(st, 2)); }} className={`px-4 py-3 rounded-xl text-sm font-medium border transition-smooth ${slot === s ? "border-primary bg-primary/10 text-brown" : "border-border text-muted-foreground hover:border-primary/40"}`}>
-                {s}
-              </button>
-            ))}
-          </div>
-        </section>
+        {hasSubscriptionInCart ? (
+          <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
+            <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-2">
+              <Clock className="w-5 h-5 text-primary" /> Delivery slot
+            </h2>
+            <div className="p-3.5 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2">
+              <span className="text-lg">☀️</span>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Delivery Schedule</span>
+                <span className="text-sm font-medium text-amber-900">
+                  Strictly Early Morning Delivery (Freshly dropped before 7:00 AM)
+                </span>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
+            <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-1"><Clock className="w-5 h-5 text-primary" /> Delivery slot</h2>
+            <p className="text-xs text-muted-foreground mb-4 ml-7">Standard Delivery Windows</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {slots.map(s => (
+                <button key={s} onClick={() => { setSlot(s); setStep(st => Math.max(st, 2)); }} className={`px-4 py-3 rounded-xl text-sm font-medium border transition-smooth ${slot === s ? "border-primary bg-primary/10 text-brown" : "border-border text-muted-foreground hover:border-primary/40"}`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Payment */}
         <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">

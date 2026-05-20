@@ -1,4 +1,4 @@
-import { MapPin, ShoppingBag, ChevronDown, User, LogOut, Package, Home as HomeIcon, UserCircle, Calendar } from "lucide-react";
+import { MapPin, ShoppingBag, ChevronDown, User, LogOut, Package, Home as HomeIcon, UserCircle, Calendar, Wallet } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import StaffPortalLink from "@/components/site/StaffPortalLink";
 
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { useWallet } from "@/hooks/useWallet";
 
 import { isSyntheticEmail } from "@/lib/services/user.service";
 
@@ -15,6 +16,7 @@ const Header = () => {
   const { user, signOut, isPartner } = useAuth();
   const nav = useNavigate();
   const { data: settings } = useAppSettings();
+  const { data: wallet, isLoading: isWalletLoading } = useWallet();
   const businessName = settings?.business?.business_name || "Eggscellent";
 
   const displayId = isSyntheticEmail(user?.email)
@@ -44,8 +46,25 @@ const Header = () => {
           </Link>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <StaffPortalLink />
+          
+          {user && (
+            <Link
+              to="/account?tab=wallet"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-smooth shadow-soft hover:scale-[1.03] active:scale-[0.98] ${
+                !isWalletLoading && (wallet?.balance ?? 0.0) < 100
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-700 hover:bg-amber-500/20"
+                  : "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/20"
+              }`}
+            >
+              <span className="text-sm">👛</span>
+              <span className="font-mono font-bold">
+                ₹{isWalletLoading ? "..." : wallet?.balance?.toFixed(2)}
+              </span>
+            </Link>
+          )}
+
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -62,6 +81,7 @@ const Header = () => {
                 )}
                 <DropdownMenuItem onClick={() => nav("/account?tab=orders")}><Package className="w-4 h-4 mr-2" /> Recent orders</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => nav("/account?tab=subscriptions")}><Calendar className="w-4 h-4 mr-2" /> My Subscriptions</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => nav("/account?tab=wallet")}><Wallet className="w-4 h-4 mr-2" /> My Wallet</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => nav("/account?tab=addresses")}><HomeIcon className="w-4 h-4 mr-2" /> Saved addresses</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut()}><LogOut className="w-4 h-4 mr-2" /> Sign out</DropdownMenuItem>

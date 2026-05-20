@@ -1,9 +1,10 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Users, HelpCircle, FileText, Tag, ArrowLeft, Settings, Truck, Repeat, ShieldCheck, Sparkles } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, HelpCircle, FileText, Tag, ArrowLeft, Settings, Truck, Repeat, ShieldCheck, Sparkles, Navigation } from "lucide-react";
 import Seo from "@/components/Seo";
 
 const items = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/admin/logistics", label: "Logistics Dispatch", icon: Navigation },
   { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/customers", label: "Customers", icon: Users },

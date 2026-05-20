@@ -109,7 +109,8 @@ const CartDrawer = () => {
 
     let adjustments = 0;
     const synced = items.map(i => {
-      const p = allProducts.find(ap => ap.id === i.id);
+      const baseId = i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id;
+      const p = allProducts.find(ap => ap.id === baseId);
       if (!p || !p.active) {
         adjustments++;
         toast.error(`${i.name} is no longer available`);
@@ -256,16 +257,29 @@ const CartDrawer = () => {
 
     // 2. Process Subscription Items
     if (subItems.length > 0) {
+      // Pre-validate that all subscription items can resolve a valid product UUID
+      for (const i of subItems) {
+        const product = allProducts?.find(p => p.slug === i.slug || p.name === i.slug || p.id === i.id);
+        if (!product) {
+          toast.error(`Could not resolve catalog product for subscription: ${i.name}. Please contact support.`);
+          setPlacing(false);
+          return;
+        }
+      }
+
       const { error: subErr } = await (supabase as any).from("subscriptions").insert(
         subItems.map(i => {
-          const plan = activePlans?.find(p => p.product_slug === i.slug);
+          const product = allProducts?.find(p => p.slug === i.slug || p.name === i.slug || p.id === i.id);
+          const resolvedSlug = product?.slug || i.slug;
+          const plan = activePlans?.find(p => 
+            (p.product_slug === resolvedSlug || p.product_slug === i.slug) && 
+            p.frequency_type === i.frequency_type
+          );
           const isWeekly = plan?.frequency_type === 'weekly';
-          // Resolve matching product ID if needed
-          const product = allProducts?.find(p => p.slug === i.slug);
           return {
             user_id: user.id,
-            product_slug: i.slug,
-            product_id: product?.id || i.id, // Write correct UUID product_id
+            product_slug: resolvedSlug,
+            product_id: product?.id, // Assured to be valid UUID
             plan_id: plan?.id || null, // Write correct subscription plan_id
             quantity: i.qty,
             selected_days: i.subscription_days || (isWeekly ? [1] : (plan?.frequency_type === 'alternate' ? (
@@ -282,16 +296,20 @@ const CartDrawer = () => {
           };
         })
       );
-      if (subErr) { toast.error("Some subscriptions failed to save: " + subErr.message); }
-    }
 
+      if (subErr) {
+        toast.error("Subscriptions failed to save: " + subErr.message);
+        setPlacing(false);
+        return;
+      }
+    }
 
     setPlacing(false);
     placedRef.current = true;
     clear();
     setOpen(false);
     if (mainOrderId) nav(`/order-success/${mainOrderId}`);
-    else { toast.success("Subscriptions confirmed!"); nav("/account"); }
+    else { toast.success("Subscriptions confirmed!"); nav("/account?tab=subscriptions"); }
   };
 
   // Step label helpers

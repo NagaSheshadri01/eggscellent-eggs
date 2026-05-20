@@ -13,6 +13,10 @@ import Seo from "@/components/Seo";
 import { format } from "date-fns";
 
 import { getSlotLabel } from "@/constants/delivery";
+import { PartnerOrderCard as SwipePartnerOrderCard } from "@/components/partner/PartnerOrderCard";
+import { DeliveryIssueModal } from "@/components/partner/DeliveryIssueModal";
+import { useDriverShift } from "@/hooks/useDriverShift";
+import { useProducts } from "@/hooks/useProducts";
 
 const WAREHOUSE_DEFAULT = { lat: 17.5012, lng: 78.4985 };
 
@@ -156,6 +160,12 @@ const Partner = () => {
   const [loc, setLoc] = useState<{lat: number, lng: number} | null>(null);
   const [warehouse, setWarehouse] = useState(WAREHOUSE_DEFAULT);
 
+  // Phase 5: Driver Shift states and hooks
+  const [completedStops, setCompletedStops] = useState<Record<string, boolean>>({});
+  const [selectedIssueStopId, setSelectedIssueStopId] = useState<string | null>(null);
+  
+  const { data: productsList = [] } = useProducts({ onlyActive: false });
+
   useEffect(() => {
     const fetchWarehouse = async () => {
       const { data } = await (supabase.from("app_settings") as any).select("value").eq("key", "warehouse_config").maybeSingle();
@@ -198,15 +208,16 @@ const Partner = () => {
   });
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { updateStopStatus } = useDriverShift(user?.id, todayStr);
   const subDeliveries = useQuery({
     queryKey: ["partner_sub_deliveries", user?.id, todayStr],
     enabled: !!user?.id && activeFeed === 'subscription',
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("subscription_deliveries")
+        .from("delivery_ledger")
         .select(`*, subscriptions(product_slug, quantity, address_id, addresses(full_name, lat, lng, address_line_1, pincode))`)
         .eq("delivery_partner_id", user!.id)
-        .in("status", ["pending", "out_for_delivery"])
+        .in("status", ["scheduled", "out_for_delivery"])
         .eq("delivery_date", todayStr);
       if (error) throw error;
       return (data ?? []) as any[];
@@ -340,126 +351,125 @@ const Partner = () => {
           </button>
         </div>
 
-        {activeFeed === 'subscription' && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Subscription Shift</h1>
-              <p className="text-sm text-muted-foreground">Today's recurring delivery queue — {todayStr}</p>
-            </div>
+        {activeFeed === 'subscription' && (() => {
+          const rawStops = subDeliveries.data || [];
+          const activeStops = rawStops.filter((s: any) => !completedStops[s.id] && s.status !== 'delivered' && s.status !== 'skipped' && s.status !== 'failed');
 
-            {subDeliveries.isLoading && <div className="space-y-3"><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div>}
-            {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error as any).message}</div>}
-
-            {!subDeliveries.isLoading && (subDeliveries.data ?? []).length === 0 && (
-              <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border">
-                <Repeat className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-30" />
-                <p className="font-display font-bold text-brown">No subscription deliveries today</p>
-                <p className="text-sm text-muted-foreground mt-1">You have no pending subscription stops for today.</p>
+          return (
+            <div className="space-y-6">
+              <div>
+                <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Subscription Shift</h1>
+                <p className="text-sm text-muted-foreground">Today's recurring delivery queue — {todayStr}</p>
               </div>
-            )}
 
-            {(subDeliveries.data ?? []).length > 0 && (() => {
-              const stops = subDeliveries.data!;
-              const subIds = stops.map((s: any) => s.id);
-              const allCoords = stops
-                .map((s: any) => s.subscriptions?.addresses)
-                .filter((a: any) => a?.lat && a?.lng);
-              const routeUrl = allCoords.length > 0
-                ? `https://www.google.com/maps/dir/?api=1&origin=${warehouse.lat},${warehouse.lng}&destination=${allCoords[allCoords.length-1].lat},${allCoords[allCoords.length-1].lng}${allCoords.length > 1 ? `&waypoints=${allCoords.slice(0,-1).map((a: any) => `${a.lat},${a.lng}`).join('|')}` : ''}&travelmode=driving`
-                : null;
+              {subDeliveries.isLoading && <div className="space-y-3"><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div>}
+              {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error as any).message}</div>}
 
-              return (
-                <div className="bg-card rounded-2xl shadow-soft border border-border/50 overflow-hidden">
-                  <div className="p-6 border-b border-border/40 bg-secondary/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
-                        <Repeat className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h2 className="font-display font-bold text-brown text-xl">🌅 Early Morning Subscription Shift</h2>
-                        <p className="text-xs text-muted-foreground mt-0.5">{stops.length} recurring stops today</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      {routeUrl && (
-                        <a href={routeUrl} target="_blank" rel="noreferrer">
-                          <Button variant="outline" className="border-primary text-primary hover:bg-primary/5 h-12 px-6 font-bold">
-                            <Navigation className="w-4 h-4 mr-2" /> Continue Route
-                          </Button>
-                        </a>
-                      )}
-                      {stops.some((s: any) => s.status === 'pending') && (
-                        <Button
-                          className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-12 px-6 shadow-lg shadow-amber-500/20"
-                          onClick={async () => {
-                            const pendingIds = stops.filter((s: any) => s.status === 'pending').map((s: any) => s.id);
-                            const { error } = await (supabase as any).from('subscription_deliveries').update({ status: 'out_for_delivery' }).in('id', pendingIds);
-                            if (error) toast.error(error.message);
-                            else { subDeliveries.refetch(); toast.success(`${pendingIds.length} subscription stops dispatched!`); }
-                          }}
-                        >
-                          🚚 Start Subscription Shift
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="p-6 space-y-4">
-                    <div className="flex items-center gap-2 text-muted-foreground uppercase text-[10px] font-bold tracking-widest mb-2">
-                      <ShieldCheck className="w-4 h-4" /> Shift Manifesto & Verification
-                    </div>
-                    {stops.map((s: any, idx: number) => {
-                      const addr = s.subscriptions?.addresses || {};
-                      const navUrl = addr.lat && addr.lng
-                        ? `https://www.google.com/maps/dir/?api=1&destination=${addr.lat},${addr.lng}&travelmode=driving`
-                        : null;
-                      return (
-                        <div key={s.id} className="group relative pl-10 pb-6 border-l-2 border-dashed border-border last:border-0 last:pb-0">
-                          <div className="absolute left-[-11px] top-0 w-5 h-5 rounded-full bg-secondary border-2 border-border flex items-center justify-center text-[10px] font-bold text-brown group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-colors">
-                            {idx + 1}
-                          </div>
-                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 bg-secondary/5 rounded-2xl p-4 border border-transparent hover:border-primary/20 hover:bg-white transition-all">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-display font-bold text-brown text-base">{addr.full_name || 'Customer'}</span>
-                                <span className="text-[9px] font-mono bg-secondary px-2 py-0.5 rounded text-muted-foreground">×{s.subscriptions?.quantity}</span>
-                              </div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <MapPin className="w-3 h-3" /> {addr.address_line_1 || '—'}, {addr.pincode || ''}
-                              </div>
-                              <div className="mt-3 text-[10px] font-bold text-primary uppercase tracking-tighter bg-primary/10 px-2 py-0.5 rounded self-start inline-block">
-                                Verification Note: Match with Subscription Bill ID #{s.bill_id}
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-2 shrink-0">
-                              {navUrl && (
-                                <a href={navUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs font-bold text-blue-600 border border-blue-200 px-4 py-2 rounded-xl hover:bg-blue-50 transition-colors">
-                                  📍 Navigate Stop
-                                </a>
-                              )}
-                              {s.status !== 'delivered' && (
-                                <button
-                                  onClick={async () => {
-                                    const { error } = await (supabase as any).from('subscription_deliveries').update({ status: 'delivered' }).eq('id', s.id);
-                                    if (error) toast.error(error.message);
-                                    else { subDeliveries.refetch(); toast.success('Delivery confirmed!'); }
-                                  }}
-                                  className="text-xs font-bold text-white bg-green-600 px-4 py-2 rounded-xl hover:bg-green-700 transition-colors shadow-sm shadow-green-600/20"
-                                >
-                                  ✓ Complete Delivery
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+              {!subDeliveries.isLoading && activeStops.length === 0 && (
+                <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border animate-in fade-in duration-300">
+                  <Repeat className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-30" />
+                  <p className="font-display font-bold text-brown">No active subscription deliveries today</p>
+                  <p className="text-sm text-muted-foreground mt-1">All subscription stops have been successfully completed or exception-handled.</p>
                 </div>
-              );
-            })()}
-          </div>
-        )}
+              )}
+
+              {activeStops.length > 0 && (() => {
+                const allCoords = activeStops
+                  .map((s: any) => s.subscriptions?.addresses)
+                  .filter((a: any) => a?.lat && a?.lng);
+                const routeUrl = allCoords.length > 0
+                  ? `https://www.google.com/maps/dir/?api=1&origin=${warehouse.lat},${warehouse.lng}&destination=${allCoords[allCoords.length-1].lat},${allCoords[allCoords.length-1].lng}${allCoords.length > 1 ? `&waypoints=${allCoords.slice(0,-1).map((a: any) => `${a.lat},${a.lng}`).join('|')}` : ''}&travelmode=driving`
+                  : null;
+
+                return (
+                  <div className="bg-card rounded-2xl shadow-soft border border-border/50 overflow-hidden animate-in fade-in duration-500">
+                    <div className="p-6 border-b border-border/40 bg-secondary/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
+                          <Repeat className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h2 className="font-display font-bold text-brown text-xl">🌅 Early Morning Subscription Shift</h2>
+                          <p className="text-xs text-muted-foreground mt-0.5">{activeStops.length} recurring stops remaining</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {routeUrl && (
+                          <a href={routeUrl} target="_blank" rel="noreferrer">
+                            <Button variant="outline" className="border-primary text-primary hover:bg-primary/5 h-12 px-6 font-bold">
+                              <Navigation className="w-4 h-4 mr-2" /> Continue Route
+                            </Button>
+                          </a>
+                        )}
+                        {activeStops.some((s: any) => s.status === 'scheduled') && (
+                          <Button
+                            className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-12 px-6 shadow-lg shadow-amber-500/20"
+                            onClick={async () => {
+                              const pendingIds = activeStops.filter((s: any) => s.status === 'scheduled').map((s: any) => s.id);
+                              const { error } = await (supabase as any).from('delivery_ledger').update({ status: 'out_for_delivery' }).in('id', pendingIds);
+                              if (error) toast.error(error.message);
+                              else { subDeliveries.refetch(); toast.success(`${pendingIds.length} subscription stops dispatched!`); }
+                            }}
+                          >
+                            🚚 Start Subscription Shift
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-6">
+                      <div className="flex items-center gap-2 text-muted-foreground uppercase text-[10px] font-bold tracking-widest mb-4">
+                        <ShieldCheck className="w-4 h-4" /> Shift Manifesto & Verification
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {activeStops.map((s: any) => {
+                          const matchingProduct = productsList.find((p: any) => p.slug === s.subscriptions?.product_slug);
+                          const productName = matchingProduct?.name || s.subscriptions?.product_slug || "Premium Eggs";
+                          const effectivePrice = matchingProduct?.discountPrice || matchingProduct?.discounted_price || 150.00;
+
+                          return (
+                            <div 
+                              key={s.id}
+                              className="transition-all duration-500 ease-out transform"
+                            >
+                              <SwipePartnerOrderCard
+                                deliveryItem={s}
+                                productName={productName}
+                                effectivePrice={effectivePrice}
+                                onConfirmDelivery={async (stopId) => {
+                                  // Optimistic Collapse State setting
+                                  setCompletedStops(prev => ({ ...prev, [stopId]: true }));
+                                  await updateStopStatus.mutateAsync({ stopId, status: 'delivered' });
+                                  toast.success("Delivery confirmed and wallet deducted successfully!");
+                                }}
+                                onLogIssue={(stopId) => {
+                                  setSelectedIssueStopId(stopId);
+                                }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Delivery Issue Modal */}
+              <DeliveryIssueModal
+                open={selectedIssueStopId !== null}
+                onClose={() => setSelectedIssueStopId(null)}
+                onSelectIssue={async (status) => {
+                  if (!selectedIssueStopId) return;
+                  const stopId = selectedIssueStopId;
+                  setCompletedStops(prev => ({ ...prev, [stopId]: true }));
+                  await updateStopStatus.mutateAsync({ stopId, status });
+                  toast.success(`Delivery logged as ${status} (No wallet charges deducted)`);
+                }}
+              />
+            </div>
+          );
+        })()}
 
         {activeFeed === 'instant' && (
         <div className="space-y-6">

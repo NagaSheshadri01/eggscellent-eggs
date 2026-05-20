@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, Calendar, MapPin, RefreshCw, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 
 type SubscriptionContract = {
   id: string;
@@ -34,6 +35,9 @@ type SubscriptionContract = {
     frequency_type: string;
     price_per_delivery: number;
   } | null;
+  products?: {
+    name: string;
+  } | null;
 };
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -41,6 +45,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const AccountSubscriptions = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [pauseModal, setPauseModal] = useState<{ open: boolean; subId: string; status: string }>({ open: false, subId: "", status: "" });
 
   const { data: contracts = [], isLoading, error, refetch } = useQuery<SubscriptionContract[]>({
     queryKey: ["user-subscriptions", user?.id],
@@ -50,10 +55,11 @@ const AccountSubscriptions = () => {
         .from("subscriptions")
         .select(`
           *,
-          addresses:address_id (address_line_1, address_line_2, landmark, city, state, pincode),
-          subscription_plans:plan_id (id, title, description, frequency_type, custom_days, price_per_delivery)
+          products:product_id (name, discounted_price),
+          addresses:address_id (address_line_1, address_line_2, landmark, city, state, pincode)
         `)
         .eq("user_id", user.id)
+        .in("status", ["active", "paused"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -111,10 +117,10 @@ const AccountSubscriptions = () => {
 
       // 2. Post-cleanup logistics: Cancel all upcoming pending deliveries
       const { error: delivErr } = await supabase
-        .from("subscription_deliveries")
+        .from("delivery_ledger")
         .update({ status: "cancelled" })
         .eq("subscription_id", subId)
-        .eq("status", "pending");
+        .eq("status", "scheduled");
 
       if (delivErr) {
         console.warn("Could not auto-cancel pending deliveries:", delivErr);
@@ -135,6 +141,15 @@ const AccountSubscriptions = () => {
     );
     if (ok) {
       cancelMutation.mutate(subId);
+    }
+  };
+
+  const handlePauseIntercept = (subId: string, status: string) => {
+    if (status === "active") {
+      setPauseModal({ open: true, subId, status });
+    } else {
+      // Resume directly
+      togglePauseMutation.mutate({ subId, currentStatus: status });
     }
   };
 
@@ -174,12 +189,12 @@ const AccountSubscriptions = () => {
 
   return (
     <div className="space-y-6">
-      {contracts.map((sub) => {
+      {contracts.map((sub: any) => {
         const plan = sub.subscription_plans || {
-          title: `Custom Package (${sub.product_slug})`,
+          title: sub.products?.name || 'Egg Subscription',
           description: "Structured subscription deliveries",
-          frequency_type: sub.selected_days.length === 7 ? "daily" : "weekly",
-          price_per_delivery: 0
+          frequency_type: sub.selected_days?.length === 7 ? "daily" : "weekly",
+          price_per_delivery: sub.products?.discounted_price || sub.effective_price || 0
         };
         const addr = sub.addresses;
         const isWeekly = plan.frequency_type === "weekly";
@@ -294,7 +309,7 @@ const AccountSubscriptions = () => {
                   variant={sub.status === "active" ? "secondary" : "hero"}
                   className="font-bold rounded-xl h-9"
                   disabled={togglePauseMutation.isPending}
-                  onClick={() => togglePauseMutation.mutate({ subId: sub.id, currentStatus: sub.status })}
+                  onClick={() => handlePauseIntercept(sub.id, sub.status)}
                 >
                   {togglePauseMutation.isPending && (
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -361,20 +376,65 @@ const AccountSubscriptions = () => {
                   </div>
                 )}
 
-                {/* C. Immediate Cancellation */}
-                <button
-                  type="button"
-                  onClick={() => handleCancel(sub.id)}
-                  disabled={cancelMutation.isPending}
-                  className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline transition-colors mt-1 sm:mt-0"
-                >
-                  Cancel Subscription
-                </button>
               </div>
             )}
           </div>
         );
       })}
+
+      {pauseModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-card border border-border rounded-3xl p-6 max-w-sm w-full shadow-card animate-scale-in text-center space-y-4">
+            <h4 className="font-display font-bold text-lg text-brown leading-tight">
+              Are you sure you want to pause your fresh milk/egg deliveries?
+            </h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Pausing means you will miss out on your scheduled morning deliveries starting tomorrow. You can resume at any time from this dashboard.
+            </p>
+            <div className="flex flex-col gap-3 pt-2">
+              <Button
+                variant="hero"
+                className="w-full rounded-xl font-bold shadow-yolk"
+                onClick={() => setPauseModal({ open: false, subId: "", status: "" })}
+              >
+                Keep Deliveries Active
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full rounded-xl text-xs font-semibold text-muted-foreground hover:bg-secondary/40"
+                onClick={() => {
+                  togglePauseMutation.mutate({ subId: pauseModal.subId, currentStatus: pauseModal.status });
+                  setPauseModal({ open: false, subId: "", status: "" });
+                }}
+              >
+                Yes, Pause My Schedule
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D. Dark Pattern Cancellation */}
+      <div className="mt-16 pt-8 border-t border-border/20">
+        <details className="group opacity-40 hover:opacity-100 transition-opacity">
+          <summary className="text-[10px] cursor-pointer text-muted-foreground list-none select-none text-center">
+            Advanced Billing Details & Compliance
+          </summary>
+          <div className="mt-4 flex flex-col items-center gap-3">
+            {contracts.filter(c => c.status !== "cancelled").map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => handleCancel(c.id)}
+                disabled={cancelMutation.isPending}
+                className="text-[10px] text-muted-foreground/60 hover:text-red-500 transition-colors"
+              >
+                Terminate agreement for {c.products?.name || c.product_slug}
+              </button>
+            ))}
+          </div>
+        </details>
+      </div>
     </div>
   );
 };

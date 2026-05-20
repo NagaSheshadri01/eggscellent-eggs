@@ -1,73 +1,74 @@
-This updated roadmap is designed to transform your current codebase from a functional demo into a high-integrity, production-ready platform. It incorporates your recent UI observations, fixes the "Identity Leak" (Phone vs. Email), and prepares the system for high-concurrency traffic while staying within Supabase and Vercel Free Tier limits.
+================================================================================
+           EGGCELLENT EGGS: 6-PHASE PREPAID WALLET & DELIVERY LEDGER PLAN
+================================================================================
 
-Save the following content as updates.txt in your project root.
+PHASE 1: THE FINANCIAL FOUNDATION (WALLETS & TRANSACTIONS SCHEMA)
+────────────────────────────────────────────────────────────────────────────────
+Objective: Deploy the immutable financial engine and integrate it into the user profile.
+1. Database Schema Execution:
+   - Create `public.wallets` table to act as a fast balance cache.
+   - Create `public.wallet_transactions` table to serve as the absolute financial source of truth.
+   - Enforce check constraints on transaction types: ('recharge', 'delivery_deduction', 'refund', 'admin_adjustment', 'compensation').
+2. Profile Integration:
+   - Write a database trigger that automatically provisions an empty wallet (balance = 0.00) the moment a new user registers an account.
+   - Build a "Wallet Balance" visual card inside the header navigation bar and the user account dashboard page.
 
-🥚 Eggscellent — Integrated Engineering & UX Roadmap (v2.0)
-Objective: Hardening the "Engine," streamlining JIT (Just-In-Time) identity, and building the Logistics/Partner infrastructure for 1,000+ simultaneous users.
+PHASE 2: STOREFRONT SUBSCRIPTION CREATION & GROUPING MATRIX
+────────────────────────────────────────────────────────────────────────────────
+Objective: Align product families, set up fixed tier pricing, and build the template builder.
+1. Product Hierarchy Upgrade:
+   - Add an optional `parent_group_id` column to `public.products` to link family variations (e.g., 6-pack and 12-pack under a single family identifier).
+2. Plan Management Refactor:
+   - Update `public.subscription_plans` to hold fixed delivery parameters and explicit pricing modes: One-time (₹60), Subscription (₹50), VIP Subscription (₹45).
+   - Incorporate `max_deliveries_per_week` and `is_vip_eligible` metrics directly into the plan template configuration.
+3. Subscription Core Insertion:
+   - Make the storefront "Subscribe" buttons save directly to `public.subscriptions` as an uncharged, paused, or pending template row defining only the user's delivery day choices, active status, and wallet processing mode.
 
-Phase 1: The "Fortress" Layer (Integrity & Reliability)
-Focus: Protecting your money and your stock while fixing "Blank Page" regressions.
+PHASE 3: THE DELIVERY LEDGER ENGINE & THE CALENDAR GRID
+────────────────────────────────────────────────────────────────────────────────
+Objective: Build the date-granular delivery tracker and customer-facing calendar controls.
+1. Ledger Database Deployment:
+   - Create the `public.delivery_ledger` table to house individual daily delivery rows.
+   - Map explicit statuses: ('scheduled', 'delivered', 'paused', 'skipped', 'failed', 'pending_payment', 'cancelled').
+2. Customer Calendar View (`AccountSubscriptions.tsx`):
+   - Build a monthly visual grid calendar where each date displays a color-coded dot mapping to the delivery ledger statuses for that user.
+3. Future-Date Mutability Guardrails:
+   - Allow users to tap a future date and click "Skip Delivery", changing that row's ledger state to `'skipped'`.
+   - Enforce a hard application layer lock: Past dates are completely frozen, unclickable, and immutable forever.
 
-1.1 Database-Level Inventory Guard: * Implement a PostgreSQL trigger fn_decrement_inventory() on order_items.
+PHASE 4: LOW-BALANCE GATEKEEPERS & RECHARGE FLOWS
+────────────────────────────────────────────────────────────────────────────────
+Objective: Connect payment gateways directly to wallet funding and handle insufficient balances.
+1. Wallet Recharge Gateway Integration:
+   - Build an in-app recharge portal where users select/input an amount and complete an online transaction (UPI / Card).
+   - On payment success, log a positive row in `wallet_transactions` and increment the `wallets.balance` cache.
+2. Checkout Gate Intercept:
+   - Modify the progressive checkout handler. If a subscription is chosen, completely remove checkout cart processing. Replace it with a wallet verification step:
+     * "Current Balance: ₹X. Minimum balance required to launch this contract: ₹Y."
+     * Force a recharge redirect if the wallet balance sits below the configuration threshold.
+3. Insufficient Funds Handling:
+   - If a user's wallet is empty when a delivery is processed, flip that ledger row's state to `'pending_payment'`.
+   - Read an admin configuration variable to determine if a single "Grace Delivery" is permitted before completely freezing subsequent shipments.
 
-Logic: Decrement products.stock_quantity on insert. It must RAISE EXCEPTION to roll back the order if stock < quantity to prevent overselling during high-traffic spikes.
+PHASE 5: THE DELIVERY PARTNER INTERFACE & FINANCIAL DEDUCTION GATES
+────────────────────────────────────────────────────────────────────────────────
+Objective: Reconstruct the partner portal around zero-cash validation and immediate ledger deductions.
+1. Driver Manifest Transformation (`PartnerPortal.tsx` / `PartnerSubscriptions.tsx`):
+   - Strip out all cash collection components, COD checks, and verification bills for subscriptions.
+2. The Delivery Deduction Hook:
+   - Replace the old completion buttons with a simple slide-to-confirm bar reading "Confirm Drop-off".
+   - **Crucial Action Hook:** Sliding completion updates that specific `delivery_ledger` row to `'delivered'`. This database status transition fires a transaction trigger that automatically calculates the `effective_price`, appends a negative `'delivery_deduction'` row to `wallet_transactions`, and decrements the user's cached wallet balance. No deduction occurs if the delivery is skipped, paused, or marked failed.
 
-1.2 Checkout Price Re-hydration: * In Checkout.tsx, force a server-side price check on mount.
+PHASE 6: LOGISTICS LOGS & ADMIN MANUAL CLUSTERING BOARD
+────────────────────────────────────────────────────────────────────────────────
+Objective: Build the administrative control panels for manual route grouping and manual driver matching.
+1. Manual Cluster Routing Panel (`AdminLogistics.tsx`):
+   - Query tomorrow's `delivery_ledger` rows where status is `'scheduled'`.
+   - Group rows into expandable visual buckets organized by Area, Pincode, and Apartment Name.
+2. Bulk Partner Assignment:
+   - Add a checkbox selection matrix next to the grouped delivery lists.
+   - Admin selects 10, 20, or 50 delivery rows at once, hits a dropdown selection list, and clicks "Assign to Partner: [Driver Name]". This updates `delivery_partner_id` across those targeted rows simultaneously.
+3. Overrides & Balances Adjuster:
+   - Provide explicit admin override tools to manually adjust wallet balances (logging an `'admin_adjustment'` transaction type) and manually force-pause or force-resume a user's entire upcoming schedule during disputes.
 
-Sync CartContext with real-time discounted_price from the DB to prevent "Price Hijacking" with stale localStorage data.
-
-1.3 View Restoration & Data Binding:
-
-Orders Page: Fix the /orders blank render; ensure it maps order_items correctly.
-
-Profile Hub: Fix the blank /profile page. Bind profiles table data so Name, Email, and Addresses are visible/editable while keeping Phone Number locked as the Primary Key.
-
-1.4 Product Metadata: Fix UnifiedProductCard to display the product description, which is currently missing from the UI.
-
-Phase 2: Streamlined JIT Identity & Geospatial Accuracy
-Focus: Removing user friction and improving delivery precision.
-
-2.1 Integrated JIT Flow: * Remove separate "Input Name" and "Input Email" steps.
-
-Merge these into the Address Input form during the first checkout. Saving the address will trigger a background update to profiles.full_name and profiles.email.
-
-2.2 Precise Geolocation (Lat/Lng): * Replace pincode-based estimations with a "Detect My Location" button using the Browser Geolocation API.
-
-Ensure addresses and orders tables capture exact lat and lng for logistics mapping.
-
-2.3 Order Confirmation State: Replace the "Empty Page" bug with a dedicated /order-success/{id} page featuring an Order Status Stepper (Placed → Confirmed → Out for Delivery).
-
-Phase 3: Operational Logistics & Partner Portal
-Focus: Making the "Staff Portal" fully functional for Admins and Delivery Partners.
-
-3.1 Partner Synchronization: * Fix the bug where promoted users don't appear in the Admin Partner list.
-
-Ensure the AuthContext uses supabase.channel to reactively update user roles (Customer → Admin/Partner) without requiring a logout.
-
-3.2 Admin Logistics Dashboard: * Add a Google Maps Link to every order in the Admin Panel using the precise lat/lng captured in Phase 2.
-
-Enable "Assign to Partner" functionality based on partner availability and proximity.
-
-3.3 Partner Portal & Route Optimization:
-
-Assigned Orders: Ensure /partner displays a list of assigned orders sorted by ascending distance from the partner's current location.
-
-Multi-Stop Routing: Implement a button that generates a single Google Maps URL containing all "Out for Delivery" stops in one route.
-
-Phase 4: Free-Tier Optimization & Scalability
-Focus: Ensuring the app doesn't crash or incur costs during a 1,000-user spike.
-
-4.1 Connection Leak Prevention: * Audit all supabase.channel() instances. Every subscription must have a removeChannel() call in the useEffect cleanup to stay under the 200 concurrent connection limit.
-
-4.2 Performance Indexing: * Add PostgreSQL Indexes to profiles.phone, orders.user_id, and order_items.order_id to ensure queries stay under the 10s serverless timeout limit.
-
-4.3 Ghost Code Purge: Delete orphaned files: Razorpay.tsx ghost components, mockOtp.ts, and dead enum paths in usePartnerStatus.ts.
-
-4.4 Live Payment Swap: Prepare the payment.service.ts to swap the 1.5s "Demo Simulation" with the real Razorpay SDK once credentials are ready.
-
-🚦 Instructions for Antigravity:
-Context Loading: Always read updates.txt before suggesting changes.
-
-Order of Operations: Do not move to Phase 3 (Logistics) until Phase 1 (Inventory/Price Integrity) is verified.
-
-Tier Awareness: Every time a new Realtime channel is added, confirm the cleanup logic to protect the Free Tier quota.
+================================================================================

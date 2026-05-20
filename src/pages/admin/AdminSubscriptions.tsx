@@ -78,11 +78,12 @@ const AdminSubscriptions = () => {
     queryKey: ["admin-subscription-dispatch", today],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("subscription_deliveries")
+        .from("delivery_ledger")
         .select(`
           *,
           subscriptions:subscription_id (
             product_slug,
+            product_id,
             quantity,
             profiles:user_id (full_name, phone),
             addresses:address_id (*)
@@ -122,7 +123,7 @@ const AdminSubscriptions = () => {
   const assignPartner = useMutation({
     mutationFn: async ({ deliveryId, partnerId }: { deliveryId: string; partnerId: string }) => {
       const { error } = await (supabase as any)
-        .from("subscription_deliveries")
+        .from("delivery_ledger")
         .update({ delivery_partner_id: partnerId === "unassigned" ? null : partnerId })
         .eq("id", deliveryId);
       if (error) throw error;
@@ -329,7 +330,7 @@ const AdminSubscriptions = () => {
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center gap-2 text-xs text-brown font-medium">
                         <Package className="w-3 h-3" />
-                        {sub.quantity}x {sub.product_slug}
+                        {sub.quantity}x {products.find((p: any) => p.slug === sub.product_slug || p.id === sub.product_id)?.name || sub.product_slug}
                       </div>
                       <div className="flex items-start gap-2 text-[10px] text-muted-foreground leading-relaxed">
                         <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
@@ -395,7 +396,7 @@ const AdminSubscriptions = () => {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-1.5 font-medium text-brown">
                           <Package className="w-3.5 h-3.5 text-primary" />
-                          {s.quantity}x {s.product_slug}
+                          {s.quantity}x {products.find((p: any) => p.slug === s.product_slug || p.id === s.product_id)?.name || s.product_slug}
                         </div>
                       </td>
                       <td className="px-5 py-4">
@@ -828,7 +829,7 @@ const AdminSubscriptions = () => {
                             <span className="text-[9px] uppercase font-bold text-muted-foreground block">Deliveries</span>
                             <span className="font-bold text-brown flex items-center gap-1 mt-0.5">
                               <Package className="w-3.5 h-3.5 text-primary" />
-                              {plan.quantity}x {plan.product_slug}
+                              {plan.quantity}x {products.find((p: any) => p.slug === plan.product_slug)?.name || plan.product_slug}
                             </span>
                           </div>
                           <div>

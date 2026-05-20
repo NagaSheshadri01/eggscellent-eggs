@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/context/CartContext";
 import { useProducts } from "@/hooks/useProducts";
@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Sparkles, Calendar, ArrowRight, Loader2, ShieldCheck, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useWallet } from "@/hooks/useWallet";
+import { useState } from "react";
 
 export type SubscriptionPlan = {
   id: string;
@@ -27,23 +29,46 @@ const SubscriptionShop = () => {
   const { add } = useCart();
   const nav = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: products = [], isLoading: productsLoading } = useProducts({ onlyActive: true });
+  const { data: wallet } = useWallet();
 
-  const { data: activeSubs = [] } = useQuery({
+  const [rechargeModal, setRechargeModal] = useState<{
+    open: boolean;
+    currentBalance: number;
+  }>({ open: false, currentBalance: 0 });
+
+  const { data: activeSubs = [], refetch: refetchActiveSubs } = useQuery({
     queryKey: ['active-user-contracts', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data } = await supabase
+      
+      // Fetch subscriptions
+      const { data: subsData, error: subsError } = await (supabase as any)
         .from('subscriptions')
-        .select('id, status')
+        .select('id, product_slug, status, quantity, selected_days')
         .in('status', ['active', 'paused'])
         .eq('user_id', user.id);
-      return data || [];
+
+      if (subsError) throw subsError;
+      if (!subsData || subsData.length === 0) return [];
+
+      // Fetch products to map parent_group_id
+      const { data: prodsData } = await (supabase as any)
+        .from('products')
+        .select('slug, parent_group_id, name');
+
+      return subsData.map((sub: any) => {
+        const matchingProduct = prodsData?.find((p: any) => p.slug === sub.product_slug);
+        return {
+          ...sub,
+          parent_group_id: matchingProduct?.parent_group_id || null,
+          product_name: matchingProduct?.name || sub.product_slug
+        };
+      });
     },
     enabled: !!user
   });
-
-  const hasOngoingSubscription = activeSubs.length > 0;
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<SubscriptionPlan[]>({
     queryKey: ["active-subscription-plans"],
@@ -57,38 +82,84 @@ const SubscriptionShop = () => {
     },
   });
 
-  const handleSubscribe = (plan: SubscriptionPlan) => {
-    // Find matching product in catalog
-    const product = products.find(p => p.slug === plan.product_slug);
-    const cartProduct = product
-      ? {
-          id: product.id!,
-          name: plan.title, // Use plan title for clarity
-          price: product.original_price,
-          discountPrice: plan.price_per_delivery,
-          image: product.image_url || "/placeholder.png",
-          slug: product.slug,
-          unit: `Pack of ${plan.quantity}`,
-          frequency_type: plan.frequency_type
-        }
-      : {
-          id: plan.id,
-          name: plan.title,
-          price: plan.price_per_delivery,
-          discountPrice: plan.price_per_delivery,
-          image: "/placeholder.png",
-          slug: plan.product_slug,
-          unit: `Pack of ${plan.quantity}`,
-          frequency_type: plan.frequency_type
-        };
+  const handleSubscribe = async (plan: SubscriptionPlan) => {
+    if (!user) {
+      toast.error("Please sign in to subscribe.");
+      nav("/auth");
+      return;
+    }
 
-    const days = plan.frequency_type === 'weekly' 
-      ? [1] 
-      : plan.frequency_type === 'alternate' 
-        ? [1, 3, 5, 0] 
-        : [1, 2, 3, 4, 5, 6, 0];
-    add(cartProduct as any, 'subscription', days);
-    toast.success(`Added "${plan.title}" subscription to cart!`);
+    // Strict signup check gate
+    const walletBalance = wallet?.balance ?? 0.00;
+    if (walletBalance < 200.00) {
+      setRechargeModal({ open: true, currentBalance: walletBalance });
+      return;
+    }
+
+    // A. Evaluate Duplicates
+    const duplicate = activeSubs.find((s: any) => s.product_slug === plan.product_slug);
+    if (duplicate) {
+      toast.error("You already have an active subscription for this product. Please manage or upgrade your existing plan in your Account Dashboard.", {
+        duration: 5000
+      });
+      return;
+    }
+
+    // B. Evaluate Category Overlap
+    try {
+      const { data: prodsData } = await (supabase as any)
+        .from('products')
+        .select('slug, parent_group_id, name');
+
+      const matchedProd = prodsData?.find((p: any) => p.slug === plan.product_slug);
+      const parentGroupId = matchedProd?.parent_group_id;
+
+      if (parentGroupId) {
+        const familyOverlap = activeSubs.find((s: any) => s.parent_group_id === parentGroupId && s.product_slug !== plan.product_slug);
+        if (familyOverlap) {
+          const confirmParallel = window.confirm(`Notice: You already have an active subscription for ${familyOverlap.product_name} in this category. Do you want to establish this parallel subscription as a separate recurring delivery line?`);
+          if (!confirmParallel) return;
+        }
+      }
+
+      // Create subscription template directly
+      const days = plan.frequency_type === 'weekly' 
+        ? [1] 
+        : plan.frequency_type === 'alternate' 
+          ? [1, 3, 5] 
+          : [1, 2, 3, 4, 5, 6, 0];
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_vip')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const isUserVipMember = profile?.is_vip || false;
+
+      const { error } = await (supabase as any)
+        .from('subscriptions')
+        .insert([{
+          user_id: user.id,
+          product_slug: plan.product_slug,
+          quantity: plan.quantity || 1,
+          selected_days: days,
+          status: 'active',
+          is_vip: isUserVipMember,
+          wallet_mode: true
+        }]);
+
+      if (error) {
+        toast.error("Failed to initialize subscription schedule: " + error.message);
+      } else {
+        toast.success("Subscription schedule activated! Check your delivery calendar.");
+        queryClient.invalidateQueries({ queryKey: ['active-user-contracts'] });
+        queryClient.invalidateQueries({ queryKey: ['user-active-subscriptions'] });
+        await refetchActiveSubs();
+      }
+    } catch (err: any) {
+      toast.error("Error creating subscription: " + err.message);
+    }
   };
 
   const loading = plansLoading || productsLoading;
@@ -137,6 +208,7 @@ const SubscriptionShop = () => {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {plans.map((plan) => {
               const product = products.find(p => p.slug === plan.product_slug);
+              const hasOngoingSubscriptionForProduct = activeSubs.some((s: any) => s.product_slug === plan.product_slug);
               return (
                 <article 
                   key={plan.id}
@@ -193,7 +265,7 @@ const SubscriptionShop = () => {
                         <span className="text-[10px] text-muted-foreground ml-0.5">/delivery</span>
                       </div>
 
-                      {hasOngoingSubscription ? (
+                      {hasOngoingSubscriptionForProduct ? (
                         <Button 
                           className="bg-slate-800 text-white hover:bg-slate-900 font-bold rounded-2xl px-5 transition-colors"
                           onClick={() => nav("/account?tab=subscriptions")}
@@ -244,6 +316,41 @@ const SubscriptionShop = () => {
           </div>
         </div>
       </section>
+      {rechargeModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-card border border-border rounded-3xl p-6 max-w-sm w-full shadow-card animate-scale-in text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 grid place-items-center mx-auto text-xl">
+              👛
+            </div>
+            <h4 className="font-display font-bold text-lg text-brown leading-tight">Prepaid Balance Top-Up Required</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              To activate a recurring morning delivery schedule, your wallet requires a minimum balance of <span className="font-semibold text-brown">₹200.00</span> to secure warehouse packing manifests.
+            </p>
+            <p className="text-xs font-semibold text-rose-600 leading-relaxed bg-rose-50/50 p-2.5 rounded-xl border border-rose-100/50">
+              Your current balance is ₹{rechargeModal.currentBalance.toFixed(2)}.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="ghost"
+                className="flex-1 rounded-xl text-xs font-bold border border-border"
+                onClick={() => setRechargeModal({ open: false, currentBalance: 0 })}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="hero"
+                className="flex-1 rounded-xl text-xs font-bold shadow-yolk"
+                onClick={() => {
+                  setRechargeModal({ open: false, currentBalance: 0 });
+                  nav("/account?tab=wallet");
+                }}
+              >
+                Top Up Wallet
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
