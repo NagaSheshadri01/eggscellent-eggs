@@ -17,7 +17,7 @@ export const useDriverShift = (partnerId?: string, todayStr?: string) => {
     },
     onSuccess: (data) => {
       // Invalidate the partner deliveries query for background synchronization
-      queryClient.invalidateQueries({ queryKey: ["partner_sub_deliveries", partnerId, todayStr] });
+      queryClient.invalidateQueries({ queryKey: ["driver-active-shift"] });
     },
     onError: (error: any) => {
       toast.error("Failed to update shift status: " + error.message);

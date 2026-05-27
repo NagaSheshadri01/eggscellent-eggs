@@ -29,11 +29,12 @@ export const useDeliveryCalendar = () => {
       if (subsError) throw subsError;
       if (!subs || subs.length === 0) return [];
 
-      // 2. Fetch existing ledger entries for these subscriptions
+      // 2. Fetch existing ledger entries for these subscriptions (exclude cancelled)
       const { data: ledger, error: ledgerError } = await (supabase as any)
         .from("delivery_ledger")
         .select("*")
         .in("subscription_id", subs.map((s: any) => s.id))
+        .neq("status", "cancelled")
         .order("delivery_date", { ascending: true });
 
       if (ledgerError) throw ledgerError;
@@ -49,7 +50,7 @@ export const useDeliveryCalendar = () => {
         .select("slug, discounted_price");
 
       for (const sub of subs) {
-        const days = sub.selected_days || [];
+        const days = (sub.selected_days || []).map((d: any) => Number(d));
         const existingDates = new Set(
           existingLedger
             .filter((l: any) => l.subscription_id === sub.id)
@@ -60,12 +61,14 @@ export const useDeliveryCalendar = () => {
         const rate = matchingProduct?.discounted_price || 0;
 
         for (let i = 0; i <= 14; i++) {
-          const date = new Date();
-          date.setDate(today.getDate() + i);
-          const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+          const futureDate = new Date();
+          futureDate.setDate(today.getDate() + i);
+          const currentCheckDayIndex = futureDate.getDay();
 
-          if (days.includes(dayOfWeek)) {
-            const dateStr = toDateString(date);
+          const isScheduledDay = days.includes(currentCheckDayIndex);
+
+          if (isScheduledDay) {
+            const dateStr = toDateString(futureDate);
             if (!existingDates.has(dateStr)) {
               missingEntries.push({
                 subscription_id: sub.id,
@@ -73,7 +76,7 @@ export const useDeliveryCalendar = () => {
                 product_slug: sub.product_slug,
                 quantity: sub.quantity || 1,
                 effective_price: rate,
-                status: "scheduled",
+                status: "scheduled"
               });
             }
           }
@@ -84,7 +87,7 @@ export const useDeliveryCalendar = () => {
       if (missingEntries.length > 0) {
         const { error: seedError } = await (supabase as any)
           .from("delivery_ledger")
-          .insert(missingEntries);
+          .upsert(missingEntries, { onConflict: "subscription_id, delivery_date, product_slug" });
 
         if (seedError) {
           console.error("Error seeding calendar:", seedError);
@@ -125,13 +128,28 @@ export const useDeliveryCalendar = () => {
   });
 
   const updateVolume = useMutation({
-    mutationFn: async ({ id, quantity }: { id: string; quantity: number }) => {
+    mutationFn: async ({ id, quantity, subscription_id, delivery_date, product_slug, effective_price }: any) => {
       const status = quantity <= 0 ? "skipped" : "scheduled";
-      const { error } = await (supabase as any)
-        .from("delivery_ledger")
-        .update({ quantity, status })
-        .eq("id", id);
-      if (error) throw error;
+      
+      if (id) {
+        const { error } = await (supabase as any)
+          .from("delivery_ledger")
+          .update({ quantity, status })
+          .eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("delivery_ledger")
+          .upsert([{
+            subscription_id,
+            delivery_date,
+            product_slug,
+            quantity,
+            effective_price,
+            status
+          }], { onConflict: "subscription_id, delivery_date, product_slug" });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["delivery-ledger"] });
@@ -158,14 +176,14 @@ export const useDeliveryCalendar = () => {
 
       const { error } = await (supabase as any)
         .from("delivery_ledger")
-        .insert([{
+        .upsert([{
           subscription_id: subs.id,
           delivery_date: date,
           product_slug,
           quantity: 1,
           effective_price: price,
           status: 'scheduled'
-        }]);
+        }], { onConflict: "subscription_id, delivery_date, product_slug" });
       if (error) throw error;
     },
     onSuccess: () => {

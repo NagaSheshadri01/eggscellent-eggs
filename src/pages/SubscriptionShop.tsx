@@ -11,7 +11,8 @@ import { toast } from "sonner";
 import { Sparkles, Calendar, ArrowRight, Loader2, ShieldCheck, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/hooks/useWallet";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { format } from "date-fns";
 
 export type SubscriptionPlan = {
   id: string;
@@ -82,6 +83,15 @@ const SubscriptionShop = () => {
     },
   });
 
+  const sortedPlans = useMemo(() => {
+    const order = { daily: 1, alternate: 2, weekly: 3, custom_days: 4 };
+    return [...plans].sort((a, b) => {
+      const oa = order[a.frequency_type as any] || 99;
+      const ob = order[b.frequency_type as any] || 99;
+      return oa - ob;
+    });
+  }, [plans]);
+
   const handleSubscribe = async (plan: SubscriptionPlan) => {
     if (!user) {
       toast.error("Please sign in to subscribe.");
@@ -126,8 +136,8 @@ const SubscriptionShop = () => {
       const days = plan.frequency_type === 'weekly' 
         ? [1] 
         : plan.frequency_type === 'alternate' 
-          ? [1, 3, 5] 
-          : [1, 2, 3, 4, 5, 6, 0];
+          ? [0, 2, 4] 
+          : [0, 1, 2, 3, 4, 5, 6];
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -142,11 +152,15 @@ const SubscriptionShop = () => {
         .insert([{
           user_id: user.id,
           product_slug: plan.product_slug,
+          product_id: matchedProd?.id,
+          plan_id: plan.id,
           quantity: plan.quantity || 1,
           selected_days: days,
           status: 'active',
           is_vip: isUserVipMember,
-          wallet_mode: true
+          wallet_mode: true,
+          next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"),
+          slot_id: 'subscription'
         }]);
 
       if (error) {
@@ -196,7 +210,7 @@ const SubscriptionShop = () => {
             <Loader2 className="w-10 h-10 animate-spin text-primary" />
             <p className="text-sm font-semibold text-muted-foreground">Loading active plans catalog…</p>
           </div>
-        ) : plans.length === 0 ? (
+        ) : sortedPlans.length === 0 ? (
           <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border/80 flex flex-col items-center">
             <Calendar className="w-12 h-12 text-muted-foreground opacity-50 mb-3" />
             <p className="font-display font-bold text-brown text-lg">No subscription plans live yet</p>
@@ -206,7 +220,7 @@ const SubscriptionShop = () => {
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {plans.map((plan) => {
+            {sortedPlans.map((plan) => {
               const product = products.find(p => p.slug === plan.product_slug);
               const hasOngoingSubscriptionForProduct = activeSubs.some((s: any) => s.product_slug === plan.product_slug);
               return (
@@ -259,10 +273,16 @@ const SubscriptionShop = () => {
                     <div className="flex items-center justify-between pt-4 border-t border-border/50 mt-auto">
                       <div>
                         <span className="block text-[9px] text-muted-foreground uppercase font-bold">Special Rate</span>
-                        <span className="font-display font-extrabold text-brown text-2xl">
-                          ₹{plan.price_per_delivery}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground ml-0.5">/delivery</span>
+                        <div className="flex items-baseline gap-2">
+                          {product && Number(product.discounted_price) > plan.price_per_delivery && (
+                            <span className="text-sm text-muted-foreground line-through">
+                              ₹{Number(product.discounted_price)}
+                            </span>
+                          )}
+                          <span className="font-display font-extrabold text-brown text-2xl">
+                            ₹{plan.price_per_delivery}
+                          </span>
+                        </div>
                       </div>
 
                       {hasOngoingSubscriptionForProduct ? (

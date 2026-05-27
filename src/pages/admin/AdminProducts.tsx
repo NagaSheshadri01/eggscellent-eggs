@@ -126,9 +126,9 @@ const AdminProducts = () => {
               <div className="flex-1 min-w-0">
                 <div className="font-display font-semibold text-brown truncate">{p.name}</div>
                 <div className="text-xs text-muted-foreground">{p.unit} · Stock {p.stock_quantity}</div>
-                <div className="font-display font-bold text-brown mt-1">
-                  ₹{p.discounted_price}{" "}
+                <div className="font-display font-bold text-brown mt-1 flex items-baseline gap-1.5">
                   <span className="text-xs text-muted-foreground line-through font-normal">₹{p.original_price}</span>
+                  ₹{p.discounted_price}
                 </div>
               </div>
             </div>

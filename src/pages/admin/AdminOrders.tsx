@@ -26,7 +26,8 @@ const AdminOrders = () => {
         .from("orders")
         .select(`
           *,
-          addresses(pincode, lat, lng)
+          addresses(pincode, lat, lng),
+          order_items(product_name, product_id)
         ` as any)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -256,6 +257,11 @@ const AdminOrders = () => {
                             <div className="flex flex-col mt-0.5">
                               <span className="text-[10px] font-semibold text-brown">{(o as any).profiles?.full_name || snap.full_name || "Customer"}</span>
                               <span className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</span>
+                            </div>
+                            <div className="mt-1">
+                              <span className="text-xs text-stone-500 font-medium truncate w-64 block">
+                                {o.order_items?.map((item: any) => `${item.product_name || item.product?.name || 'Product'} - ${item.quantity || 1}N`).join(', ') || 'No products found'}
+                              </span>
                             </div>
                           </div>
                           <div>

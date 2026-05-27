@@ -4,11 +4,10 @@ import Seo from "@/components/Seo";
 
 const items = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/logistics", label: "Logistics Dispatch", icon: Navigation },
+  { to: "/admin/logistics", label: "Logistics & Subscriptions", icon: Navigation },
   { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/customers", label: "Customers", icon: Users },
-  { to: "/admin/subscriptions", label: "Subscription Orders", icon: Repeat },
   { to: "/admin/delivery-partners", label: "Partners", icon: Truck },
   { to: "/admin/staff", label: "Staff & roles", icon: ShieldCheck },
   { to: "/admin/coupons", label: "Coupons", icon: Tag },

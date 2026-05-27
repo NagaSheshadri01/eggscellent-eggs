@@ -18,6 +18,10 @@ interface PartnerOrderCardProps {
         address_line_1?: string;
         pincode?: string;
       };
+      profiles?: {
+        full_name?: string;
+        phone?: string;
+      };
     };
   };
   productName: string;
@@ -34,6 +38,7 @@ export const PartnerOrderCard = ({
   onLogIssue
 }: PartnerOrderCardProps) => {
   const addr = deliveryItem.subscriptions?.addresses || {};
+  const profile = deliveryItem.subscriptions?.profiles || {};
   const quantity = deliveryItem.subscriptions?.quantity || 1;
   const totalCost = effectivePrice * quantity;
 
@@ -107,7 +112,7 @@ export const PartnerOrderCard = ({
       <div className="flex items-start justify-between gap-2">
         <div>
           <span className="font-display font-extrabold text-brown text-base">
-            {addr.full_name || "Customer"}
+            {profile.full_name || "Customer"}
           </span>
           <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mt-0.5">
             Bill ID: {deliveryItem.bill_id}

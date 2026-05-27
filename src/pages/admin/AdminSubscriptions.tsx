@@ -372,6 +372,7 @@ const AdminSubscriptions = () => {
                     <th className="px-5 py-4">Customer</th>
                     <th className="px-5 py-4">Subscription Plan</th>
                     <th className="px-5 py-4">Days</th>
+                    <th className="px-5 py-4">Next Delivery</th>
                     <th className="px-5 py-4">Status</th>
                     <th className="px-5 py-4">Actions</th>
                   </tr>
@@ -379,11 +380,11 @@ const AdminSubscriptions = () => {
                 <tbody className="divide-y divide-border/50">
                   {subscriptionsQ.isLoading ? (
                     [1, 2, 3].map(i => (
-                      <tr key={i}><td colSpan={5} className="p-5"><Skeleton className="h-4 w-full" /></td></tr>
+                      <tr key={i}><td colSpan={6} className="p-5"><Skeleton className="h-4 w-full" /></td></tr>
                     ))
                   ) : subscriptionsQ.error ? (
                     <tr>
-                      <td colSpan={5} className="p-5 text-center text-destructive bg-destructive/10">
+                      <td colSpan={6} className="p-5 text-center text-destructive bg-destructive/10">
                         Error loading subscriptions: {(subscriptionsQ.error as any).message}
                       </td>
                     </tr>
@@ -414,6 +415,9 @@ const AdminSubscriptions = () => {
                             </span>
                           ))}
                         </div>
+                      </td>
+                      <td className="px-5 py-4 font-mono text-xs text-brown">
+                        {s.next_delivery_date ? new Date(s.next_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                       </td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${

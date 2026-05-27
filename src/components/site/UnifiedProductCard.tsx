@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Plus, Sparkles, Check, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart, type Product } from "@/context/CartContext";
@@ -14,12 +14,12 @@ import {
   type SubFrequency,
 } from "@/hooks/useSubscriptionPlans";
 
-const FREQS: SubFrequency[] = ["daily", "alternate"];
+const FREQS: SubFrequency[] = ["daily", "alternate", "weekly"];
 
 type Props = { product: Product; index: number };
 
 const UnifiedProductCard = ({ product, index }: Props) => {
-  const { add } = useCart();
+  const { add, setOpen } = useCart();
   const nav = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -73,8 +73,42 @@ const UnifiedProductCard = ({ product, index }: Props) => {
   const parentGroupId = productDbInfo?.parent_group_id || null;
   const hasOngoingSubscriptionForProduct = activeSubs.some((s: any) => s.product_slug === product.slug);
 
+  // Fetch active subscription plans from the DB for this product
+  const { data: plans = [] } = useQuery({
+    queryKey: ["product-subscription-plans", product.slug],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subscription_plans")
+        .select("*")
+        .eq("product_slug", product.slug)
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const availableFreqs = useMemo(() => {
+    const fetched = plans.map(p => p.frequency_type as SubFrequency);
+    return (["daily", "alternate", "weekly"] as SubFrequency[]).filter(f => fetched.includes(f));
+  }, [plans]);
+
   const [mode, setMode] = useState<"once" | "subscribe">("once");
   const [freq, setFreq] = useState<SubFrequency>("daily");
+
+  // Keep freq in sync with available frequencies once loaded
+  useEffect(() => {
+    if (availableFreqs.length > 0 && !availableFreqs.includes(freq)) {
+      setFreq(availableFreqs[0]);
+    }
+  }, [availableFreqs, freq]);
+
+  // Keep mode forced to "once" if no subscription plans are active
+  useEffect(() => {
+    if (availableFreqs.length === 0 && mode === "subscribe") {
+      setMode("once");
+    }
+  }, [availableFreqs, mode]);
+
   const [busy, setBusy] = useState(false);
 
   const [overlapModal, setOverlapModal] = useState<{
@@ -92,13 +126,16 @@ const UnifiedProductCard = ({ product, index }: Props) => {
 
   const off = Math.round(((product.price - product.discountPrice) / product.price) * 100);
 
-  const subPrice = product.discountPrice;
-  const perDelivery = product.price - subPrice;
+  const activePlan = plans.find(p => p.frequency_type === freq);
+  const subPrice = activePlan ? Number(activePlan.price_per_delivery) : product.discountPrice;
+  // Calculate savings vs one-time sale price
+  const perDelivery = Math.max(0, product.discountPrice - subPrice);
   const monthly = perDelivery * FREQUENCY_META[freq].perMonth;
   
   const isSoldOut = (product.stock_quantity ?? 1) <= 0;
 
   const [selectedAltOption, setSelectedAltOption] = useState<'A' | 'B'>('A');
+  const [selectedWeeklyDay, setSelectedWeeklyDay] = useState<number>(1); // Default to Monday [1]
 
   const executeSubscriptionTemplate = async (selectedDaysArray: number[]) => {
     // Add to cart instead of direct DB insert
@@ -126,10 +163,12 @@ const UnifiedProductCard = ({ product, index }: Props) => {
     }
     
     // Determine target days array based on active selected frequency tab
-    let targetDaysArray: number[] = [1, 2, 3, 4, 5, 6, 0]; // Default for Daily
+    let targetDaysArray: number[] = [0, 1, 2, 3, 4, 5, 6]; // Default for Daily
     
     if (freq === 'alternate') {
       targetDaysArray = selectedAltOption === 'A' ? [0, 2, 4] : [1, 3, 5];
+    } else if (freq === 'weekly') {
+      targetDaysArray = [selectedWeeklyDay];
     }
 
     // Step A: (Cart checkout handles wallet/payment)
@@ -252,20 +291,22 @@ const UnifiedProductCard = ({ product, index }: Props) => {
         )}
 
         {/* Mode toggle */}
-        <div className="mt-4 grid grid-cols-2 gap-1 p-1 rounded-full bg-secondary/60">
-          {(["once","subscribe"] as const).map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`text-[11px] font-semibold py-1.5 rounded-full transition-smooth ${
-                mode === m ? "bg-brown text-primary shadow-yolk" : "text-brown/70 hover:text-brown"
-              }`}
-            >
-              {m === "once" ? "One-time" : "Subscribe & Save"}
-            </button>
-          ))}
-        </div>
+        {availableFreqs.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-1 p-1 rounded-full bg-secondary/60">
+            {(["once","subscribe"] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`text-[11px] font-semibold py-1.5 rounded-full transition-smooth ${
+                  mode === m ? "bg-brown text-primary shadow-yolk" : "text-brown/70 hover:text-brown"
+                }`}
+              >
+                {m === "once" ? "One-time" : "Subscribe & Save"}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Subscribe sub-controls (animated reveal) */}
         <div
@@ -274,8 +315,11 @@ const UnifiedProductCard = ({ product, index }: Props) => {
           }`}
         >
           <div className="overflow-hidden">
-            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-full bg-background/60 border border-border/60">
-              {FREQS.map((f) => (
+            <div 
+              className="grid gap-1.5 p-1 rounded-full bg-background/60 border border-border/60"
+              style={{ gridTemplateColumns: `repeat(${availableFreqs.length}, minmax(0, 1fr))` }}
+            >
+              {availableFreqs.map((f) => (
                 <button
                   key={f}
                   type="button"
@@ -284,7 +328,7 @@ const UnifiedProductCard = ({ product, index }: Props) => {
                     freq === f ? "bg-primary text-brown shadow-yolk" : "text-brown/70 hover:text-brown"
                   }`}
                 >
-                  {FREQUENCY_META[f].label.split(" ")[0]}
+                  {FREQUENCY_META[f]?.label.split(" ")[0]}
                 </button>
               ))}
             </div>
@@ -317,6 +361,33 @@ const UnifiedProductCard = ({ product, index }: Props) => {
                 </button>
               </div>
             )}
+
+            {freq === "weekly" && (
+              <div className="mt-3">
+                <div className="text-[10px] font-bold text-brown uppercase tracking-wider mb-2 pl-1">
+                  Select Delivery Day
+                </div>
+                <div className="flex justify-between bg-background/60 border border-border/60 p-1.5 rounded-2xl">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName, idx) => {
+                    const isSelected = selectedWeeklyDay === idx;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedWeeklyDay(idx)}
+                        className={`w-8 h-8 rounded-full text-[11px] font-extrabold transition-smooth flex items-center justify-center ${
+                          isSelected
+                            ? "bg-primary text-brown shadow-yolk scale-105"
+                            : "text-brown/70 hover:bg-secondary/40"
+                        }`}
+                      >
+                        {dayName[0]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {monthly > 0 && (
               <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-success bg-success/10 px-3 py-2 rounded-xl">
                 <Check className="w-3.5 h-3.5" /> Save ₹{monthly} / month vs one-time
@@ -335,11 +406,22 @@ const UnifiedProductCard = ({ product, index }: Props) => {
               {mode === "subscribe" ? "Per delivery" : "From"}
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="font-display font-bold text-brown text-2xl">
-                ₹{mode === "subscribe" ? subPrice : product.price}
-              </span>
-              {mode === "subscribe" && (
-                <span className="text-sm text-muted-foreground line-through">₹{product.price}</span>
+              {mode === "once" ? (
+                <>
+                  {product.price > product.discountPrice && (
+                    <span className="text-sm text-muted-foreground line-through">₹{product.price}</span>
+                  )}
+                  <span className="font-display font-bold text-brown text-2xl">
+                    ₹{product.discountPrice}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm text-muted-foreground line-through">₹{product.discountPrice}</span>
+                  <span className="font-display font-bold text-brown text-2xl">
+                    ₹{subPrice}
+                  </span>
+                </>
               )}
             </div>
           </div>

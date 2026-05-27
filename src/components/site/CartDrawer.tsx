@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Minus, Plus, ShoppingBag, Trash2, Tag, Check, ChevronRight,
-  MapPin, Truck, Gift, Zap, Package, CreditCard, Loader2, ArrowLeft, Repeat, Calendar
+  MapPin, Truck, Gift, Zap, Package, CreditCard, Loader2, ArrowLeft, Repeat, Calendar, Wallet
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useOffers, type Offer, type OfferType } from "@/hooks/useOffers";
@@ -59,16 +59,38 @@ const CartDrawer = () => {
   const { data: activePlans } = useSubscriptionPlans();
 
   const hasWeeklySub = useMemo(() => {
-    return items.some(item => {
-      if (item.purchase_type !== 'subscription') return false;
-      const plan = activePlans?.find(p => p.product_slug === item.slug);
-      return plan?.frequency_type === 'weekly';
-    });
-  }, [items, activePlans]);
+    return items.some(item => item.purchase_type === 'subscription' && item.frequency_type === 'weekly');
+  }, [items]);
 
   const hasSubscriptionInCart = useMemo(() => {
     return items.some(item => item.purchase_type === 'subscription');
   }, [items]);
+
+  const isDeliveryFree = total >= 199 || offerResult.isDeliveryFree;
+  const deliveryFee = isDeliveryFree ? 0 : 29;
+  const finalTotal = grandTotal + deliveryFee;
+
+  // Per-delivery cost = single drop, no monthly multiplier baked in
+  const perDeliveryCost = useMemo(() => {
+    return items
+      .filter(i => i.purchase_type === 'subscription')
+      .reduce((s, i) => s + i.discountPrice * i.qty, 0);
+  }, [items]);
+  const projectedMonthlyTotal = finalTotal; // monthly total (includes multiplier from CartContext)
+
+  const { data: walletData } = useQuery({
+    queryKey: ['user-wallet-balance', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      return data;
+    },
+    enabled: !!user && hasSubscriptionInCart
+  });
+  const currentBalance = walletData?.balance || 0;
+  // Only block if they can't afford a SINGLE delivery drop
+  const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
+  const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
 
   const handleUpdateSubDays = (itemId: string, newDays: number[]) => {
     updateItems(items.map(item => 
@@ -139,11 +161,15 @@ const CartDrawer = () => {
   }, [open, allProducts]);
 
   const cartSlugs = useMemo(() => items.map(i => i.slug || ""), [items]);
-  const crossSells = useMemo(() => (allProducts || []).filter(p => !items.find(i => i.id === p.id)).slice(0, 6), [allProducts, items]);
+  const crossSells = useMemo(() => {
+    return (allProducts || []).filter(p => {
+      return !items.find(i => {
+        const baseId = i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id;
+        return baseId === p.id;
+      });
+    }).slice(0, 6);
+  }, [allProducts, items]);
 
-  const isDeliveryFree = total >= 199 || offerResult.isDeliveryFree;
-  const deliveryFee = isDeliveryFree ? 0 : 29;
-  const finalTotal = grandTotal + deliveryFee;
 
   const applyOffer = async (offer: Offer) => {
     const isEligible = total >= (Number(offer.min_order_value) || 0);
@@ -215,10 +241,29 @@ const CartDrawer = () => {
     const instantItems = items.filter(i => i.purchase_type === 'instant');
     const subItems = items.filter(i => i.purchase_type === 'subscription');
 
+    if (subItems.length > 0) {
+      const singleDeliveryCost = subItems.reduce((s, i) => s + i.discountPrice * i.qty, 0);
+      const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const currentWalletBalance = wallet?.balance || 0;
+
+      if (currentWalletBalance < singleDeliveryCost) {
+        setPlacing(false);
+        const difference = Math.max(0, singleDeliveryCost - currentWalletBalance);
+        toast.error("Insufficient wallet balance. Redirecting to recharge...");
+        setOpen(false);
+        nav(`/account/wallet?redirect=/checkout&recharge=${difference}`);
+        return;
+      }
+    }
+
     let onlinePaid = false;
     if (payment === "online") {
       const r = await payNow(finalTotal);
       if (!r.ok) { setPlacing(false); toast.error("Payment failed"); return; }
+      onlinePaid = true;
+    } else if (payment === "wallet") {
+      const { error } = await supabase.rpc('deduct_wallet', { uid: user.id, amount: finalTotal });
+      if (error) { setPlacing(false); toast.error("Wallet deduction failed"); return; }
       onlinePaid = true;
     }
 
@@ -275,18 +320,18 @@ const CartDrawer = () => {
             (p.product_slug === resolvedSlug || p.product_slug === i.slug) && 
             p.frequency_type === i.frequency_type
           );
-          const isWeekly = plan?.frequency_type === 'weekly';
+          const isWeekly = i.frequency_type === 'weekly';
           return {
             user_id: user.id,
             product_slug: resolvedSlug,
             product_id: product?.id, // Assured to be valid UUID
             plan_id: plan?.id || null, // Write correct subscription plan_id
             quantity: i.qty,
-            selected_days: i.subscription_days || (isWeekly ? [1] : (plan?.frequency_type === 'alternate' ? (
+            selected_days: i.subscription_days || (isWeekly ? [selectedWeeklyDay] : (plan?.frequency_type === 'alternate' ? (
               (() => {
                 const cDays = plan?.custom_days || [];
                 const dividerIndex = cDays.indexOf(-1);
-                return dividerIndex === -1 ? (cDays.length > 0 ? cDays : [1, 3, 5, 0]) : cDays.slice(0, dividerIndex);
+                return dividerIndex === -1 ? (cDays.length > 0 ? cDays : [0, 2, 4]) : cDays.slice(0, dividerIndex);
               })()
             ) : [0, 1, 2, 3, 4, 5, 6])),
             address_id: selectedAddressId,
@@ -377,8 +422,8 @@ const CartDrawer = () => {
                         const isWeekly = i.frequency_type === 'weekly';
 
                         const plan = activePlans?.find(p => p.product_slug === i.slug && p.frequency_type === i.frequency_type);
-                        let optADays = [1, 3, 5, 0];
-                        let optBDays = [2, 4, 6];
+                        let optADays = [0, 2, 4];
+                        let optBDays = [1, 3, 5];
                         if (isAlternate && plan) {
                           const cDays = plan.custom_days || [];
                           const dividerIndex = cDays.indexOf(-1);
@@ -597,55 +642,80 @@ const CartDrawer = () => {
                 {step === "payment" && (
                   <div className="px-4 pt-4 pb-2 space-y-4">
                     {/* Payment Methods */}
-                    <div className="bg-card rounded-2xl border border-border/40 p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <CreditCard className="w-4 h-4 text-primary" />
-                        <span className="font-display font-bold text-sm text-brown">Payment Method</span>
-                      </div>
-                      <RadioGroup value={payment} onValueChange={v => setPayment(v as any)} className="space-y-2">
-                        {[
-                          { v: "online", label: "Pay Online (Razorpay)", desc: "Cards, UPI, Net Banking" },
-                          { v: "upi", label: "UPI", desc: "Google Pay, PhonePe, Paytm" },
-                          { v: "cod", label: "Cash on Delivery", desc: "Pay when your eggs arrive", disabled: hasSubscriptionInCart },
-                        ].map(o => {
-                          const isDisabled = o.disabled;
-                          return (
-                            <label 
-                              key={o.v} 
-                              className={`flex items-center gap-3 p-3 rounded-xl border transition-smooth ${
-                                isDisabled 
-                                  ? "opacity-40 grayscale cursor-not-allowed pointer-events-none" 
-                                  : payment === o.v 
-                                    ? "border-primary bg-primary/5 cursor-pointer" 
-                                    : "border-border hover:border-primary/30 cursor-pointer"
-                              }`}
-                            >
-                              <RadioGroupItem value={o.v} disabled={isDisabled} />
-                              <div className="flex-1">
-                                <div className="font-semibold text-brown text-sm">{o.label}</div>
-                                <div className="text-[10px] text-muted-foreground">{o.desc}</div>
-                              </div>
-                              {payment === o.v && !isDisabled && <Check className="w-4 h-4 text-success shrink-0" />}
-                            </label>
-                          );
-                        })}
-                      </RadioGroup>
-                      {hasSubscriptionInCart && (
-                        <div className="mt-2 text-[10px] sm:text-xs font-semibold text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-100 flex items-center gap-2">
-                          ⚠️ Subscriptions require upfront Online Payment (UPI/Card) for automated route scheduling.
+                    {hasSubscriptionInCart ? (
+                      <div className="bg-card rounded-2xl border border-border/40 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Wallet className="w-4 h-4 text-primary" />
+                          <span className="font-display font-bold text-sm text-brown">Payment Mode: Prepaid Wallet</span>
                         </div>
-                      )}
-                    </div>
+                        <div className="p-3 bg-secondary/20 border border-border rounded-xl">
+                          <p className="text-xs text-muted-foreground">Subscriptions are automatically fulfilled using your prepaid wallet balance.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-card rounded-2xl border border-border/40 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CreditCard className="w-4 h-4 text-primary" />
+                          <span className="font-display font-bold text-sm text-brown">Payment Method</span>
+                        </div>
+                        <RadioGroup value={payment} onValueChange={v => setPayment(v as any)} className="space-y-2">
+                          {[
+                            { v: "online", label: "Pay Online (Razorpay)", desc: "Cards, UPI, Net Banking" },
+                            { v: "upi", label: "UPI", desc: "Google Pay, PhonePe, Paytm" },
+                            { v: "cod", label: "Cash on Delivery", desc: "Pay when your eggs arrive", disabled: hasSubscriptionInCart },
+                          ].map(o => {
+                            const isDisabled = o.disabled;
+                            return (
+                              <label 
+                                key={o.v} 
+                                className={`flex items-center gap-3 p-3 rounded-xl border transition-smooth ${
+                                  isDisabled 
+                                    ? "opacity-40 grayscale cursor-not-allowed pointer-events-none" 
+                                    : payment === o.v 
+                                      ? "border-primary bg-primary/5 cursor-pointer" 
+                                      : "border-border hover:border-primary/30 cursor-pointer"
+                                }`}
+                              >
+                                <RadioGroupItem value={o.v} disabled={isDisabled} />
+                                <div className="flex-1">
+                                  <div className="font-semibold text-brown text-sm">{o.label}</div>
+                                  <div className="text-[10px] text-muted-foreground">{o.desc}</div>
+                                </div>
+                                {payment === o.v && !isDisabled && <Check className="w-4 h-4 text-success shrink-0" />}
+                              </label>
+                            );
+                          })}
+                        </RadioGroup>
+                      </div>
+                    )}
 
                     {/* Bill Breakdown */}
                     <div className="bg-card rounded-2xl border border-border/40 p-4">
                       <div className="font-display font-bold text-brown text-sm mb-3">Bill Details</div>
                       <div className="space-y-2 text-xs">
-                        <div className="flex justify-between text-muted-foreground"><span>Items Total ({count})</span><span>₹{total}</span></div>
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Delivery</span>
-                          <span className={isDeliveryFree ? "text-success font-semibold" : ""}>{isDeliveryFree ? "FREE" : `₹${deliveryFee}`}</span>
-                        </div>
+                        {hasSubscriptionInCart ? (
+                          <>
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
+                              <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
+                            </div>
+                            <div className="flex justify-between text-muted-foreground/70">
+                              <span>Month's Projected Total <span className="italic">(Informational)</span></span>
+                              <span>₹{projectedMonthlyTotal}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Items Total ({count})</span>
+                              <span>₹{total}</span>
+                            </div>
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Delivery</span>
+                              <span className={isDeliveryFree ? "text-success font-semibold" : ""}>{isDeliveryFree ? "FREE" : `₹${deliveryFee}`}</span>
+                            </div>
+                          </>
+                        )}
                         {discount > 0 && (
                           <div className="flex justify-between text-success font-medium">
                             <span className="flex items-center gap-1"><Check className="w-3 h-3" /> Discount ({appliedCoupon?.code || "Offer"})</span>
@@ -653,7 +723,17 @@ const CartDrawer = () => {
                           </div>
                         )}
                         <div className="flex justify-between font-display font-bold text-brown text-sm pt-2 mt-1 border-t border-border">
-                          <span>Grand Total</span><span>₹{finalTotal}</span>
+                          {hasSubscriptionInCart ? (
+                            <>
+                              <span>Amount Due Now</span>
+                              <span className="text-emerald-700">₹0 <span className="text-[10px] font-normal text-muted-foreground">(Prepaid Wallet)</span></span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Grand Total</span>
+                              <span>₹{finalTotal}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -670,10 +750,10 @@ const CartDrawer = () => {
                 <div className="flex justify-between items-baseline mb-3">
                   <div>
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      {step === "cart" ? "Subtotal" : "Grand Total"}
+                      {hasSubscriptionInCart && step === "payment" ? "Per Delivery" : (step === "cart" ? "Subtotal" : "Grand Total")}
                     </div>
                     <div className="font-display font-bold text-brown text-xl">
-                      ₹{step === "cart" ? total : finalTotal}
+                      {hasSubscriptionInCart && step === "payment" ? `₹${perDeliveryCost}` : `₹${step === "cart" ? total : finalTotal}`}
                     </div>
                   </div>
                   {discount > 0 && (
@@ -701,7 +781,7 @@ const CartDrawer = () => {
                         ? "Area Not Serviceable"
                         : soldOut
                           ? "Sold Out for Today"
-                          : <>Select Delivery Slot <ChevronRight className="w-5 h-5 ml-1" /></>
+                          : <>Proceed to Payment <ChevronRight className="w-5 h-5 ml-1" /></>
                     }
                   </Button>
                 )}
@@ -714,15 +794,44 @@ const CartDrawer = () => {
                   </Button>
                 )}
                 {step === "payment" && (
-                  <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk text-base"
-                    onClick={placeOrder}
-                    disabled={placing || !selectedAddressId || !addrServiceable}
-                  >
-                    {placing
-                      ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Placing Order…</>
-                      : <>Place Order • ₹{finalTotal}</>
-                    }
-                  </Button>
+                  <div className="w-full space-y-3">
+                    {hasSubscriptionInCart && (
+                      <div>
+                        {!isShortfundedForFirstDelivery ? (
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-xs">
+                            ✓ Sufficient balance available! ₹{perDeliveryCost} will be debited per delivery. (Current Wallet: ₹{currentBalance})
+                          </div>
+                        ) : (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900 text-xs space-y-1">
+                            <p className="font-semibold">⚠️ Minimum Balance Required</p>
+                            <p>Your current wallet balance is <strong>₹{currentBalance}</strong>. A minimum of <strong>₹{perDeliveryCost}</strong> (1 delivery) is required to activate this schedule.</p>
+                            <p className="text-stone-500">* Est. monthly consumption: ₹{projectedMonthlyTotal}. Recharge any amount you prefer.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {hasSubscriptionInCart && isShortfundedForFirstDelivery ? (
+                      <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk text-[13px] sm:text-sm !bg-amber-500 hover:!bg-amber-600 !text-white !border-amber-600"
+                        onClick={() => {
+                          setOpen(false);
+                          nav(`/account/wallet?redirect=/checkout&recharge=${minimumNeededToActivate}`);
+                        }}
+                        disabled={profileLoading || !addrServiceable || checkingAddr}
+                      >
+                        Go to Wallet to Recharge • Min Add ₹{minimumNeededToActivate}
+                      </Button>
+                    ) : (
+                      <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk text-base"
+                        onClick={placeOrder}
+                        disabled={placing || !selectedAddressId || !addrServiceable}
+                      >
+                        {placing
+                          ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Placing Order…</>
+                          : <>Place Order • ₹{finalTotal}</>
+                        }
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             </>

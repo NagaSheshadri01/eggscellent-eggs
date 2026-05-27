@@ -44,7 +44,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const AccountSubscriptions = () => {
   const { user } = useAuth();
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   const [pauseModal, setPauseModal] = useState<{ open: boolean; subId: string; status: string }>({ open: false, subId: "", status: "" });
 
   const { data: contracts = [], isLoading, error, refetch } = useQuery<SubscriptionContract[]>({
@@ -55,7 +55,8 @@ const AccountSubscriptions = () => {
         .from("subscriptions")
         .select(`
           *,
-          products:product_id (name, discounted_price),
+          products:product_id (name, discounted_price, image_url),
+          subscription_plans:plan_id (*),
           addresses:address_id (address_line_1, address_line_2, landmark, city, state, pincode)
         `)
         .eq("user_id", user.id)
@@ -81,7 +82,7 @@ const AccountSubscriptions = () => {
     },
     onSuccess: (res) => {
       toast.success(`Subscription successfully ${res.nextStatus === "active" ? "resumed" : "paused"}!`);
-      qc.invalidateQueries({ queryKey: ["user-subscriptions", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["user-subscriptions", user?.id] });
     },
     onError: (err: any) => {
       toast.error(`Operation failed: ${err.message}`);
@@ -90,19 +91,79 @@ const AccountSubscriptions = () => {
 
   const changeDaysMutation = useMutation({
     mutationFn: async ({ subId, newDays }: { subId: string; newDays: number[] }) => {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+
+      // Compute the next upcoming date that falls on one of newDays
+      const nextDeliveryDate = (() => {
+        for (let offset = 1; offset <= 14; offset++) {
+          const d = new Date(today);
+          d.setDate(today.getDate() + offset);
+          if (newDays.includes(d.getDay())) {
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          }
+        }
+        return todayStr; // fallback (shouldn't happen with valid days)
+      })();
+
+      // 1. Update selected_days AND next_delivery_date atomically
       const { error } = await supabase
         .from("subscriptions")
-        .update({ selected_days: newDays })
+        .update({ selected_days: newDays, next_delivery_date: nextDeliveryDate })
         .eq("id", subId);
 
       if (error) throw error;
+
+      // 2. Cancel all future scheduled/skipped ledger rows so they don't ghost on the calendar.
+      //    New rows will be JIT-seeded for the new days on next calendar load.
+      await supabase
+        .from("delivery_ledger")
+        .update({ status: "cancelled" })
+        .eq("subscription_id", subId)
+        .in("status", ["scheduled", "skipped"])
+        .gte("delivery_date", todayStr);
+    },
+    onMutate: async ({ subId, newDays }) => {
+      // Optimistically patch the in-memory contracts cache so the UI
+      // reflects the new selected_days and next_delivery_date immediately
+      await queryClient.cancelQueries({ queryKey: ['user-subscriptions', user?.id] });
+
+      const today = new Date();
+      const nextDate = (() => {
+        for (let i = 1; i <= 14; i++) {
+          const d = new Date(today);
+          d.setDate(today.getDate() + i);
+          if (newDays.includes(d.getDay())) {
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          }
+        }
+        return null;
+      })();
+
+      queryClient.setQueryData(['user-subscriptions', user?.id], (old: any[]) =>
+        (old || []).map(sub =>
+          sub.id === subId
+            ? { ...sub, selected_days: newDays, ...(nextDate ? { next_delivery_date: nextDate } : {}) }
+            : sub
+        )
+      );
     },
     onSuccess: () => {
-      toast.success("Delivery schedule successfully updated!");
-      qc.invalidateQueries({ queryKey: ["user-subscriptions", user?.id] });
+      toast.success("Delivery schedule updated successfully!");
+      
+      // Invalidate ALL calendar + subscription caches so the change renders immediately
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['user-active-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-user-contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-ledger'] });
+      queryClient.invalidateQueries({ queryKey: ['user-delivery-calendar'] });
+      // This is the key the SubscriptionCalendar uses for JIT dot rendering
+      queryClient.invalidateQueries({ queryKey: ['active-subscriptions-calendar'] });
     },
     onError: (err: any) => {
       toast.error(`Failed to update day: ${err.message}`);
+      // Roll back optimistic update
+      queryClient.invalidateQueries({ queryKey: ['user-subscriptions', user?.id] });
     }
   });
 
@@ -128,7 +189,7 @@ const AccountSubscriptions = () => {
     },
     onSuccess: () => {
       toast.success("Subscription has been cancelled.");
-      qc.invalidateQueries({ queryKey: ["user-subscriptions", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["user-subscriptions", user?.id] });
     },
     onError: (err: any) => {
       toast.error(`Cancellation failed: ${err.message}`);
@@ -193,7 +254,7 @@ const AccountSubscriptions = () => {
         const plan = sub.subscription_plans || {
           title: sub.products?.name || 'Egg Subscription',
           description: "Structured subscription deliveries",
-          frequency_type: sub.selected_days?.length === 7 ? "daily" : "weekly",
+          frequency_type: sub.selected_days?.length === 7 ? "daily" : sub.selected_days?.length === 3 ? "alternate" : "weekly",
           price_per_delivery: sub.products?.discounted_price || sub.effective_price || 0
         };
         const addr = sub.addresses;
@@ -201,8 +262,8 @@ const AccountSubscriptions = () => {
         const isAlternate = plan.frequency_type === "alternate";
 
         // Resolve Option A / Option B days for alternate
-        let optADays = [1, 3, 5, 0];
-        let optBDays = [2, 4, 6];
+        let optADays = [0, 2, 4];
+        let optBDays = [1, 3, 5];
         if (isAlternate && plan) {
           const cDays = plan.custom_days || [];
           const dividerIndex = cDays.indexOf(-1);
@@ -234,68 +295,75 @@ const AccountSubscriptions = () => {
             }`}
           >
             {/* Top info row */}
-            <div className="p-5 sm:p-6 border-b border-border/40">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-display font-bold text-brown text-lg leading-tight">
-                      {plan.title}
-                    </h3>
-                    <Badge 
-                      variant="outline"
-                      className={`text-[9px] uppercase tracking-tighter ${
-                        sub.status === "active" 
-                          ? "bg-green-50 text-green-700 border-green-200" 
-                          : sub.status === "paused"
-                          ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
-                          : "bg-slate-100 text-slate-600 border-slate-200"
-                      }`}
-                    >
-                      {sub.status}
-                    </Badge>
+            <div className="p-5 sm:p-6 border-b border-border/40 flex gap-4 items-start">
+              <img 
+                src={sub.products?.image_url || "/placeholder.png"} 
+                alt={plan.title}
+                className="w-20 h-20 rounded-2xl object-cover shrink-0 border border-border/40 bg-secondary/30"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-display font-bold text-brown text-lg leading-tight">
+                        {plan.title}
+                      </h3>
+                      <Badge 
+                        variant="outline"
+                        className={`text-[9px] uppercase tracking-tighter ${
+                          sub.status === "active" 
+                            ? "bg-green-50 text-green-700 border-green-200" 
+                            : sub.status === "paused"
+                            ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        {sub.status === "active" ? "Active" : sub.status === "paused" ? "Paused" : sub.status === "cancelled" ? "Cancelled" : sub.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                      {plan.description || "Recurring freshness on schedule"}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-md">
-                    {plan.description || "Recurring freshness on schedule"}
-                  </p>
-                </div>
 
-                <div className="text-right">
-                  <span className="block text-[9px] text-muted-foreground uppercase font-bold">Price Rate</span>
-                  <span className="font-display font-extrabold text-brown text-xl">
-                    ₹{plan.price_per_delivery || "N/A"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">/delivery</span>
-                </div>
-              </div>
-
-              {/* Grid detail overview */}
-              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-border/30 text-xs">
-                <div className="space-y-1">
-                  <span className="block text-[9px] text-muted-foreground uppercase font-bold">Fulfillment Details</span>
-                  <div className="flex items-center gap-1.5 text-brown font-medium">
-                    <Calendar className="w-3.5 h-3.5 text-primary" />
-                    <span className="capitalize">
-                      {plan.frequency_type.replace(/_/g, " ")} ({sub.quantity} pack)
+                  <div className="text-right">
+                    <span className="block text-[9px] text-muted-foreground uppercase font-bold">Price Rate</span>
+                    <span className="font-display font-extrabold text-brown text-xl">
+                      ₹{plan.price_per_delivery || "N/A"}
                     </span>
+                    <span className="text-[10px] text-muted-foreground">/delivery</span>
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <span className="block text-[9px] text-muted-foreground uppercase font-bold">Delivery Destination</span>
-                  {addr ? (
-                    <div className="flex items-start gap-1.5 text-slate-600 max-w-xs leading-snug">
-                      <MapPin className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
-                      <span>
-                        {addr.address_line_1}
-                        {addr.address_line_2 ? `, ${addr.address_line_2}` : ""}
-                        {addr.landmark ? `, Near ${addr.landmark}` : ""}
-                        <br />
-                        {addr.city} - {addr.pincode}
+                {/* Grid detail overview */}
+                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-border/30 text-xs">
+                  <div className="space-y-1">
+                    <span className="block text-[9px] text-muted-foreground uppercase font-bold">Fulfillment Details</span>
+                    <div className="flex items-center gap-1.5 text-brown font-medium">
+                      <Calendar className="w-3.5 h-3.5 text-primary" />
+                      <span className="capitalize">
+                        {plan.frequency_type.replace(/_/g, " ")} ({sub.quantity} pack)
                       </span>
                     </div>
-                  ) : (
-                    <span className="text-muted-foreground italic">No address bound</span>
-                  )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="block text-[9px] text-muted-foreground uppercase font-bold">Delivery Destination</span>
+                    {addr ? (
+                      <div className="flex items-start gap-1.5 text-slate-600 max-w-xs leading-snug">
+                        <MapPin className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
+                        <span>
+                          {addr.address_line_1}
+                          {addr.address_line_2 ? `, ${addr.address_line_2}` : ""}
+                          {addr.landmark ? `, Near ${addr.landmark}` : ""}
+                          <br />
+                          {addr.city} - {addr.pincode}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground italic">No address bound</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -320,7 +388,7 @@ const AccountSubscriptions = () => {
                 {/* B. Customer Day Recalibrator */}
                 {(isWeekly || isAlternate) && (
                   <div className="flex flex-col items-center sm:items-end gap-1.5 shrink-0">
-                    <span className="text-[9px] text-muted-foreground uppercase font-bold">Recalibrate Delivery Schedule</span>
+                    <span className="text-[9px] text-muted-foreground uppercase font-bold">Your Delivery Days</span>
                     
                     {isAlternate && (
                       <div className="flex gap-1.5 bg-background p-1 rounded-xl border border-border/80">

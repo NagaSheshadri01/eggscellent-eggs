@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Calendar, ChevronLeft, ChevronRight, Check, X, ShieldAlert, Lock, Moon, Plus, Minus } from "lucide-react";
 import { toast } from "sonner";
 import { useProducts } from "@/hooks/useProducts";
+import { useAuth } from "@/context/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -18,9 +21,23 @@ const toDateString = (year: number, month: number, day: number) => {
 };
 
 const SubscriptionCalendar = () => {
+  const { user } = useAuth();
   const { data: ledger = [], isLoading, toggleSkip, updateVolume, addStandaloneItem } = useDeliveryCalendar();
   const { data: products = [] } = useProducts({ onlyActive: true });
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const { data: activeSubscriptions = [] } = useQuery({
+    queryKey: ["active-subscriptions-calendar"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("subscriptions")
+        .select("id, product_slug, selected_days, quantity, products(name, discounted_price)")
+        .eq("user_id", user?.id)
+        .eq("status", "active");
+      return data || [];
+    },
+    enabled: !!user?.id,
+  });
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -43,14 +60,15 @@ const SubscriptionCalendar = () => {
   const [selectedDayInfo, setSelectedDayInfo] = useState<{
     dateStr: string;
     dayNum: number;
-    ledgerRow: any;
+    ledgerRows: any[];
   } | null>(null);
 
   // Group ledger entries by date for fast O(1) lookups
   const ledgerMap = useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, any[]>();
     ledger.forEach((item: any) => {
-      map.set(item.delivery_date, item);
+      if (!map.has(item.delivery_date)) map.set(item.delivery_date, []);
+      map.get(item.delivery_date)!.push(item);
     });
     return map;
   }, [ledger]);
@@ -66,7 +84,29 @@ const SubscriptionCalendar = () => {
 
   const handleDayClick = (day: number) => {
     const dateStr = toDateString(year, month, day);
-    const ledgerRow = ledgerMap.get(dateStr);
+    const dateObj = new Date(year, month, day);
+    const currentDayIndex = dateObj.getDay();
+    let ledgerRows = [...(ledgerMap.get(dateStr) || [])];
+
+    // Hydrate JIT base subscriptions
+    activeSubscriptions.forEach((sub: any) => {
+      const days = (sub.selected_days || []).map((d: any) => Number(d));
+      const isScheduledDay = days.includes(currentDayIndex);
+      const baseProductExistsInLedger = ledgerRows.some(row => row.product_slug === sub.product_slug);
+      
+      if (isScheduledDay && !baseProductExistsInLedger) {
+        ledgerRows.unshift({
+          isVirtual: true,
+          subscription_id: sub.id,
+          delivery_date: dateStr,
+          product_slug: sub.product_slug,
+          quantity: sub.quantity || 1,
+          effective_price: sub.products?.discounted_price || 0,
+          status: 'scheduled',
+          virtual_product_name: sub.products?.name || sub.product_slug
+        });
+      }
+    });
 
     // Past / Present evaluation lock
     if (dateStr <= todayStr) {
@@ -80,7 +120,7 @@ const SubscriptionCalendar = () => {
     setSelectedDayInfo({
       dateStr,
       dayNum: day,
-      ledgerRow,
+      ledgerRows,
     });
   };
 
@@ -103,16 +143,25 @@ const SubscriptionCalendar = () => {
     }
   };
 
-  const handleUpdateVolume = async (delta: number) => {
-    if (!selectedDayInfo?.ledgerRow) return;
-    const { ledgerRow } = selectedDayInfo;
+  const handleUpdateVolume = async (ledgerRow: any, delta: number) => {
     const newQty = Math.max(0, ledgerRow.quantity + delta);
     
     try {
-      await updateVolume.mutateAsync({ id: ledgerRow.id, quantity: newQty });
-      setSelectedDayInfo({
-        ...selectedDayInfo,
-        ledgerRow: { ...ledgerRow, quantity: newQty, status: newQty <= 0 ? "skipped" : "scheduled" }
+      await updateVolume.mutateAsync({ 
+        id: ledgerRow.isVirtual ? null : ledgerRow.id,
+        quantity: newQty,
+        subscription_id: ledgerRow.subscription_id,
+        delivery_date: ledgerRow.delivery_date,
+        product_slug: ledgerRow.product_slug,
+        effective_price: ledgerRow.effective_price
+      });
+      
+      // Remove virtual flag on local update so it behaves like a real row
+      const updatedRow = { ...ledgerRow, quantity: newQty, status: newQty <= 0 ? "skipped" : "scheduled", isVirtual: false };
+      setSelectedDayInfo((prev: any) => {
+        if (!prev) return prev;
+        const newRows = prev.ledgerRows.map((r: any) => r.product_slug === ledgerRow.product_slug ? updatedRow : r);
+        return { ...prev, ledgerRows: newRows };
       });
     } catch (e) {}
   };
@@ -201,16 +250,44 @@ const SubscriptionCalendar = () => {
               {/* Render actual days */}
               {days.map((day) => {
                 const dateStr = toDateString(year, month, day);
-                const ledgerRow = ledgerMap.get(dateStr);
+                const ledgerRows = ledgerMap.get(dateStr) || [];
                 const isPast = dateStr <= todayStr;
+                
+                // Add the JIT evaluation
+                const dateObj = new Date(year, month, day);
+                const currentDayIndex = dateObj.getDay();
+                let hasJitScheduled = false;
+                
+                activeSubscriptions.forEach((sub: any) => {
+                  const days = (sub.selected_days || []).map((d: any) => Number(d));
+                  if (days.includes(currentDayIndex)) hasJitScheduled = true;
+                });
+
+                const activeLedgerRows = ledgerRows.filter((r: any) => r.status !== "cancelled");
+                const hasLedger = activeLedgerRows.length > 0;
+                let overallStatus = null;
+
+                // 1. Evaluate physical ledger rows
+                if (hasLedger) {
+                  overallStatus = "skipped";
+                  if (activeLedgerRows.some((r: any) => r.status === "scheduled")) overallStatus = "scheduled";
+                  else if (activeLedgerRows.some((r: any) => r.status === "delivered")) overallStatus = "delivered";
+                  else if (activeLedgerRows.some((r: any) => r.status === "pending_payment")) overallStatus = "pending_payment";
+                  else if (activeLedgerRows.some((r: any) => r.status === "paused")) overallStatus = "paused";
+                  else if (activeLedgerRows.some((r: any) => r.status === "failed")) overallStatus = "failed";
+                } 
+                // 2. Evaluate JIT (virtual) base subscriptions
+                else if (hasJitScheduled && !isPast) {
+                  overallStatus = "scheduled";
+                }
 
                 // Color coding logic based on Ledger status
                 let borderStyle = "border-border/30 hover:border-accent/40 bg-card";
                 let statusColor = "bg-slate-300";
                 let textStyle = "text-brown";
 
-                if (ledgerRow) {
-                  switch (ledgerRow.status) {
+                if (overallStatus) {
+                  switch (overallStatus) {
                     case "scheduled":
                       borderStyle = "border-sky-200 bg-sky-50/20 hover:border-sky-400/80 shadow-sm";
                       statusColor = "bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.6)] animate-pulse";
@@ -230,7 +307,6 @@ const SubscriptionCalendar = () => {
                       statusColor = "bg-amber-500";
                       break;
                     case "failed":
-                    case "pending_payment":
                       borderStyle = "border-rose-200 bg-rose-50/20";
                       statusColor = "bg-rose-500";
                       textStyle = "text-rose-950";
@@ -243,20 +319,20 @@ const SubscriptionCalendar = () => {
                     key={`day-${day}`}
                     onClick={() => handleDayClick(day)}
                     className={`relative aspect-square flex flex-col items-center justify-between p-2 rounded-2xl border transition-smooth ${borderStyle} ${
-                      isPast && ledgerRow ? "opacity-60 cursor-not-allowed bg-muted/20" : ""
-                    } ${isPast && !ledgerRow ? "cursor-not-allowed opacity-30" : "hover:-translate-y-0.5 active:scale-95 hover:border-accent/40"}`}
+                      isPast && hasLedger ? "opacity-60 cursor-not-allowed bg-muted/20" : ""
+                    } ${isPast && !hasLedger ? "cursor-not-allowed opacity-30" : "hover:-translate-y-0.5 active:scale-95 hover:border-accent/40"}`}
                     disabled={isPast}
                   >
                     {/* Top row: Date Number + Past Lock Icon */}
                     <div className="w-full flex items-center justify-between">
                       <span className={`text-xs font-semibold font-mono ${textStyle}`}>{day}</span>
-                      {isPast && ledgerRow && (
+                      {isPast && hasLedger && (
                         <Lock className="w-2.5 h-2.5 text-muted-foreground opacity-60" title="Past Record Immutable" />
                       )}
                     </div>
 
                     {/* Bottom row: Glow indicator dot */}
-                    {ledgerRow && (
+                    {overallStatus && (
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
                       </div>
@@ -306,35 +382,35 @@ const SubscriptionCalendar = () => {
 
             <div className="space-y-4 py-2 text-left">
               
-              {/* Action 1: Adjust Base Volume */}
-              {selectedDayInfo.ledgerRow ? (
+              {/* Action 1: Adjust Scheduled Items */}
+              {selectedDayInfo.ledgerRows && selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped').length > 0 ? (
                 <div className="bg-muted/30 rounded-2xl p-4 border border-border/40">
-                  <h5 className="text-xs font-bold text-brown mb-3 uppercase tracking-wider">Adjust Base Volume</h5>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-brown">{selectedDayInfo.ledgerRow.product_slug.replace(/-/g, " ")}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">Rate: ₹{selectedDayInfo.ledgerRow.effective_price.toFixed(2)}</div>
-                    </div>
-                    <div className="flex items-center gap-2 bg-background border border-border/50 rounded-xl p-1 shadow-sm">
-                      <button onClick={() => handleUpdateVolume(-1)} disabled={updateVolume.isPending || selectedDayInfo.ledgerRow.quantity <= 0} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown disabled:opacity-50 transition-colors">
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-sm font-bold w-6 text-center">{selectedDayInfo.ledgerRow.quantity}</span>
-                      <button onClick={() => handleUpdateVolume(1)} disabled={updateVolume.isPending} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown transition-colors">
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
+                  <h5 className="text-xs font-bold text-brown mb-3 uppercase tracking-wider">Scheduled For Today</h5>
+                  <div className="space-y-3">
+                    {selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped').map((row: any) => (
+                      <div key={row.id || row.product_slug} className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-brown capitalize flex items-center gap-2">
+                            {row.virtual_product_name || row.product_slug.replace(/-/g, " ")}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">Rate: ₹{row.effective_price.toFixed(2)}</div>
+                        </div>
+                        <div className="flex items-center gap-2 bg-background border border-border/50 rounded-xl p-1 shadow-sm">
+                          <button onClick={() => handleUpdateVolume(row, -1)} disabled={updateVolume.isPending || row.quantity <= 0} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown disabled:opacity-50 transition-colors">
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="text-sm font-bold w-6 text-center">{row.quantity}</span>
+                          <button onClick={() => handleUpdateVolume(row, 1)} disabled={updateVolume.isPending} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown transition-colors">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {selectedDayInfo.ledgerRow.status === "skipped" && (
-                    <div className="mt-3 text-[10px] text-amber-600 bg-amber-50 rounded-lg p-2 flex items-start gap-1.5 border border-amber-100">
-                      <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                      Volume set to 0. This delivery is currently skipped.
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground italic text-center py-4 bg-muted/20 rounded-2xl border border-border/30">
-                  No recurring base delivery scheduled for this date.
+                  No active deliveries scheduled for this date.
                 </div>
               )}
 
@@ -342,7 +418,12 @@ const SubscriptionCalendar = () => {
               <div>
                 <h5 className="text-xs font-bold text-brown mb-3 uppercase tracking-wider pl-1">The Add-on Marketplace</h5>
                 <div className="space-y-2 max-h-[40vh] overflow-y-auto no-scrollbar pb-2">
-                  {products.map(p => (
+                  {products
+                    .filter((p: any) => {
+                      const activeItems = selectedDayInfo.ledgerRows ? selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped') : [];
+                      return !activeItems.some((item: any) => item.product_slug === p.slug);
+                    })
+                    .map(p => (
                     <div key={p.id} className="flex items-center justify-between bg-card rounded-xl p-2.5 border border-border/50 shadow-soft hover:shadow-card transition-smooth">
                       <div className="flex items-center gap-3">
                         {p.image_url && <img src={p.image_url} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />}

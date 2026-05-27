@@ -9,24 +9,54 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Check, MapPin, Clock, CreditCard, Loader2, Tag } from "lucide-react";
+import { Check, MapPin, Clock, CreditCard, Loader2, Tag, Wallet } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import AddressPicker from "@/components/site/AddressPicker";
 import JitVerifySheet from "@/components/site/JitVerifySheet";
 import { useProfileCompleteness } from "@/hooks/useProfileCompleteness";
 import { useCoupons, type Coupon } from "@/hooks/useCoupons";
 import { useOffers, type Offer } from "@/hooks/useOffers";
 import { payNow } from "@/lib/payments/razorpay";
+import { format } from "date-fns";
+import { useSubscriptionPlans } from "@/hooks/useSubscriptionPlans";
 
 const slots = ["08:00 AM – 12:00 PM", "02:00 PM – 06:00 PM", "06:00 PM – 08:00 PM"];
 
 const Checkout = () => {
   const { items, total, clear, appliedCoupon, setAppliedCoupon, discount, grandTotal, selectedAddressId } = useCart();
+  const { data: activePlans } = useSubscriptionPlans();
   const hasSubscriptionInCart = items.some(item => item.purchase_type === 'subscription');
   const hasOnlySubscriptions = items.length > 0 && items.every(i => i.purchase_type === 'subscription');
   const { user } = useAuth();
   const nav = useNavigate();
   const { isComplete, missing, hasPhone, refetch: refetchProfile, isLoading: profileLoading } = useProfileCompleteness();
   const { data: availableOffers } = useOffers({ onlyActive: true });
+
+  const deliveryFee = total >= 199 ? 0 : 29;
+  const calculatedDiscount = discount;
+  const grand = Math.max(0, total + deliveryFee - calculatedDiscount);
+
+  // Per-delivery cost = single drop, no monthly multiplier
+  const perDeliveryCost = useMemo(() => {
+    return items
+      .filter(i => i.purchase_type === 'subscription')
+      .reduce((s, i) => s + i.discountPrice * i.qty, 0);
+  }, [items]);
+  const projectedMonthlyTotal = grand; // monthly total with multiplier baked in
+
+  const { data: walletData } = useQuery({
+    queryKey: ['user-wallet-balance', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      return data;
+    },
+    enabled: !!user && hasSubscriptionInCart
+  });
+  const currentBalance = walletData?.balance || 0;
+  // Only block if they can't afford a SINGLE delivery drop
+  const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
+  const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
 
   const [step, setStep] = useState(1);
   const [selectedAddr, setSelectedAddr] = useState<string>(selectedAddressId || "");
@@ -57,8 +87,6 @@ const Checkout = () => {
     }));
   }, [availableOffers, total]);
 
-  // calculatedDiscount comes from CartContext now
-  const calculatedDiscount = discount;
 
   useEffect(() => { if (!items.length && !placedRef.current) nav("/"); }, [items, nav]);
 
@@ -117,8 +145,7 @@ const Checkout = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount — cart is already in memory
 
-  const deliveryFee = total >= 199 ? 0 : 29;
-  const grand = Math.max(0, total + deliveryFee - calculatedDiscount);
+
 
   const applyCoupon = async (manualCode?: string) => {
     const codeToTry = manualCode || coupon.trim().toUpperCase();
@@ -142,6 +169,24 @@ const Checkout = () => {
     if (!hasPhone) { setVerifyOpen(true); return; }
     setPlacing(true);
 
+    const subItems = items.filter(i => i.purchase_type === 'subscription');
+    const instantItems = items.filter(i => i.purchase_type === 'instant');
+
+    if (subItems.length > 0) {
+      const singleDeliveryCost = subItems.reduce((s, i) => s + i.discountPrice * i.qty, 0);
+      const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const currentWalletBalance = wallet?.balance || 0;
+
+      if (currentWalletBalance < singleDeliveryCost) {
+        setPlacing(false);
+        const difference = Math.max(0, singleDeliveryCost - currentWalletBalance);
+        toast.error("Insufficient wallet balance. Redirecting to recharge...");
+        nav(`/account/wallet?redirect=/checkout&recharge=${difference}`);
+        return;
+
+      }
+    }
+
     // Online payment — simulate Razorpay first
     let onlinePaid = false;
     if (payment === "online") {
@@ -149,9 +194,6 @@ const Checkout = () => {
       if (!r.ok) { setPlacing(false); toast.error("Payment failed"); return; }
       onlinePaid = true;
     }
-
-    const subItems = items.filter(i => i.purchase_type === 'subscription');
-    const instantItems = items.filter(i => i.purchase_type === 'instant');
 
     const { data: addr } = await supabase.from("addresses").select("*").eq("id", selectedAddr).maybeSingle();
     const lat = (addr as any)?.lat ?? null;
@@ -164,16 +206,24 @@ const Checkout = () => {
       const subRows = subItems.map(i => {
         // id was set as `${product.id}-sub-${freq}`
         const actualProductId = i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id;
+        const plan = activePlans?.find(p => 
+          p.product_slug === i.slug && p.frequency_type === i.frequency_type
+        );
+        const isWeekly = i.frequency_type === 'weekly';
+        const isAlternate = i.frequency_type === 'alternate';
         return {
           user_id: user.id,
           product_slug: i.slug || '',
           product_id: actualProductId,
+          plan_id: plan?.id || null,
           quantity: i.qty,
-          selected_days: i.subscription_days || [1,3,5],
+          selected_days: i.subscription_days || (isWeekly ? [3] : (isAlternate ? [0,2,4] : [0,1,2,3,4,5,6])),
           status: 'active',
           is_vip: profile?.is_vip || false,
           wallet_mode: true,
-          address_id: selectedAddr
+          address_id: selectedAddr,
+          next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"),
+          slot_id: 'subscription'
         };
       });
       
@@ -300,26 +350,37 @@ const Checkout = () => {
         )}
 
         {/* Payment */}
-        <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
-          <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><CreditCard className="w-5 h-5 text-primary" /> Payment method</h2>
-          <RadioGroup value={payment} onValueChange={(v) => setPayment(v as any)} className="space-y-2">
-            {[
-              { v: "online", label: "Pay online (Razorpay demo)", desc: "Simulated payment — completes instantly" },
-              { v: "upi", label: "UPI", desc: "Pay via Google Pay, PhonePe, Paytm" },
-              { v: "cod", label: "Cash on delivery", desc: "Pay when your eggs arrive" },
-            ].map(o => (
-              <label key={o.v} className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-smooth ${payment === o.v ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
-                <RadioGroupItem value={o.v} />
-                <div className="flex-1">
-                  <div className="font-semibold text-brown text-sm">{o.label}</div>
-                  <div className="text-xs text-muted-foreground">{o.desc}</div>
-                </div>
-                {payment === o.v && <Check className="w-4 h-4 text-success" />}
-              </label>
-            ))}
-          </RadioGroup>
-          <p className="text-xs text-muted-foreground mt-3">Razorpay flow is in demo mode — production keys can be wired in <code>src/lib/payments/razorpay.ts</code>.</p>
-        </section>
+        {hasSubscriptionInCart ? (
+          <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
+            <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-2">
+              <Wallet className="w-5 h-5 text-primary" /> Payment Mode: Prepaid Wallet
+            </h2>
+            <div className="p-3.5 bg-secondary/20 border border-border rounded-xl">
+              <p className="text-sm text-muted-foreground">Subscriptions are automatically fulfilled using your prepaid wallet balance.</p>
+            </div>
+          </section>
+        ) : (
+          <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
+            <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><CreditCard className="w-5 h-5 text-primary" /> Payment method</h2>
+            <RadioGroup value={payment} onValueChange={(v) => setPayment(v as any)} className="space-y-2">
+              {[
+                { v: "online", label: "Pay online (Razorpay demo)", desc: "Simulated payment — completes instantly" },
+                { v: "upi", label: "UPI", desc: "Pay via Google Pay, PhonePe, Paytm" },
+                { v: "cod", label: "Cash on delivery", desc: "Pay when your eggs arrive" },
+              ].map(o => (
+                <label key={o.v} className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-smooth ${payment === o.v ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                  <RadioGroupItem value={o.v} />
+                  <div className="flex-1">
+                    <div className="font-semibold text-brown text-sm">{o.label}</div>
+                    <div className="text-xs text-muted-foreground">{o.desc}</div>
+                  </div>
+                  {payment === o.v && <Check className="w-4 h-4 text-success" />}
+                </label>
+              ))}
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground mt-3">Razorpay flow is in demo mode — production keys can be wired in <code>src/lib/payments/razorpay.ts</code>.</p>
+          </section>
+        )}
 
         {/* Coupon + Summary */}
         <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6">
@@ -382,8 +443,26 @@ const Checkout = () => {
           </div>
 
           <div className="space-y-2.5 text-sm">
-            <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{total}</span></div>
-            <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span className={deliveryFee === 0 ? "text-success font-semibold" : ""}>{deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}</span></div>
+            {hasSubscriptionInCart ? (
+              <>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
+                  <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground/70 text-xs">
+                  <span>Month's Projected Total <span className="italic">(Informational)</span></span>
+                  <span>₹{projectedMonthlyTotal}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Subtotal ({items.reduce((s, i) => s + i.qty, 0)} items)</span>
+                <span>₹{total}</span>
+              </div>
+            )}
+            {!hasSubscriptionInCart && (
+              <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span className={deliveryFee === 0 ? "text-success font-semibold" : ""}>{deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}</span></div>
+            )}
             {calculatedDiscount > 0 && (
               <div className="flex justify-between text-success font-medium">
                 <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Discount ({appliedCoupon?.code})</span>
@@ -391,27 +470,63 @@ const Checkout = () => {
               </div>
             )}
             <div className="flex justify-between font-display font-bold text-brown text-lg pt-3 mt-3 border-t border-border">
-              <span>Grand Total</span>
-              <span>₹{grand}</span>
+              {hasSubscriptionInCart ? (
+                <>
+                  <span>Amount Due Now</span>
+                  <span className="text-emerald-700">₹0 <span className="text-xs font-normal text-muted-foreground">(Prepaid Wallet)</span></span>
+                </>
+              ) : (
+                <>
+                  <span>Grand Total</span>
+                  <span>₹{grand}</span>
+                </>
+              )}
             </div>
           </div>
         </section>
       </main>
 
-      <div className="fixed bottom-0 inset-x-0 bg-background/90 backdrop-blur-xl border-t border-border p-3 z-30">
-        <div className="container max-w-3xl flex gap-3">
-          <div className="flex-1">
-            <div className="text-xs text-muted-foreground">Total</div>
-            <div className="font-display font-bold text-brown text-xl">₹{grand}</div>
+      <div className="fixed bottom-0 inset-x-0 bg-background/90 backdrop-blur-xl border-t border-border p-3 z-30 shadow-[0_-8px_24px_rgba(0,0,0,0.05)]">
+        <div className="container max-w-3xl">
+          {hasSubscriptionInCart && (
+            <div className="mb-3">
+              {!isShortfundedForFirstDelivery ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-sm">
+                  ✓ Sufficient balance available! ₹{perDeliveryCost} will be debited per delivery. (Current Wallet: ₹{currentBalance})
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-900 text-sm space-y-1">
+                  <p className="font-semibold">⚠️ Minimum Balance Required</p>
+                  <p>Your current wallet balance is <strong>₹{currentBalance}</strong>. A minimum of <strong>₹{perDeliveryCost}</strong> (1 delivery) is required to activate this schedule.</p>
+                  <p className="text-xs text-stone-500 mt-1">* Estimated monthly consumption is ₹{projectedMonthlyTotal}, but you can recharge whatever amount you prefer.</p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex gap-3 items-end">
+            <div className="flex-1 pb-1">
+              <div className="text-xs text-muted-foreground">{hasSubscriptionInCart ? 'Per Delivery' : 'Total'}</div>
+              <div className="font-display font-bold text-brown text-xl">{hasSubscriptionInCart ? `₹${perDeliveryCost}` : `₹${grand}`}</div>
+            </div>
+            {hasSubscriptionInCart && isShortfundedForFirstDelivery ? (
+              <Button
+                variant="hero" size="lg" className="flex-[2] !bg-amber-500 hover:!bg-amber-600 !text-white !border-amber-600"
+                onClick={() => nav(`/account/wallet?redirect=/checkout&recharge=${minimumNeededToActivate}`)}
+                disabled={profileLoading || !addrServiceable || checkingAddr}
+              >
+                Go to Wallet to Recharge • Min Add ₹{minimumNeededToActivate}
+              </Button>
+            ) : (
+              <Button
+                variant="hero" size="lg" className="flex-[2]"
+                onClick={placeOrder}
+                disabled={placing || !selectedAddr || profileLoading || !addrServiceable || checkingAddr}
+                title={!hasPhone ? `Please verify your phone first` : (!addrServiceable ? "Location not serviceable" : undefined)}
+              >
+                {placing || checkingAddr ? <Loader2 className="w-4 h-4 animate-spin" /> : (!addrServiceable ? "Location Not Serviceable" : "Place order")}
+              </Button>
+            )}
           </div>
-          <Button
-            variant="hero" size="lg" className="flex-1"
-            onClick={placeOrder}
-            disabled={placing || !selectedAddr || profileLoading || !addrServiceable || checkingAddr}
-            title={!hasPhone ? `Please verify your phone first` : (!addrServiceable ? "Location not serviceable" : undefined)}
-          >
-            {placing || checkingAddr ? <Loader2 className="w-4 h-4 animate-spin" /> : (!addrServiceable ? "Location Not Serviceable" : (payment === "online" ? `Pay ₹${grand}` : "Place order"))}
-          </Button>
         </div>
       </div>
 

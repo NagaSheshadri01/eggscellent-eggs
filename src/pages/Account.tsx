@@ -36,7 +36,7 @@ const Account = ({ defaultTab }: AccountProps) => {
   const { data: wallet, isLoading: isWalletLoading, refetch: refetchWallet } = useWallet();
   const { data: transactions, isLoading: isTransactionsLoading, refetch: refetchTransactions } = useWalletTransactions();
 
-  const [rechargeAmount, setRechargeAmount] = useState("500");
+  const [rechargeAmount, setRechargeAmount] = useState(params.get("recharge") || "500");
   const [recharging, setRecharging] = useState(false);
 
   useEffect(() => {
@@ -84,6 +84,12 @@ const Account = ({ defaultTab }: AccountProps) => {
         queryClient.invalidateQueries({ queryKey: ['user-wallet-transactions'] });
         await refetchWallet();
         await refetchTransactions();
+        
+        const redirect = params.get("redirect");
+        if (redirect) {
+          toast.info("Redirecting back to complete your order...");
+          setTimeout(() => nav(redirect), 1000);
+        }
       }
     } catch (e: any) {
       toast.error(e.message);

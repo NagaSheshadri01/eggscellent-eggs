@@ -210,15 +210,24 @@ const Partner = () => {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const { updateStopStatus } = useDriverShift(user?.id, todayStr);
   const subDeliveries = useQuery({
-    queryKey: ["partner_sub_deliveries", user?.id, todayStr],
+    queryKey: ["driver-active-shift"],
     enabled: !!user?.id && activeFeed === 'subscription',
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("delivery_ledger")
-        .select(`*, subscriptions(product_slug, quantity, address_id, addresses(full_name, lat, lng, address_line_1, pincode))`)
-        .eq("delivery_partner_id", user!.id)
-        .in("status", ["scheduled", "out_for_delivery"])
-        .eq("delivery_date", todayStr);
+        .from('delivery_ledger')
+        .select(`
+          *,
+          subscriptions!inner(
+            user_id,
+            product_slug,
+            quantity,
+            addresses (*),
+            profiles (full_name, phone)
+          )
+        `)
+        .eq('delivery_partner_id', user!.id)
+        .eq('delivery_date', todayStr)
+        .in('status', ['scheduled', 'pending_payment']);
       if (error) throw error;
       return (data ?? []) as any[];
     },
