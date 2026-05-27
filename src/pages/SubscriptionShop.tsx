@@ -74,7 +74,7 @@ const SubscriptionShop = () => {
   const { data: plans = [], isLoading: plansLoading } = useQuery<SubscriptionPlan[]>({
     queryKey: ["active-subscription-plans"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("subscription_plans")
         .select("*")
         .eq("is_active", true);
@@ -139,13 +139,13 @@ const SubscriptionShop = () => {
           ? [0, 2, 4] 
           : [0, 1, 2, 3, 4, 5, 6];
 
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as any)
         .from('profiles')
         .select('is_vip')
         .eq('id', user.id)
         .maybeSingle();
 
-      const isUserVipMember = profile?.is_vip || false;
+      const isUserVipMember = (profile as any)?.is_vip || false;
 
       const { error } = await (supabase as any)
         .from('subscriptions')

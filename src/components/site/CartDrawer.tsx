@@ -534,7 +534,7 @@ const CartDrawer = () => {
                     ) : null}
 
                     {/* Cross-sells */}
-                    {crossSells.length > 0 && (
+                    {crossSells.length > 0 && !hasSubscriptionInCart && (
                       <div>
                         <div className="flex items-center gap-2 mb-3">
                           <Zap className="w-4 h-4 text-primary" />

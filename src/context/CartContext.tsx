@@ -91,19 +91,20 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     setItems(prev => {
       if (type === 'subscription') {
-        // Enforce Strict Single-Subscription Cart Ceiling: delete any other subscription item
-        const filteredPrev = prev.filter(i => i.purchase_type !== 'subscription');
-        const exists = filteredPrev.find(i => i.id === p.id && i.purchase_type === type);
-        
-        if (exists) {
-          return filteredPrev.map(i => (i.id === p.id && i.purchase_type === 'subscription') 
-            ? { ...i, qty: i.qty + 1 } 
-            : i
-          );
-        }
-        return [...filteredPrev, { ...p, qty: 1, purchase_type: 'subscription', subscription_days: days, frequency_type: p.frequency_type }];
+        // Discard all other items since subscription cannot co-exist with any other item
+        return [{ ...p, qty: 1, purchase_type: 'subscription', subscription_days: days, frequency_type: p.frequency_type }];
       } else {
         // INSTANT PATH
+        // If there's an existing subscription in the cart, replace the entire cart
+        const hasSub = prev.some(i => i.purchase_type === 'subscription');
+        if (hasSub) {
+          if (p.stock_quantity !== undefined && p.stock_quantity <= 0) {
+            toast.error("Item is out of stock");
+            return prev;
+          }
+          return [{ ...p, qty: 1, purchase_type: 'instant' }];
+        }
+
         const exists = prev.find(i => i.id === p.id && (i.purchase_type || 'instant') === 'instant');
         if (exists) {
           if (p.stock_quantity !== undefined && exists.qty >= p.stock_quantity) {
