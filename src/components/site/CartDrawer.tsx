@@ -694,16 +694,10 @@ const CartDrawer = () => {
                       <div className="font-display font-bold text-brown text-sm mb-3">Bill Details</div>
                       <div className="space-y-2 text-xs">
                         {hasSubscriptionInCart ? (
-                          <>
-                            <div className="flex justify-between text-muted-foreground">
-                              <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
-                              <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
-                            </div>
-                            <div className="flex justify-between text-muted-foreground/70">
-                              <span>Month's Projected Total <span className="italic">(Informational)</span></span>
-                              <span>₹{projectedMonthlyTotal}</span>
-                            </div>
-                          </>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
+                            <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
+                          </div>
                         ) : (
                           <>
                             <div className="flex justify-between text-muted-foreground">
@@ -722,19 +716,12 @@ const CartDrawer = () => {
                             <span>− ₹{discount}</span>
                           </div>
                         )}
-                        <div className="flex justify-between font-display font-bold text-brown text-sm pt-2 mt-1 border-t border-border">
-                          {hasSubscriptionInCart ? (
-                            <>
-                              <span>Amount Due Now</span>
-                              <span className="text-emerald-700">₹0 <span className="text-[10px] font-normal text-muted-foreground">(Prepaid Wallet)</span></span>
-                            </>
-                          ) : (
-                            <>
-                              <span>Grand Total</span>
-                              <span>₹{finalTotal}</span>
-                            </>
-                          )}
-                        </div>
+                        {!hasSubscriptionInCart && (
+                          <div className="flex justify-between font-display font-bold text-brown text-sm pt-2 mt-1 border-t border-border">
+                            <span>Grand Total</span>
+                            <span>₹{finalTotal}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -750,10 +737,10 @@ const CartDrawer = () => {
                 <div className="flex justify-between items-baseline mb-3">
                   <div>
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      {hasSubscriptionInCart && step === "payment" ? "Per Delivery" : (step === "cart" ? "Subtotal" : "Grand Total")}
+                      {hasSubscriptionInCart ? "Per Delivery" : (step === "cart" ? "Subtotal" : "Grand Total")}
                     </div>
                     <div className="font-display font-bold text-brown text-xl">
-                      {hasSubscriptionInCart && step === "payment" ? `₹${perDeliveryCost}` : `₹${step === "cart" ? total : finalTotal}`}
+                      {hasSubscriptionInCart ? `₹${perDeliveryCost}` : `₹${step === "cart" ? total : finalTotal}`}
                     </div>
                   </div>
                   {discount > 0 && (

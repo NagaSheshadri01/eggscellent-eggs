@@ -444,16 +444,10 @@ const Checkout = () => {
 
           <div className="space-y-2.5 text-sm">
             {hasSubscriptionInCart ? (
-              <>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
-                  <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
-                </div>
-                <div className="flex justify-between text-muted-foreground/70 text-xs">
-                  <span>Month's Projected Total <span className="italic">(Informational)</span></span>
-                  <span>₹{projectedMonthlyTotal}</span>
-                </div>
-              </>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
+                <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
+              </div>
             ) : (
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal ({items.reduce((s, i) => s + i.qty, 0)} items)</span>
@@ -469,19 +463,12 @@ const Checkout = () => {
                 <span>− ₹{calculatedDiscount}</span>
               </div>
             )}
-            <div className="flex justify-between font-display font-bold text-brown text-lg pt-3 mt-3 border-t border-border">
-              {hasSubscriptionInCart ? (
-                <>
-                  <span>Amount Due Now</span>
-                  <span className="text-emerald-700">₹0 <span className="text-xs font-normal text-muted-foreground">(Prepaid Wallet)</span></span>
-                </>
-              ) : (
-                <>
-                  <span>Grand Total</span>
-                  <span>₹{grand}</span>
-                </>
-              )}
-            </div>
+            {!hasSubscriptionInCart && (
+              <div className="flex justify-between font-display font-bold text-brown text-lg pt-3 mt-3 border-t border-border">
+                <span>Grand Total</span>
+                <span>₹{grand}</span>
+              </div>
+            )}
           </div>
         </section>
       </main>
