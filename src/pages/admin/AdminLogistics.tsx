@@ -43,6 +43,7 @@ interface DeliveryStop {
     productSlug: string;
     quantity: number;
     price: number;
+    status: string;
   }>;
   netQuantity: number;
 }
@@ -51,8 +52,13 @@ export const AdminLogistics = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("tomorrow-dispatch");
 
-  // Filter Date: Tomorrow
-  const tomorrowStr = format(addDays(new Date(), 1), "yyyy-MM-dd");
+  // Filter Dates
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const [adminManifestTab, setAdminManifestTab] = useState<'today' | 'tomorrow'>('today');
 
   // Selection state for checkbox bulk matching
   const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
@@ -76,7 +82,30 @@ export const AdminLogistics = () => {
   const [selectedDaysB, setSelectedDaysB] = useState<number[]>([2, 4, 6]);
   const [pricePerDelivery, setPricePerDelivery] = useState(0);
 
-  // --- QUERY 1: Tomorrow's Scheduled Deliveries ---
+  // --- QUERY 1A: Today's Live Operations Manifest ---
+  const todayDispatchQ = useQuery({
+    queryKey: ["admin-logistics-manifest-today", todayStr],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("delivery_ledger")
+        .select(`
+          *,
+          subscriptions:subscription_id (
+            id,
+            product_slug,
+            quantity,
+            profiles:user_id (id, full_name, phone, email),
+            addresses:address_id (*)
+          )
+        `)
+        .eq("delivery_date", todayStr);
+      
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // --- QUERY 1B: Tomorrow's Planning Manifest ---
   const tomorrowDispatchQ = useQuery({
     queryKey: ["tomorrow-dispatch-manifest", tomorrowStr],
     queryFn: async () => {
@@ -190,6 +219,7 @@ export const AdminLogistics = () => {
     },
     onSuccess: (data) => {
       toast.success(`Assigned ${data.ledgerIds.length} stops successfully!`);
+      queryClient.invalidateQueries({ queryKey: ["admin-logistics-manifest-today"] });
       queryClient.invalidateQueries({ queryKey: ["tomorrow-dispatch-manifest"] });
       queryClient.invalidateQueries({ queryKey: ["admin-logistics-manifest"] });
       setSelectedLedgerIds([]); // Reset selection
@@ -369,13 +399,15 @@ export const AdminLogistics = () => {
   });
 
   // --- CLUSTERING REDUCER (Pincode -> Area/Colony -> Stop) ---
-  const tomorrowDeliveries = tomorrowDispatchQ.data || [];
+  const activeDeliveries = useMemo(() => {
+    return adminManifestTab === 'today' ? todayDispatchQ.data || [] : tomorrowDispatchQ.data || [];
+  }, [adminManifestTab, todayDispatchQ.data, tomorrowDispatchQ.data]);
   
   const geographicalClusters = useMemo(() => {
     const groups: Record<string, Record<string, DeliveryStop[]>> = {};
     const stopMap = new Map<string, DeliveryStop>();
 
-    tomorrowDeliveries.forEach((d: any) => {
+    activeDeliveries.forEach((d: any) => {
       const sub = d.subscriptions || {};
       const addr = sub.addresses || {};
       const profile = sub.profiles || {};
@@ -409,13 +441,14 @@ export const AdminLogistics = () => {
         ledgerId: d.id,
         productSlug: d.product_slug || sub.product_slug,
         quantity: qty,
-        price: d.effective_price || 0
+        price: d.effective_price || 0,
+        status: d.status || 'scheduled'
       });
       stop.netQuantity += qty;
     });
 
     return groups;
-  }, [tomorrowDeliveries]);
+  }, [activeDeliveries]);
 
   // Selected customer computed data
   const selectedCustomerInfo = useMemo(() => {
@@ -475,7 +508,9 @@ export const AdminLogistics = () => {
         </div>
         <div className="bg-white px-4 py-2 rounded-2xl border border-border/80 flex items-center gap-2 self-start">
           <Calendar className="w-4 h-4 text-primary" />
-          <span className="text-xs font-bold text-brown">Manifest Date: {tomorrowStr} (Tomorrow)</span>
+          <span className="text-xs font-bold text-brown">
+            Manifest Date: {adminManifestTab === 'today' ? `${todayStr} (Today)` : `${tomorrowStr} (Tomorrow)`}
+          </span>
         </div>
       </div>
 
@@ -483,7 +518,7 @@ export const AdminLogistics = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-secondary/40 p-1 mb-6">
           <TabsTrigger value="tomorrow-dispatch" className="flex items-center gap-2">
-            <Navigation className="w-4 h-4" /> Tomorrow's Route Stops
+            <Navigation className="w-4 h-4" /> Route Stops Dispatch Board
           </TabsTrigger>
           <TabsTrigger value="driver-registry" className="flex items-center gap-2">
             <Truck className="w-4 h-4" /> Active Driver Shifts
@@ -499,22 +534,52 @@ export const AdminLogistics = () => {
           </TabsTrigger>
         </TabsList>
 
-        {/* 1. TOMORROW'S ROUTE STOPS CLUSTERING VIEW */}
+        {/* 1. DISPATCH BOARD CLUSTERING VIEW (TODAY & TOMORROW) */}
         <TabsContent value="tomorrow-dispatch" className="space-y-6">
-          {tomorrowDispatchQ.isLoading ? (
+          {/* Main View Segmented Toggles */}
+          <div className="flex gap-2 bg-secondary/30 border border-border p-1 rounded-2xl max-w-md">
+            <button
+              onClick={() => {
+                setAdminManifestTab('today');
+                setSelectedLedgerIds([]); // Reset selection on switch
+              }}
+              className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
+                adminManifestTab === 'today' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
+              }`}
+            >
+              🚚 Today's Live Orders ({todayDispatchQ.data?.length || 0})
+            </button>
+            <button
+              onClick={() => {
+                setAdminManifestTab('tomorrow');
+                setSelectedLedgerIds([]); // Reset selection on switch
+              }}
+              className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
+                adminManifestTab === 'tomorrow' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
+              }`}
+            >
+              ⏳ Tomorrow's Route Staging ({tomorrowDispatchQ.data?.length || 0})
+            </button>
+          </div>
+
+          {(adminManifestTab === 'today' ? todayDispatchQ.isLoading : tomorrowDispatchQ.isLoading) ? (
             <div className="space-y-4">
               <Skeleton className="h-20 rounded-2xl" />
               <Skeleton className="h-20 rounded-2xl" />
             </div>
-          ) : tomorrowDispatchQ.error ? (
+          ) : (adminManifestTab === 'today' ? todayDispatchQ.error : tomorrowDispatchQ.error) ? (
             <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-2xl text-sm">
-              Error loading dispatch entries: {(tomorrowDispatchQ.error as any).message}
+              Error loading dispatch entries: {((adminManifestTab === 'today' ? todayDispatchQ.error : tomorrowDispatchQ.error) as any).message}
             </div>
-          ) : tomorrowDeliveries.length === 0 ? (
-            <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border flex flex-col items-center">
+          ) : activeDeliveries.length === 0 ? (
+            <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border flex flex-col items-center animate-in fade-in duration-300">
               <CheckCircle2 className="w-12 h-12 text-muted-foreground mb-3 opacity-30" />
-              <p className="font-display font-bold text-brown">No scheduled deliveries for tomorrow</p>
-              <p className="text-sm text-muted-foreground mt-1">There are no upcoming scheduled subscription ledger rows for {tomorrowStr}.</p>
+              <p className="font-display font-bold text-brown">
+                {adminManifestTab === 'today' ? "No active deliveries today" : "No scheduled deliveries for tomorrow"}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {adminManifestTab === 'today' ? `There are no recurring subscription ledger rows scheduled for ${todayStr}.` : `There are no upcoming scheduled subscription ledger rows for ${tomorrowStr}.`}
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -616,9 +681,20 @@ export const AdminLogistics = () => {
                                         <td className="px-4 py-3 align-top space-y-2">
                                           {stop.items.map((item, idx) => (
                                             <div key={idx} className="flex flex-col">
-                                              <div className="flex items-center gap-1.5 font-medium text-brown">
+                                              <div className="flex items-center gap-1.5 font-medium text-brown flex-wrap">
                                                 <Package className="w-3.5 h-3.5 text-primary shrink-0" />
                                                 {item.quantity}x {item.productSlug} <span className="text-[10px] text-muted-foreground">(₹{item.price})</span>
+                                                {adminManifestTab === 'today' && (
+                                                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase border shrink-0 ${
+                                                    item.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                    item.status === 'out_for_delivery' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                    item.status === 'skipped' ? 'bg-stone-50 text-stone-600 border-stone-200' :
+                                                    item.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                    'bg-amber-50 text-amber-700 border-amber-200'
+                                                  }`}>
+                                                    {item.status.replace(/_/g, " ")}
+                                                  </span>
+                                                )}
                                               </div>
                                             </div>
                                           ))}
@@ -673,8 +749,8 @@ export const AdminLogistics = () => {
               </div>
             ) : (
               (partnersQ.data || []).map((partner: any) => {
-                // Calculate assigned stops count for tomorrow
-                const assignedStops = tomorrowDeliveries.filter((d) => d.delivery_partner_id === partner.user_id);
+                // Calculate assigned stops count for active shift
+                const assignedStops = activeDeliveries.filter((d: any) => d.delivery_partner_id === partner.user_id);
                 return (
                   <div key={partner.user_id} className="bg-card rounded-2xl border border-border/80 p-5 shadow-soft hover:shadow-md transition-all space-y-4">
                     <div className="flex justify-between items-start gap-4">
@@ -691,7 +767,9 @@ export const AdminLogistics = () => {
 
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-secondary">
                       <div>
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Tomorrow's Drops</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                          {adminManifestTab === 'today' ? "Today's Drops" : "Tomorrow's Drops"}
+                        </span>
                         <div className="text-xl font-display font-bold text-brown mt-0.5">{assignedStops.length} Stops</div>
                       </div>
                       <div>
