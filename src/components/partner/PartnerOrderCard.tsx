@@ -28,6 +28,7 @@ interface PartnerOrderCardProps {
   effectivePrice: number;
   onConfirmDelivery: (id: string) => Promise<void>;
   onLogIssue: (id: string) => void;
+  isLocked?: boolean;
 }
 
 export const PartnerOrderCard = ({
@@ -35,7 +36,8 @@ export const PartnerOrderCard = ({
   productName,
   effectivePrice,
   onConfirmDelivery,
-  onLogIssue
+  onLogIssue,
+  isLocked = false
 }: PartnerOrderCardProps) => {
   const addr = deliveryItem.subscriptions?.addresses || {};
   const profile = deliveryItem.subscriptions?.profiles || {};
@@ -53,11 +55,12 @@ export const PartnerOrderCard = ({
 
   // Handle Dragging / Sliding
   const handleStart = () => {
+    if (isLocked) return;
     setIsSliding(true);
   };
 
   const handleMove = (clientX: number) => {
-    if (!isSliding || !trackRef.current) return;
+    if (!isSliding || !trackRef.current || isLocked) return;
     const rect = trackRef.current.getBoundingClientRect();
     const width = rect.width - 48; // thumb width is 48px
     const relativeX = clientX - rect.left - 24;
@@ -66,7 +69,7 @@ export const PartnerOrderCard = ({
   };
 
   const handleEnd = () => {
-    if (!isSliding) return;
+    if (!isSliding || isLocked) return;
     setIsSliding(false);
     if (sliderVal >= 90) {
       // Completed Swipe
@@ -156,49 +159,59 @@ export const PartnerOrderCard = ({
           </a>
         )}
 
-        {/* Swipe to confirm delivery slider */}
-        {deliveryItem.status !== "delivered" ? (
-          <div 
-            ref={trackRef}
-            className="relative h-12 bg-stone-100 border border-stone-200 rounded-full overflow-hidden select-none"
-          >
-            {/* Slide Track Label Text */}
-            <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-stone-500 pointer-events-none uppercase tracking-wider">
-              {sliderVal > 90 ? "Release to confirm Drop-off" : "Swipe right to confirm drop-off →"}
-            </div>
-
-            {/* Slide Progress Fill */}
-            <div 
-              className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-75"
-              style={{ width: `${sliderVal}%` }}
-            />
-
-            {/* Egg-yolk Gold Thumb Button */}
-            <div
-              className="absolute top-0.5 bottom-0.5 w-11 rounded-full gradient-yolk shadow-md flex items-center justify-center cursor-grab active:cursor-grabbing transition-all duration-75"
-              style={{ 
-                left: `calc(${sliderVal}% * (100% - 44px) / 100 + 2px)`,
-              }}
-              onMouseDown={handleStart}
-              onTouchStart={handleStart}
-            >
-              <span className="text-white text-base select-none">🍳</span>
+        {isLocked ? (
+          <div className="flex justify-center pt-2">
+            <div className="bg-stone-100 text-stone-500 text-xs font-medium px-3 py-1.5 rounded-lg border border-stone-200 inline-flex items-center gap-1.5">
+              🔒 Locked Until Tomorrow
             </div>
           </div>
         ) : (
-          <div className="w-full h-11 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold rounded-xl flex items-center justify-center text-xs">
-            ✓ Delivered Successfully
-          </div>
-        )}
+          <>
+            {/* Swipe to confirm delivery slider */}
+            {deliveryItem.status !== "delivered" ? (
+              <div 
+                ref={trackRef}
+                className="relative h-12 bg-stone-100 border border-stone-200 rounded-full overflow-hidden select-none"
+              >
+                {/* Slide Track Label Text */}
+                <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-stone-500 pointer-events-none uppercase tracking-wider">
+                  {sliderVal > 90 ? "Release to confirm Drop-off" : "Swipe right to confirm drop-off →"}
+                </div>
 
-        {/* Log Issue Button */}
-        {deliveryItem.status !== "delivered" && (
-          <button
-            onClick={() => onLogIssue(deliveryItem.id)}
-            className="w-full text-center text-stone-400 hover:text-stone-600 text-xs font-semibold hover:underline block pt-1"
-          >
-            ⚠️ Log Delivery Issue
-          </button>
+                {/* Slide Progress Fill */}
+                <div 
+                  className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-75"
+                  style={{ width: `${sliderVal}%` }}
+                />
+
+                {/* Egg-yolk Gold Thumb Button */}
+                <div
+                  className="absolute top-0.5 bottom-0.5 w-11 rounded-full gradient-yolk shadow-md flex items-center justify-center cursor-grab active:cursor-grabbing transition-all duration-75"
+                  style={{ 
+                    left: `calc(${sliderVal}% * (100% - 44px) / 100 + 2px)`,
+                  }}
+                  onMouseDown={handleStart}
+                  onTouchStart={handleStart}
+                >
+                  <span className="text-white text-base select-none">🍳</span>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full h-11 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold rounded-xl flex items-center justify-center text-xs">
+                ✓ Delivered Successfully
+              </div>
+            )}
+
+            {/* Log Issue Button */}
+            {deliveryItem.status !== "delivered" && (
+              <button
+                onClick={() => onLogIssue(deliveryItem.id)}
+                className="w-full text-center text-stone-400 hover:text-stone-600 text-xs font-semibold hover:underline block pt-1"
+              >
+                ⚠️ Log Delivery Issue
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

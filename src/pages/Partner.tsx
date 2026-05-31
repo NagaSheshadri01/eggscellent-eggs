@@ -207,10 +207,16 @@ const Partner = () => {
     },
   });
 
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const [subscriptionTab, setSubscriptionTab] = useState<'today' | 'tomorrow'>('today');
+
   const { updateStopStatus } = useDriverShift(user?.id, todayStr);
   const subDeliveries = useQuery({
-    queryKey: ["driver-active-shift"],
+    queryKey: ["driver-active-shift", todayStr, tomorrowStr],
     enabled: !!user?.id && activeFeed === 'subscription',
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -226,8 +232,7 @@ const Partner = () => {
           )
         `)
         .eq('delivery_partner_id', user!.id)
-        .eq('delivery_date', todayStr)
-        .in('status', ['scheduled', 'pending_payment']);
+        .in('delivery_date', [todayStr, tomorrowStr]);
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -362,28 +367,68 @@ const Partner = () => {
 
         {activeFeed === 'subscription' && (() => {
           const rawStops = subDeliveries.data || [];
-          const activeStops = rawStops.filter((s: any) => !completedStops[s.id] && s.status !== 'delivered' && s.status !== 'skipped' && s.status !== 'failed');
+          
+          // Split stops by date bounds
+          const todayStops = rawStops.filter((s: any) => s.delivery_date === todayStr);
+          const tomorrowStops = rawStops.filter((s: any) => s.delivery_date === tomorrowStr);
+
+          // Active stops logic (only filtering completed/inactive for today's live execution)
+          const activeStops = todayStops.filter((s: any) => !completedStops[s.id] && s.status !== 'delivered' && s.status !== 'skipped' && s.status !== 'failed');
+          const tomorrowActiveStops = tomorrowStops;
+
+          const isFutureShift = subscriptionTab === 'tomorrow';
+          const displayStops = isFutureShift ? tomorrowActiveStops : activeStops;
 
           return (
             <div className="space-y-6">
-              <div>
-                <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Subscription Shift</h1>
-                <p className="text-sm text-muted-foreground">Today's recurring delivery queue — {todayStr}</p>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Subscription Shifts</h1>
+                  <p className="text-sm text-muted-foreground">
+                    {isFutureShift ? `Tomorrow's pre-assigned schedule — ${tomorrowStr}` : `Today's recurring delivery queue — ${todayStr}`}
+                  </p>
+                </div>
+                
+                {/* Secondary Today vs Tomorrow Toggles */}
+                {!subDeliveries.isLoading && (
+                  <div className="flex gap-2 bg-card border border-border rounded-xl p-1 shadow-soft w-full max-w-xs self-start md:self-center">
+                    <button
+                      onClick={() => setSubscriptionTab('today')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all ${
+                        subscriptionTab === 'today' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
+                      }`}
+                    >
+                      Today's Shift ({todayStops.length})
+                    </button>
+                    <button
+                      onClick={() => setSubscriptionTab('tomorrow')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all ${
+                        subscriptionTab === 'tomorrow' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
+                      }`}
+                    >
+                      Tomorrow's Shift ({tomorrowStops.length})
+                    </button>
+                  </div>
+                )}
               </div>
 
               {subDeliveries.isLoading && <div className="space-y-3"><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div>}
               {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error as any).message}</div>}
 
-              {!subDeliveries.isLoading && activeStops.length === 0 && (
+              {!subDeliveries.isLoading && displayStops.length === 0 && (
                 <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border animate-in fade-in duration-300">
                   <Repeat className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-30" />
-                  <p className="font-display font-bold text-brown">No active subscription deliveries today</p>
-                  <p className="text-sm text-muted-foreground mt-1">All subscription stops have been successfully completed or exception-handled.</p>
+                  <p className="font-display font-bold text-brown">
+                    {isFutureShift ? "No subscription deliveries scheduled for tomorrow" : "No active subscription deliveries today"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {isFutureShift ? "Stops will appear here in real-time as the admin maps tomorrow's dispatch manifest." : "All subscription stops have been successfully completed or exception-handled."}
+                  </p>
                 </div>
               )}
 
-              {activeStops.length > 0 && (() => {
-                const allCoords = activeStops
+              {displayStops.length > 0 && (() => {
+                const allCoords = displayStops
                   .map((s: any) => s.subscriptions?.addresses)
                   .filter((a: any) => a?.lat && a?.lng);
                 const routeUrl = allCoords.length > 0
@@ -398,19 +443,23 @@ const Partner = () => {
                           <Repeat className="w-6 h-6" />
                         </div>
                         <div>
-                          <h2 className="font-display font-bold text-brown text-xl">🌅 Early Morning Subscription Shift</h2>
-                          <p className="text-xs text-muted-foreground mt-0.5">{activeStops.length} recurring stops remaining</p>
+                          <h2 className="font-display font-bold text-brown text-xl">
+                            {isFutureShift ? "🌅 Tomorrow's Pre-assigned Shift" : "🌅 Early Morning Subscription Shift"}
+                          </h2>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {isFutureShift ? `${tomorrowActiveStops.length} stops mapped` : `${activeStops.length} recurring stops remaining`}
+                          </p>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-3">
                         {routeUrl && (
                           <a href={routeUrl} target="_blank" rel="noreferrer">
                             <Button variant="outline" className="border-primary text-primary hover:bg-primary/5 h-12 px-6 font-bold">
-                              <Navigation className="w-4 h-4 mr-2" /> Continue Route
+                              <Navigation className="w-4 h-4 mr-2" /> {isFutureShift ? "Preview Route" : "Continue Route"}
                             </Button>
                           </a>
                         )}
-                        {activeStops.some((s: any) => s.status === 'scheduled') && (
+                        {!isFutureShift && activeStops.some((s: any) => s.status === 'scheduled') && (
                           <Button
                             className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-12 px-6 shadow-lg shadow-amber-500/20"
                             onClick={async () => {
@@ -431,7 +480,7 @@ const Partner = () => {
                         <ShieldCheck className="w-4 h-4" /> Shift Manifesto & Verification
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {activeStops.map((s: any) => {
+                        {displayStops.map((s: any) => {
                           const matchingProduct = productsList.find((p: any) => p.slug === s.subscriptions?.product_slug);
                           const productName = matchingProduct?.name || s.subscriptions?.product_slug || "Premium Eggs";
                           const effectivePrice = matchingProduct?.discountPrice || matchingProduct?.discounted_price || 150.00;
@@ -445,6 +494,7 @@ const Partner = () => {
                                 deliveryItem={s}
                                 productName={productName}
                                 effectivePrice={effectivePrice}
+                                isLocked={isFutureShift}
                                 onConfirmDelivery={async (stopId) => {
                                   // Optimistic Collapse State setting
                                   setCompletedStops(prev => ({ ...prev, [stopId]: true }));
