@@ -485,7 +485,7 @@ const Checkout = () => {
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-900 text-sm space-y-1">
                   <p className="font-semibold">⚠️ Minimum Balance Required</p>
                   <p>Your current wallet balance is <strong>₹{currentBalance}</strong>. A minimum of <strong>₹{perDeliveryCost}</strong> (1 delivery) is required to activate this schedule.</p>
-                  <p className="text-xs text-stone-500 mt-1">* Estimated monthly consumption is ₹{projectedMonthlyTotal}, but you can recharge whatever amount you prefer.</p>
+                  <p className="text-xs text-stone-500 mt-1">* Recharge whatever amount you prefer to cover future deliveries.</p>
                 </div>
               )}
             </div>

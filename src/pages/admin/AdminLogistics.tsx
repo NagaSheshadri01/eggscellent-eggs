@@ -178,13 +178,12 @@ export const AdminLogistics = () => {
   // --- MUTATION 1: Bulk Assign Driver ---
   const bulkAssignMutation = useMutation({
     mutationFn: async ({ ledgerIds, partnerId }: { ledgerIds: string[]; partnerId: string }) => {
-      const { error } = await (supabase as any)
-        .from("delivery_ledger")
-        .update({ 
-          delivery_partner_id: partnerId === "unassigned" ? null : partnerId,
-          status: 'scheduled'
-        })
-        .in("id", ledgerIds);
+      const selectedDriverId = partnerId === "unassigned" ? null : partnerId;
+      const extractedLedgerIdsArray = ledgerIds;
+      const { error } = await supabase
+        .from('delivery_ledger')
+        .update({ delivery_partner_id: selectedDriverId })
+        .in('id', extractedLedgerIdsArray);
 
       if (error) throw error;
       return { ledgerIds, partnerId };

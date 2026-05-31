@@ -792,7 +792,7 @@ const CartDrawer = () => {
                           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900 text-xs space-y-1">
                             <p className="font-semibold">⚠️ Minimum Balance Required</p>
                             <p>Your current wallet balance is <strong>₹{currentBalance}</strong>. A minimum of <strong>₹{perDeliveryCost}</strong> (1 delivery) is required to activate this schedule.</p>
-                            <p className="text-stone-500">* Est. monthly consumption: ₹{projectedMonthlyTotal}. Recharge any amount you prefer.</p>
+                            <p className="text-stone-500">* Recharge any amount you prefer to cover future deliveries.</p>
                           </div>
                         )}
                       </div>
@@ -814,7 +814,9 @@ const CartDrawer = () => {
                       >
                         {placing
                           ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Placing Order…</>
-                          : <>Place Order • ₹{finalTotal}</>
+                          : hasSubscriptionInCart
+                            ? <>Place Order • ₹{perDeliveryCost}</>
+                            : <>Place Order • ₹{finalTotal}</>
                         }
                       </Button>
                     )}
