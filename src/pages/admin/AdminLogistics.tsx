@@ -711,13 +711,14 @@ export const AdminLogistics = () => {
                                         </td>
                                         <td className="px-4 py-3 align-top">
                                           {isAssigned ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
-                                              🚚 {partnersQ.data?.find((p) => p.user_id === stop.assignedDriverId)?.full_name || "Assigned"}
-                                            </span>
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">
+                                              🚚 {partnersQ.data?.find((p: any) => p.user_id === stop.assignedDriverId)?.full_name || 'delivery partner'}
+                                            </div>
                                           ) : (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200 shadow-sm">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                                               ⚠️ Unassigned
-                                            </span>
+                                            </div>
                                           )}
                                         </td>
                                       </tr>

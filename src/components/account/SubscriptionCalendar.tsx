@@ -31,7 +31,16 @@ const SubscriptionCalendar = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("subscriptions")
-        .select("id, product_slug, selected_days, quantity, products(name, discounted_price)")
+        .select(`
+          id, 
+          product_slug, 
+          selected_days, 
+          quantity, 
+          products(name, discounted_price),
+          subscription_plans:plan_id (
+            price_per_delivery
+          )
+        `)
         .eq("user_id", user?.id)
         .eq("status", "active");
       return data || [];
@@ -61,6 +70,7 @@ const SubscriptionCalendar = () => {
     dateStr: string;
     dayNum: number;
     ledgerRows: any[];
+    isPast?: boolean;
   } | null>(null);
 
   // Group ledger entries by date for fast O(1) lookups
@@ -101,18 +111,31 @@ const SubscriptionCalendar = () => {
           delivery_date: dateStr,
           product_slug: sub.product_slug,
           quantity: sub.quantity || 1,
-          effective_price: sub.products?.discounted_price || 0,
+          effective_price: sub.subscription_plans?.price_per_delivery || sub.products?.discounted_price || 0,
           status: 'scheduled',
           virtual_product_name: sub.products?.name || sub.product_slug
         });
       }
     });
 
-    // Past / Present evaluation lock
-    if (dateStr <= todayStr) {
-      toast.error("This delivery date has already passed or is active today. Past records are immutable.", {
-        id: "past-lock",
-        icon: "🔒",
+    const isPastDate = dateStr < todayStr;
+    const isToday = dateStr === todayStr;
+
+    if (isPastDate || isToday) {
+      const activeLedgerRows = ledgerRows.filter((r: any) => r.status !== "cancelled");
+      if (activeLedgerRows.length === 0) {
+        toast.error(isToday ? "No subscription deliveries scheduled for today." : "No subscription deliveries were scheduled for this past date.", {
+          id: "past-empty",
+          icon: "📅",
+        });
+        return;
+      }
+      
+      setSelectedDayInfo({
+        dateStr,
+        dayNum: day,
+        ledgerRows: activeLedgerRows,
+        isPast: true
       });
       return;
     }
@@ -168,11 +191,18 @@ const SubscriptionCalendar = () => {
 
   const handleAddStandalone = async (product_slug: string, price: number) => {
     if (!selectedDayInfo) return;
+    
+    // Dynamically evaluate if the added product matches any of their active subscription contracts
+    const matchingSub = activeSubscriptions.find((sub: any) => sub.product_slug === product_slug);
+    const planPrice = matchingSub?.subscription_plans?.price_per_delivery;
+    
+    const finalPrice = planPrice !== undefined ? planPrice : price;
+
     try {
       await addStandaloneItem.mutateAsync({
         date: selectedDayInfo.dateStr,
         product_slug,
-        price
+        price: finalPrice
       });
       // Drawer will be closed or data refetched in background. Let's just close it.
       setSelectedDayInfo(null);
@@ -251,7 +281,9 @@ const SubscriptionCalendar = () => {
               {days.map((day) => {
                 const dateStr = toDateString(year, month, day);
                 const ledgerRows = ledgerMap.get(dateStr) || [];
-                const isPast = dateStr <= todayStr;
+                const isPast = dateStr < todayStr;
+                const isToday = dateStr === todayStr;
+                const isLocked = isPast || isToday;
                 
                 // Add the JIT evaluation
                 const dateObj = new Date(year, month, day);
@@ -277,7 +309,7 @@ const SubscriptionCalendar = () => {
                   else if (activeLedgerRows.some((r: any) => r.status === "failed")) overallStatus = "failed";
                 } 
                 // 2. Evaluate JIT (virtual) base subscriptions
-                else if (hasJitScheduled && !isPast) {
+                else if (hasJitScheduled && dateStr > todayStr) {
                   overallStatus = "scheduled";
                 }
 
@@ -319,14 +351,18 @@ const SubscriptionCalendar = () => {
                     key={`day-${day}`}
                     onClick={() => handleDayClick(day)}
                     className={`relative aspect-square flex flex-col items-center justify-between p-2 rounded-2xl border transition-smooth ${borderStyle} ${
-                      isPast && hasLedger ? "opacity-60 cursor-not-allowed bg-muted/20" : ""
-                    } ${isPast && !hasLedger ? "cursor-not-allowed opacity-30" : "hover:-translate-y-0.5 active:scale-95 hover:border-accent/40"}`}
-                    disabled={isPast}
+                      isToday && hasLedger ? "opacity-75 cursor-pointer bg-muted/10 hover:border-accent/40 hover:-translate-y-0.5 active:scale-95" : ""
+                    } ${isToday && !hasLedger ? "cursor-not-allowed opacity-30" : ""} ${
+                      isPast && hasLedger ? "opacity-75 cursor-pointer bg-muted/10 hover:border-accent/40 hover:-translate-y-0.5 active:scale-95" : ""
+                    } ${isPast && !hasLedger ? "cursor-not-allowed opacity-20" : ""} ${
+                      !isLocked ? "hover:-translate-y-0.5 active:scale-95 hover:border-accent/40" : ""
+                    }`}
+                    disabled={(isPast && !hasLedger) || (isToday && !hasLedger)}
                   >
                     {/* Top row: Date Number + Past Lock Icon */}
                     <div className="w-full flex items-center justify-between">
                       <span className={`text-xs font-semibold font-mono ${textStyle}`}>{day}</span>
-                      {isPast && hasLedger && (
+                      {isLocked && hasLedger && (
                         <Lock className="w-2.5 h-2.5 text-muted-foreground opacity-60" title="Past Record Immutable" />
                       )}
                     </div>
@@ -381,21 +417,183 @@ const SubscriptionCalendar = () => {
             </div>
 
             <div className="space-y-4 py-2 text-left">
-              
-              {/* Action 1: Adjust Scheduled Items */}
-              {selectedDayInfo.ledgerRows && selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped').length > 0 ? (
-                <div className="bg-muted/30 rounded-2xl p-4 border border-border/40">
-                  <h5 className="text-xs font-bold text-brown mb-3 uppercase tracking-wider">Scheduled For Today</h5>
-                  <div className="space-y-3">
-                    {selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped').map((row: any) => (
-                      <div key={row.id || row.product_slug} className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-brown capitalize flex items-center gap-2">
+              {selectedDayInfo.isPast ? (
+                (() => {
+                  const subItems = selectedDayInfo.ledgerRows.filter((row: any) => 
+                    activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)
+                  );
+                  const addonItems = selectedDayInfo.ledgerRows.filter((row: any) => 
+                    !activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)
+                  );
+
+                  const renderPastRow = (row: any, isSubbed: boolean) => {
+                    const matchingProduct = products.find((p: any) => p.slug === row.product_slug);
+                    const productName = matchingProduct?.name || row.product_slug.replace(/-/g, " ");
+                    const imageUrl = matchingProduct?.image_url;
+                    const totalCost = row.effective_price * row.quantity;
+
+                    // Determine status badge
+                    let statusBadge = (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 border border-stone-300">
+                        ⚪ Status: {row.status}
+                      </span>
+                    );
+
+                    if (row.status === "delivered") {
+                      statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          🟢 Delivered & Settled
+                        </span>
+                      );
+                    } else if (row.status === "skipped") {
+                      statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 border border-stone-300">
+                          ⚪ Skipped by User
+                        </span>
+                      );
+                    } else if (row.status === "failed") {
+                      statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+                          🔴 Exception / Failed
+                        </span>
+                      );
+                    } else if (row.status === "scheduled") {
+                      statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                          🔵 Scheduled
+                        </span>
+                      );
+                    } else if (row.status === "pending_payment") {
+                      statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          🟡 Pending Payment
+                        </span>
+                      );
+                    } else if (row.status === "paused") {
+                      statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          🟡 Paused
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <div key={row.id || row.product_slug} className="p-3 bg-white border border-stone-200/80 rounded-xl space-y-2.5 shadow-sm">
+                        <div className="flex justify-between items-center">
+                          {isSubbed ? (
+                            <span className="text-[9px] font-extrabold uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2 py-0.5 rounded shadow-sm font-sans">
+                              🌟 Subscription Rate Locked
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-extrabold uppercase tracking-widest bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded font-sans">
+                              🛒 One-Time Purchase
+                            </span>
+                          )}
+                          {statusBadge}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            {imageUrl && (
+                              <img 
+                                src={imageUrl} 
+                                alt={productName} 
+                                className="w-10 h-10 rounded-lg object-cover border border-stone-200 shrink-0" 
+                              />
+                            )}
+                            <div>
+                              <div className="text-xs font-bold text-brown capitalize">{productName}</div>
+                              <div className="text-[10px] text-stone-500 font-mono">Unit Price: ₹{row.effective_price.toFixed(2)}</div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-[9px] font-bold text-stone-400 uppercase tracking-tighter">Qty</div>
+                            <div className="text-xs font-extrabold text-brown">{row.quantity}x Packs</div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2 border-t border-stone-100 text-[10px] font-bold text-stone-700">
+                          <span>Transaction Ledger</span>
+                          <span className="text-emerald-700 bg-emerald-50/50 border border-emerald-100 px-2 py-0.5 rounded">
+                            ₹{totalCost.toFixed(2)} Debited
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Card A: Subscriptions */}
+                      {subItems.length > 0 && (
+                        <div className="bg-emerald-50/20 border border-emerald-200/60 rounded-2xl p-4 space-y-3 shadow-sm">
+                          <h5 className="text-xs font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wider font-display">
+                            <span>🌟</span> Your Subscription Deliveries
+                          </h5>
+                          <div className="space-y-3">
+                            {subItems.map((row: any) => renderPastRow(row, true))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Card B: Add-ons */}
+                      {addonItems.length > 0 && (
+                        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                          <h5 className="text-xs font-bold text-stone-700 flex items-center gap-1.5 uppercase tracking-wider font-display">
+                            <span>🛒</span> One-Time Add-Ons
+                          </h5>
+                          <div className="space-y-3">
+                            {addonItems.map((row: any) => renderPastRow(row, false))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <p className="text-xs text-muted-foreground text-center mt-4">
+                        🔒 This record is locked and finalized for accounting integrity.
+                      </p>
+                    </div>
+                  );
+                })()
+              ) : (
+                <>
+                  {(() => {
+                    const activeRows = selectedDayInfo.ledgerRows ? selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped') : [];
+                    
+                    const subRows = activeRows.filter((row: any) => 
+                      activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)
+                    );
+                    const addonRows = activeRows.filter((row: any) => 
+                      !activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)
+                    );
+
+                    if (activeRows.length === 0) {
+                      return (
+                        <div className="text-sm text-muted-foreground italic text-center py-4 bg-muted/20 rounded-2xl border border-border/30">
+                          No active deliveries scheduled for this date.
+                        </div>
+                      );
+                    }
+
+                    const renderAdjustableRow = (row: any, isSubbed: boolean) => (
+                      <div key={row.id || row.product_slug} className="flex items-center justify-between bg-white p-3 rounded-xl border border-border/50 shadow-soft">
+                        <div className="min-w-0 pr-2">
+                          <div className="font-semibold text-brown capitalize flex items-center gap-1.5 truncate">
                             {row.virtual_product_name || row.product_slug.replace(/-/g, " ")}
                           </div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5">Rate: ₹{row.effective_price.toFixed(2)}</div>
+                          <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono">Rate: ₹{row.effective_price.toFixed(2)}</span>
+                            {isSubbed ? (
+                              <span className="text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1 py-0.5 rounded font-extrabold uppercase font-sans">
+                                Rate Locked
+                              </span>
+                            ) : (
+                              <span className="text-[8px] bg-stone-100 text-stone-600 border border-stone-200 px-1 py-0.5 rounded font-extrabold uppercase font-sans">
+                                One-Time Add-On
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 bg-background border border-border/50 rounded-xl p-1 shadow-sm">
+                        <div className="flex items-center gap-2 bg-background border border-border/50 rounded-xl p-1 shadow-sm shrink-0">
                           <button onClick={() => handleUpdateVolume(row, -1)} disabled={updateVolume.isPending || row.quantity <= 0} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown disabled:opacity-50 transition-colors">
                             <Minus className="w-4 h-4" />
                           </button>
@@ -405,52 +603,88 @@ const SubscriptionCalendar = () => {
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground italic text-center py-4 bg-muted/20 rounded-2xl border border-border/30">
-                  No active deliveries scheduled for this date.
-                </div>
-              )}
+                    );
 
-              {/* Action 2: Add-on Marketplace Pipeline */}
-              <div>
-                <h5 className="text-xs font-bold text-brown mb-3 uppercase tracking-wider pl-1">The Add-on Marketplace</h5>
-                <div className="space-y-2 max-h-[40vh] overflow-y-auto no-scrollbar pb-2">
-                  {products
-                    .filter((p: any) => {
-                      const activeItems = selectedDayInfo.ledgerRows ? selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped') : [];
-                      return !activeItems.some((item: any) => item.product_slug === p.slug);
-                    })
-                    .map(p => (
-                    <div key={p.id} className="flex items-center justify-between bg-card rounded-xl p-2.5 border border-border/50 shadow-soft hover:shadow-card transition-smooth">
-                      <div className="flex items-center gap-3">
-                        {p.image_url && <img src={p.image_url} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />}
-                        <div>
-                          <div className="text-xs font-semibold text-brown">{p.name}</div>
-                          <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">₹{p.discounted_price}</div>
-                        </div>
+                    return (
+                      <div className="space-y-4">
+                        {/* Card A: Subscriptions */}
+                        {subRows.length > 0 && (
+                          <div className="bg-emerald-50/25 border border-emerald-200/50 rounded-2xl p-4 space-y-3 shadow-sm">
+                            <h5 className="text-xs font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wider font-display">
+                              <span>🌟</span> Your Subscription Deliveries
+                            </h5>
+                            <div className="space-y-3">
+                              {subRows.map((row) => renderAdjustableRow(row, true))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Card B: Add-ons */}
+                        {addonRows.length > 0 && (
+                          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                            <h5 className="text-xs font-bold text-stone-700 flex items-center gap-1.5 uppercase tracking-wider font-display">
+                              <span>🛒</span> One-Time Add-Ons
+                            </h5>
+                            <div className="space-y-3">
+                              {addonRows.map((row) => renderAdjustableRow(row, false))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="hero"
-                        disabled={addStandaloneItem.isPending}
-                        onClick={() => handleAddStandalone(p.slug, p.discounted_price)}
-                        className="h-8 rounded-lg px-3 text-[10px] gap-1 shadow-sm"
-                      >
-                        <Plus className="w-3 h-3" /> Add
-                      </Button>
+                    );
+                  })()}
+
+                  {/* Action 2: Add-on Marketplace Pipeline */}
+                  <div>
+                    <h5 className="text-xs font-bold text-brown mb-3 uppercase tracking-wider pl-1 font-display">The Add-on Marketplace</h5>
+                    <div className="space-y-2 max-h-[40vh] overflow-y-auto no-scrollbar pb-2">
+                      {products
+                        .filter((p: any) => {
+                          const activeItems = selectedDayInfo.ledgerRows ? selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped') : [];
+                          return !activeItems.some((item: any) => item.product_slug === p.slug);
+                        })
+                        .map(p => {
+                          const matchingSub = activeSubscriptions.find((sub: any) => sub.product_slug === p.slug);
+                          const isSubbed = !!matchingSub;
+                          const displayPrice = matchingSub?.subscription_plans?.price_per_delivery ?? p.discounted_price;
+
+                          return (
+                            <div key={p.id} className="flex items-center justify-between bg-card rounded-xl p-2.5 border border-border/50 shadow-soft hover:shadow-card transition-smooth">
+                              <div className="flex items-center gap-3">
+                                {p.image_url && <img src={p.image_url} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />}
+                                <div>
+                                  <div className="text-xs font-semibold text-brown">{p.name}</div>
+                                  <div className="text-[10px] text-muted-foreground mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold">₹{displayPrice.toFixed(2)}</span>
+                                    {isSubbed && (
+                                      <span className="text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0.5 rounded font-extrabold uppercase font-sans">
+                                        Sub Rate Locked
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="hero"
+                                disabled={addStandaloneItem.isPending}
+                                onClick={() => handleAddStandalone(p.slug, p.discounted_price)}
+                                className="h-8 rounded-lg px-3 text-[10px] gap-1 shadow-sm"
+                              >
+                                <Plus className="w-3 h-3" /> Add
+                              </Button>
+                            </div>
+                          );
+                        })}
                     </div>
-                  ))}
-                </div>
-              </div>
-
+                  </div>
+                  
+                  <p className="text-[9px] text-muted-foreground leading-relaxed pt-2 border-t border-border/40 mt-2">
+                    * Base volume adjustments or single-day add-ons affect this specific delivery date only.
+                  </p>
+                </>
+              )}
             </div>
-
-            <p className="text-[9px] text-muted-foreground leading-relaxed pt-2 border-t border-border/40">
-              * Base volume adjustments or single-day add-ons affect this specific delivery date only.
-            </p>
           </div>
         </div>
       )}

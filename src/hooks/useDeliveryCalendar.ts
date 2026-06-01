@@ -19,10 +19,18 @@ export const useDeliveryCalendar = () => {
     queryFn: async () => {
       if (!user) return [];
 
-      // 1. Fetch user's active subscriptions
+      // 1. Fetch user's active subscriptions and join their plan to get contract pricing rates
       const { data: subs, error: subsError } = await (supabase as any)
         .from("subscriptions")
-        .select("id, product_slug, selected_days, quantity")
+        .select(`
+          id, 
+          product_slug, 
+          selected_days, 
+          quantity,
+          subscription_plans:plan_id (
+            price_per_delivery
+          )
+        `)
         .eq("user_id", user.id)
         .eq("status", "active");
 
@@ -58,7 +66,7 @@ export const useDeliveryCalendar = () => {
         );
 
         const matchingProduct = products?.find((p: any) => p.slug === sub.product_slug);
-        const rate = matchingProduct?.discounted_price || 0;
+        const rate = sub.subscription_plans?.price_per_delivery || matchingProduct?.discounted_price || 0;
 
         for (let i = 0; i <= 14; i++) {
           const futureDate = new Date();
