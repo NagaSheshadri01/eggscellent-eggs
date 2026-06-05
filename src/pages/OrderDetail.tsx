@@ -42,7 +42,7 @@ const OrderDetail = () => {
       unit: it.unit,
       price: Number(it.price),
       discountPrice: Number(it.price),
-    }, true));
+    }, "instant"));
     nav("/checkout");
   };
 
@@ -50,7 +50,7 @@ const OrderDetail = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Seo title={`Order ${id?.slice(0,8).toUpperCase()} — Eggscellent`} />
+      <Seo title={`Order ${order?.custom_order_id || id?.slice(0,8).toUpperCase()} — Eggscellent`} />
       <Header />
       <main className="container max-w-2xl py-8">
         {success && (
@@ -67,7 +67,7 @@ const OrderDetail = () => {
           <>
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="font-display font-bold text-brown text-2xl tracking-tight">Order #{order.id.slice(0, 8).toUpperCase()}</h1>
+                <h1 className="font-display font-bold text-brown text-2xl tracking-tight">Order #{order.custom_order_id || order.id.slice(0, 8).toUpperCase()}</h1>
                 <p className="text-sm text-muted-foreground">{new Date(order.created_at).toLocaleString()}</p>
               </div>
               <Button variant="brown" size="sm" onClick={reorder}><Repeat className="w-4 h-4" /> Reorder</Button>

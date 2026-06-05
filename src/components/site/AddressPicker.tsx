@@ -54,7 +54,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
   const load = async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("addresses")
       .select("*")
       .eq("user_id", user.id)
@@ -73,7 +73,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user?.id) return;
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("profiles")
         .select("phone, full_name, email")
         .eq("id", user.id)
@@ -120,7 +120,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
         
         // Step 1: Immediately run isServiceable
         if (postcode) {
-          const { data: serv } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", postcode).eq("active", true).maybeSingle();
+          const { data: serv } = await (supabase as any).from("serviceable_pincodes").select("pincode").eq("pincode", postcode).eq("active", true).maybeSingle();
           if (!serv) {
             toast.error(`📍 We detected pincode ${postcode}, but we don't serve this area yet. Please enter your address manually.`, { duration: 5000 });
             setMode("manual");
@@ -164,7 +164,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
       return;
     }
     setCheckingPincode(true);
-    const { data } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", pc).eq("active", true).maybeSingle();
+    const { data } = await (supabase as any).from("serviceable_pincodes").select("pincode").eq("pincode", pc).eq("active", true).maybeSingle();
     setCheckingPincode(false);
     setIsPincodeValid(!!data);
   };
@@ -223,9 +223,9 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
     } as any;
     let res;
     if (editingId) {
-      res = await supabase.from("addresses").update(payload).eq("id", editingId).select().single();
+      res = await (supabase as any).from("addresses").update(payload).eq("id", editingId).select().single();
     } else {
-      res = await supabase.from("addresses").insert(payload).select().single();
+      res = await (supabase as any).from("addresses").insert(payload).select().single();
     }
     setBusy(false);
     if (res.error) return toast.error(res.error.message);
@@ -238,7 +238,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
   const del = async (id: string) => {
     if (!confirm("Delete this address?")) return;
-    const { error } = await supabase.from("addresses").delete().eq("id", id);
+    const { error } = await (supabase as any).from("addresses").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Deleted");
     load();
@@ -246,8 +246,8 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
   const setDefault = async (id: string) => {
     if (!user) return;
-    await supabase.from("addresses").update({ is_default: false }).eq("user_id", user.id);
-    await supabase.from("addresses").update({ is_default: true }).eq("id", id);
+    await (supabase as any).from("addresses").update({ is_default: false }).eq("user_id", user.id);
+    await (supabase as any).from("addresses").update({ is_default: true }).eq("id", id);
     toast.success("Default address set");
     load();
   };

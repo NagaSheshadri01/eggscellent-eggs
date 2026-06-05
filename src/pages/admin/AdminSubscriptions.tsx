@@ -99,7 +99,7 @@ const AdminSubscriptions = () => {
   const plansQ = useQuery({
     queryKey: ["admin-subscription-plans"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("subscription_plans")
         .select("*")
         .order("created_at", { ascending: false });
@@ -145,7 +145,7 @@ const AdminSubscriptions = () => {
       price_per_delivery: number;
       is_active: boolean;
     }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("subscription_plans")
         .insert(plan);
       if (error) throw error;
@@ -171,7 +171,7 @@ const AdminSubscriptions = () => {
       price_per_delivery: number;
       is_active: boolean;
     }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("subscription_plans")
         .update({
           title: plan.title,
@@ -202,7 +202,7 @@ const AdminSubscriptions = () => {
 
   const deletePlan = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("subscription_plans")
         .delete()
         .eq("id", id)
@@ -224,7 +224,7 @@ const AdminSubscriptions = () => {
 
   const togglePlanActive = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("subscription_plans")
         .update({ is_active })
         .eq("id", id);

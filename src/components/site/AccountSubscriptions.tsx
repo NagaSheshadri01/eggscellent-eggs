@@ -72,7 +72,7 @@ const AccountSubscriptions = () => {
   const togglePauseMutation = useMutation({
     mutationFn: async ({ subId, currentStatus }: { subId: string; currentStatus: string }) => {
       const nextStatus = currentStatus === "active" ? "paused" : "active";
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("subscriptions")
         .update({ status: nextStatus })
         .eq("id", subId);
@@ -107,7 +107,7 @@ const AccountSubscriptions = () => {
       })();
 
       // 1. Update selected_days AND next_delivery_date atomically
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("subscriptions")
         .update({ selected_days: newDays, next_delivery_date: nextDeliveryDate })
         .eq("id", subId);
@@ -116,7 +116,7 @@ const AccountSubscriptions = () => {
 
       // 2. Cancel all future scheduled/skipped ledger rows so they don't ghost on the calendar.
       //    New rows will be JIT-seeded for the new days on next calendar load.
-      await supabase
+      await (supabase as any)
         .from("delivery_ledger")
         .update({ status: "cancelled" })
         .eq("subscription_id", subId)
@@ -170,14 +170,14 @@ const AccountSubscriptions = () => {
   const cancelMutation = useMutation({
     mutationFn: async (subId: string) => {
       // 1. Cancel the subscription row
-      const { error: subErr } = await supabase
+      const { error: subErr } = await (supabase as any)
         .from("subscriptions")
         .update({ status: "cancelled" })
         .eq("id", subId);
       if (subErr) throw subErr;
 
       // 2. Post-cleanup logistics: Cancel all upcoming pending deliveries
-      const { error: delivErr } = await supabase
+      const { error: delivErr } = await (supabase as any)
         .from("delivery_ledger")
         .update({ status: "cancelled" })
         .eq("subscription_id", subId)

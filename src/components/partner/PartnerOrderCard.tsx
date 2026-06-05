@@ -3,46 +3,50 @@ import { Navigation, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface PartnerOrderCardProps {
-  deliveryItem: {
-    id: string;
-    bill_id: string;
-    status: string;
-    delivery_date: string;
-    subscriptions?: {
-      product_slug: string;
-      quantity: number;
-      addresses?: {
-        full_name?: string;
-        lat?: number;
-        lng?: number;
-        address_line_1?: string;
-        pincode?: string;
-      };
-      profiles?: {
-        full_name?: string;
-        phone?: string;
-      };
+  groupedStop: {
+    userId: string;
+    customerInfo?: {
+      full_name?: string;
+      phone?: string;
     };
+    address?: {
+      address_line_1?: string;
+      pincode?: string;
+      lat?: number;
+      lng?: number;
+    };
+    items: Array<{
+      id: string;
+      bill_id: string;
+      status: string;
+      delivery_date: string;
+      custom_order_id?: string;
+      effective_price?: number;
+      subscriptions?: {
+        product_slug: string;
+        quantity: number;
+      };
+    }>;
   };
-  productName: string;
-  effectivePrice: number;
-  onConfirmDelivery: (id: string) => Promise<void>;
-  onLogIssue: (id: string) => void;
+  productsList: any[];
+  onConfirmDelivery: () => Promise<void>;
+  onLogIssue: (itemId: string) => void;
   isLocked?: boolean;
 }
 
 export const PartnerOrderCard = ({
-  deliveryItem,
-  productName,
-  effectivePrice,
+  groupedStop,
+  productsList,
   onConfirmDelivery,
   onLogIssue,
   isLocked = false
 }: PartnerOrderCardProps) => {
-  const addr = deliveryItem.subscriptions?.addresses || {};
-  const profile = deliveryItem.subscriptions?.profiles || {};
-  const quantity = deliveryItem.subscriptions?.quantity || 1;
-  const totalCost = effectivePrice * quantity;
+  const addr = groupedStop.address || {};
+  const profile = groupedStop.customerInfo || {};
+  const items = groupedStop.items || [];
+
+  // Consider it delivered if all items in the stop are marked as delivered
+  const isDelivered = items.every((item: any) => item.status === "delivered");
 
   // Slider State
   const [sliderVal, setSliderVal] = useState(0);
@@ -74,7 +78,7 @@ export const PartnerOrderCard = ({
     if (sliderVal >= 90) {
       // Completed Swipe
       setSliderVal(100);
-      onConfirmDelivery(deliveryItem.id);
+      onConfirmDelivery();
     } else {
       // Snap back
       setSliderVal(0);
@@ -110,6 +114,10 @@ export const PartnerOrderCard = ({
     };
   }, [isSliding, sliderVal]);
 
+  const uniqueBillIds = Array.from(new Set(
+    items.map((item: any) => item.custom_order_id || item.bill_id || item.id?.slice(0, 8).toUpperCase())
+  )).join(", ");
+
   return (
     <div className="bg-card rounded-2xl shadow-soft p-5 border border-border/50 space-y-4 hover:shadow-card transition-smooth">
       <div className="flex items-start justify-between gap-2">
@@ -118,7 +126,7 @@ export const PartnerOrderCard = ({
             {profile.full_name || "Customer"}
           </span>
           <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mt-0.5">
-            Bill ID: {deliveryItem.bill_id}
+            Master Box Code: {uniqueBillIds}
           </div>
         </div>
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-brown">
@@ -137,16 +145,35 @@ export const PartnerOrderCard = ({
       </div>
 
       {/* Manifest Contents */}
-      <div className="flex flex-col gap-1 p-3 bg-stone-50 rounded-xl border border-stone-100">
+      <div className="flex flex-col gap-3 p-3 bg-stone-50 rounded-xl border border-stone-100">
         <span className="text-xs font-bold text-stone-500 uppercase tracking-wider flex items-center gap-1">
-          📦 Manifest Contents
+          📦 Manifest Contents ({items.length} items)
         </span>
-        <span className="text-sm font-semibold text-stone-800">
-          {productName} × {quantity} Packs
-        </span>
-        <span className="text-xs text-stone-400">
-          Locked Rate: ₹{effectivePrice.toFixed(2)}/delivery (Total: ₹{totalCost.toFixed(2)})
-        </span>
+        <div className="space-y-3">
+          {items.map((item: any) => {
+            const matchingProduct = productsList.find((p: any) => p.slug === (item.subscriptions?.product_slug || item.product_slug));
+            const productName = matchingProduct?.name || item.subscriptions?.product_slug || "Premium Eggs";
+            const quantity = item.subscriptions?.quantity || item.quantity || 1;
+            const effectivePrice = item.effective_price || matchingProduct?.discounted_price || 150.00;
+            const totalCost = effectivePrice * quantity;
+            
+            return (
+              <div key={item.id} className="flex flex-col gap-1 pb-2.5 border-b border-stone-200/50 last:border-0 last:pb-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-stone-800">
+                    {productName} × {quantity} Packs
+                  </span>
+                  <span className="font-mono text-[9px] font-bold text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">
+                    {item.custom_order_id || item.id?.slice(0, 8).toUpperCase()}
+                  </span>
+                </div>
+                <span className="text-xs text-stone-400">
+                  Rate: ₹{effectivePrice.toFixed(2)} (Total: ₹{totalCost.toFixed(2)})
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Action Buttons */}
@@ -168,7 +195,7 @@ export const PartnerOrderCard = ({
         ) : (
           <>
             {/* Swipe to confirm delivery slider */}
-            {deliveryItem.status !== "delivered" ? (
+            {!isDelivered ? (
               <div 
                 ref={trackRef}
                 className="relative h-12 bg-stone-100 border border-stone-200 rounded-full overflow-hidden select-none"
@@ -203,9 +230,9 @@ export const PartnerOrderCard = ({
             )}
 
             {/* Log Issue Button */}
-            {deliveryItem.status !== "delivered" && (
+            {!isDelivered && (
               <button
-                onClick={() => onLogIssue(deliveryItem.id)}
+                onClick={() => onLogIssue(items[0]?.id)}
                 className="w-full text-center text-stone-400 hover:text-stone-600 text-xs font-semibold hover:underline block pt-1"
               >
                 ⚠️ Log Delivery Issue

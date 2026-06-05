@@ -44,12 +44,29 @@ interface DeliveryStop {
     quantity: number;
     price: number;
     status: string;
+    custom_order_id?: string;
   }>;
   netQuantity: number;
 }
 
 export const AdminLogistics = () => {
   const queryClient = useQueryClient();
+
+  const updateItemStatusMutation = useMutation({
+    mutationFn: async ({ ledgerId, newStatus }: { ledgerId: string; newStatus: string }) => {
+      const { error } = await (supabase as any)
+        .from('delivery_ledger')
+        .update({ status: newStatus })
+        .eq('id', ledgerId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Item status adjusted successfully.");
+      queryClient.invalidateQueries({ queryKey: ["admin-logistics-manifest-today"] });
+      queryClient.invalidateQueries({ queryKey: ["tomorrow-dispatch-manifest"] });
+    }
+  });
+
   const [activeTab, setActiveTab] = useState("tomorrow-dispatch");
 
   // Filter Dates
@@ -122,7 +139,7 @@ export const AdminLogistics = () => {
           )
         `)
         .eq("delivery_date", tomorrowStr)
-        .eq("status", "scheduled");
+        .in("status", ["scheduled", "failed"]);
 
       if (error) throw error;
       return data || [];
@@ -209,7 +226,7 @@ export const AdminLogistics = () => {
     mutationFn: async ({ ledgerIds, partnerId }: { ledgerIds: string[]; partnerId: string }) => {
       const selectedDriverId = partnerId === "unassigned" ? null : partnerId;
       const extractedLedgerIdsArray = ledgerIds;
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('delivery_ledger')
         .update({ delivery_partner_id: selectedDriverId })
         .in('id', extractedLedgerIdsArray);
@@ -442,7 +459,8 @@ export const AdminLogistics = () => {
         productSlug: d.product_slug || sub.product_slug,
         quantity: qty,
         price: d.effective_price || 0,
-        status: d.status || 'scheduled'
+        status: d.status || 'scheduled',
+        custom_order_id: d.custom_order_id
       });
       stop.netQuantity += qty;
     });
@@ -679,25 +697,53 @@ export const AdminLogistics = () => {
                                           <div className="text-[10px] text-muted-foreground">{profile.phone || "—"}</div>
                                         </td>
                                         <td className="px-4 py-3 align-top space-y-2">
-                                          {stop.items.map((item, idx) => (
-                                            <div key={idx} className="flex flex-col">
-                                              <div className="flex items-center gap-1.5 font-medium text-brown flex-wrap">
-                                                <Package className="w-3.5 h-3.5 text-primary shrink-0" />
-                                                {item.quantity}x {item.productSlug} <span className="text-[10px] text-muted-foreground">(₹{item.price})</span>
-                                                {adminManifestTab === 'today' && (
-                                                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase border shrink-0 ${
-                                                    item.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                    item.status === 'out_for_delivery' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                    item.status === 'skipped' ? 'bg-stone-50 text-stone-600 border-stone-200' :
-                                                    item.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
-                                                    'bg-amber-50 text-amber-700 border-amber-200'
-                                                  }`}>
-                                                    {item.status.replace(/_/g, " ")}
+                                          {stop.items.map((item, idx) => {
+                                            const isCanceledOrFailed = item.status === 'failed' || item.status === 'skipped';
+                                            return (
+                                              <div key={idx} className="flex flex-col">
+                                                <div className="flex items-center gap-1.5 font-medium text-brown flex-wrap">
+                                                  <Package className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                  <span className="font-mono text-xs font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
+                                                    {item.custom_order_id || `#${item.ledgerId.slice(0, 8)}`}
                                                   </span>
-                                                )}
+                                                  <span className={`text-sm ${isCanceledOrFailed ? 'line-through text-muted-foreground/60' : ''}`}>
+                                                    {item.quantity}x {item.productSlug} <span className="text-[10px] text-muted-foreground">(₹{item.price})</span>
+                                                  </span>
+                                                  {adminManifestTab === 'today' && (
+                                                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase border shrink-0 ${
+                                                      item.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                      item.status === 'out_for_delivery' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                      item.status === 'skipped' ? 'bg-stone-50 text-stone-600 border-stone-200' :
+                                                      item.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                      'bg-amber-50 text-amber-700 border-amber-200'
+                                                    }`}>
+                                                      {item.status.replace(/_/g, " ")}
+                                                    </span>
+                                                  )}
+                                                  {item.status === 'scheduled' && (
+                                                    <button
+                                                      onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'failed' })}
+                                                      disabled={updateItemStatusMutation.isPending}
+                                                      className="text-[10px] text-red-600 hover:text-red-800 font-bold ml-1.5 hover:underline shrink-0 flex items-center gap-0.5"
+                                                      title="Mark Out of Stock"
+                                                    >
+                                                      ❌ Out of Stock
+                                                    </button>
+                                                  )}
+                                                  {item.status === 'failed' && adminManifestTab === 'tomorrow' && (
+                                                    <button
+                                                      onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'scheduled' })}
+                                                      disabled={updateItemStatusMutation.isPending}
+                                                      className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold ml-1.5 hover:underline shrink-0 flex items-center gap-0.5 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded"
+                                                      title="Restore to Scheduled — stock is available again"
+                                                    >
+                                                      ✅ Restore Stock
+                                                    </button>
+                                                  )}
+                                                </div>
                                               </div>
-                                            </div>
-                                          ))}
+                                            );
+                                          })}
                                         </td>
                                         <td className="px-4 py-3 align-top">
                                           <div className="font-medium text-brown capitalize">

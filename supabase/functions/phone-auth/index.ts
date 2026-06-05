@@ -24,13 +24,39 @@ const admin = createClient(
 // Never shown to the user — profiles.email stays NULL so the UI shows the phone.
 const synthEmail = (phone: string) => `${phone.replace(/\D/g, "")}@auth.eggscellent.app`;
 
+const authClient = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  {
+    auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: "auth" },
+  },
+);
+
 const findUserByPhone = async (phone: string) => {
+  // 1. Try finding in public.profiles first
   const { data: prof } = await admin
     .from("profiles")
     .select("id, email")
     .eq("phone", phone)
     .maybeSingle();
   if (prof) return { id: prof.id as string, email: prof.email as string | null };
+
+  // 2. Fallback: if public.profiles is cleared but auth.users still has the user
+  const synth = synthEmail(phone);
+  try {
+    const { data: authUser } = await authClient
+      .from("users")
+      .select("id, email")
+      .eq("email", synth)
+      .maybeSingle();
+
+    if (authUser) {
+      return { id: authUser.id as string, email: authUser.email as string | null };
+    }
+  } catch (err) {
+    console.error("Fallback auth lookup failed:", err);
+  }
   return null;
 };
 

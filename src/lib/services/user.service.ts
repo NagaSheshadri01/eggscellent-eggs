@@ -18,7 +18,7 @@ export const displayEmail = (e?: string | null) => (isSyntheticEmail(e) ? "" : e
 
 export const userService = {
   async getProfile(userId: string): Promise<ProfileRow | null> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("profiles")
       .select("id, full_name, email, phone, avatar_url")
       .eq("id", userId)
@@ -32,7 +32,7 @@ export const userService = {
     if (existing) return existing;
 
     const metadata = authUser.user_metadata ?? {};
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("profiles")
       .upsert(
         {
@@ -59,12 +59,12 @@ export const userService = {
     if (patch.full_name !== undefined) clean.full_name = patch.full_name?.trim() || null;
     if (patch.email !== undefined) clean.email = patch.email?.trim() || null;
     if (patch.avatar_url !== undefined) clean.avatar_url = patch.avatar_url || null;
-    const { error } = await supabase.from("profiles").upsert({ id: userId, ...clean }, { onConflict: "id" });
+    const { error } = await (supabase as any).from("profiles").upsert({ id: userId, ...clean }, { onConflict: "id" });
     if (error) throw error;
   },
 
   async emailExists(email: string) {
-    const { data, error } = await supabase.rpc("email_exists", { _email: email });
+    const { data, error } = await (supabase as any).rpc("email_exists", { _email: email });
     if (error) throw error;
     return !!data;
   },

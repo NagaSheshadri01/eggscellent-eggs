@@ -223,7 +223,7 @@ const Profile = () => {
 
       <JitVerifySheet
         open={!!verifyOpen}
-        missing={verifyOpen}
+        missing={verifyOpen === "phone" ? "phone" : "phone"}
         onOpenChange={(o) => !o && setVerifyOpen(null)}
         onComplete={() => { setVerifyOpen(null); refetch(); }}
       />

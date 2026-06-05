@@ -74,10 +74,10 @@ const UnifiedProductCard = ({ product, index }: Props) => {
   const hasOngoingSubscriptionForProduct = activeSubs.some((s: any) => s.product_slug === product.slug);
 
   // Fetch active subscription plans from the DB for this product
-  const { data: plans = [] } = useQuery({
+  const { data: plans = [] } = useQuery<any[]>({
     queryKey: ["product-subscription-plans", product.slug],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("subscription_plans")
         .select("*")
         .eq("product_slug", product.slug)
@@ -147,7 +147,7 @@ const UnifiedProductCard = ({ product, index }: Props) => {
       discountPrice: subPrice,
       frequency_type: freq,
       slug: product.slug
-    }, 'subscription', selectedDaysArray);
+    } as any, 'subscription', selectedDaysArray);
     
     setOpen(true);
   };
@@ -429,7 +429,7 @@ const UnifiedProductCard = ({ product, index }: Props) => {
             <Button
               size={isSoldOut ? "default" : "sm"} variant="hero"
               className={isSoldOut ? "h-11 rounded-full px-4" : "h-11 w-11 p-0 rounded-full shadow-yolk"}
-              onClick={(e) => { e.stopPropagation(); add({ ...product, discountPrice: product.price }, "instant"); }}
+              onClick={(e) => { e.stopPropagation(); add(product, "instant"); }}
               disabled={isSoldOut}
               aria-label={`Add ${product.name}`}
             >

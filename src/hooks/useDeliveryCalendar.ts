@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -115,6 +116,32 @@ export const useDeliveryCalendar = () => {
     },
     enabled: !!user,
   });
+
+  // --- REALTIME LISTENER ---
+  // Immediately sync user's calendar when admin changes a ledger row status
+  // (e.g., marking Out of Stock / Restoring Stock), without requiring page reload.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`delivery-ledger-status-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "delivery_ledger",
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["delivery-ledger", user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   // Toggle Mutation between 'scheduled' and 'skipped'
   const toggleSkip = useMutation({

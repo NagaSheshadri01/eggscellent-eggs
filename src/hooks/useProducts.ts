@@ -48,8 +48,8 @@ export const useProductMutations = () => {
         display_order: Number(p.display_order ?? 0),
       };
       const { error } = p.id
-        ? await supabase.from("products").update(payload).eq("id", p.id)
-        : await supabase.from("products").insert(payload);
+        ? await (supabase as any).from("products").update(payload).eq("id", p.id)
+        : await (supabase as any).from("products").insert(payload);
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -57,7 +57,7 @@ export const useProductMutations = () => {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("products").delete().eq("id", id);
+      const { error } = await (supabase as any).from("products").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -65,8 +65,8 @@ export const useProductMutations = () => {
 
   const swapOrder = useMutation({
     mutationFn: async ({ a, b }: { a: AdminProduct; b: AdminProduct }) => {
-      await supabase.from("products").update({ display_order: b.display_order }).eq("id", a.id!);
-      await supabase.from("products").update({ display_order: a.display_order }).eq("id", b.id!);
+      await (supabase as any).from("products").update({ display_order: b.display_order }).eq("id", a.id!);
+      await (supabase as any).from("products").update({ display_order: a.display_order }).eq("id", b.id!);
     },
     onSuccess: invalidate,
   });

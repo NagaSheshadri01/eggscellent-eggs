@@ -32,7 +32,7 @@ export const usePartnerStatus = () => {
       // Partner status is authoritative from delivery_partners table.
       // The 'partner' role value in user_roles is a dead path — app_role ENUM
       // only contains 'customer' | 'admin'. No query needed for user_roles here.
-      const { data: dp, error } = await supabase
+      const { data: dp, error } = await (supabase as any)
         .from("delivery_partners")
         .select("id, status, active")
         .eq("user_id", user!.id)

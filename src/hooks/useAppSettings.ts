@@ -52,7 +52,7 @@ export const useAppSettings = () => {
   return useQuery({
     queryKey: ["app_settings"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("site_settings" as any).select("key,value");
+      const { data, error } = await (supabase as any).from("site_settings").select("key,value");
       if (error) throw error;
       const map: Record<string, any> = {};
       (data ?? []).forEach((r: any) => { map[r.key] = r.value; });
@@ -73,7 +73,7 @@ export const useUpdateAppSetting = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ key, value }: { key: string; value: any }) => {
-      const { error } = await supabase.from("site_settings" as any).upsert({ key, value }, { onConflict: "key" });
+      const { error } = await (supabase as any).from("site_settings").upsert({ key, value }, { onConflict: "key" });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["app_settings"] }),

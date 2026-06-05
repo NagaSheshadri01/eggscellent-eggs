@@ -16,7 +16,7 @@ export const useWallet = () => {
       if (!user) throw new Error("User unauthenticated");
 
       // Attempt to retrieve the wallet row
-      let { data, error } = await supabase
+      let { data, error } = await (supabase as any)
         .from('wallets')
         .select('id, balance')
         .eq('user_id', user.id)

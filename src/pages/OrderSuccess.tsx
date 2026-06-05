@@ -8,14 +8,18 @@ import Seo from "@/components/Seo";
 export default function OrderSuccess() {
   const { id } = useParams();
   const [status, setStatus] = useState<string>("placed");
+  const [customOrderId, setCustomOrderId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!id) return;
 
     // Initial fetch
-    supabase.from("orders").select("order_status").eq("id", id).maybeSingle().then(({ data }) => {
-      if (data) setStatus(data.order_status);
+    (supabase as any).from("orders").select("order_status, custom_order_id").eq("id", id).maybeSingle().then(({ data }: any) => {
+      if (data) {
+        setStatus(data.order_status);
+        setCustomOrderId(data.custom_order_id);
+      }
       setLoaded(true);
     });
 
@@ -56,7 +60,7 @@ export default function OrderSuccess() {
             <CheckCircle2 className="w-8 h-8 text-success" />
           </div>
           <h1 className="font-display font-bold text-brown text-3xl mb-2">Order successful!</h1>
-          <p className="text-muted-foreground text-sm">Your order #{id?.split("-")[0]} has been placed successfully.</p>
+          <p className="text-muted-foreground text-sm">Your order #{customOrderId || id?.split("-")[0]} has been placed successfully.</p>
         </div>
 
         <div className="bg-card rounded-3xl shadow-soft p-6 mb-8">

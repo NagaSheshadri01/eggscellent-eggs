@@ -28,7 +28,7 @@ export const useDeliveryPartners = (status?: string) =>
   useQuery({
     queryKey: ["delivery_partners", status ?? "all"],
     queryFn: async () => {
-      let q = supabase.from("delivery_partners").select("*").order("created_at", { ascending: false });
+      let q = (supabase as any).from("delivery_partners").select("*").order("created_at", { ascending: false });
       if (status) q = q.eq("status", status);
       const { data, error } = await q;
       if (error) throw error;
@@ -38,8 +38,8 @@ export const useDeliveryPartners = (status?: string) =>
       // Attempt to join profiles to get the latest avatar/name from auth
       const userIds = partners.map(p => p.user_id).filter(Boolean) as string[];
       if (userIds.length > 0) {
-        const { data: profs } = await supabase.from("profiles").select("id, full_name, avatar_url, phone").in("id", userIds);
-        const pMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
+        const { data: profs } = await (supabase as any).from("profiles").select("id, full_name, avatar_url, phone").in("id", userIds);
+        const pMap = Object.fromEntries((profs || []).map((p: any) => [p.id, p]));
         return partners.map(p => {
           if (p.user_id && pMap[p.user_id]) {
             return { ...p, profile: pMap[p.user_id] };
@@ -56,7 +56,7 @@ export const useUpdateDeliveryPartner = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<DeliveryPartner> }) => {
-      const { error } = await supabase.from("delivery_partners").update(patch as any).eq("id", id);
+      const { error } = await (supabase as any).from("delivery_partners").update(patch as any).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["delivery_partners"] }),
@@ -67,7 +67,7 @@ export const useApproveDeliveryPartner = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (partner: DeliveryPartner) => {
-      const { error } = await supabase.from("delivery_partners").update({ status: "approved", active: true }).eq("id", partner.id);
+      const { error } = await (supabase as any).from("delivery_partners").update({ status: "approved", active: true }).eq("id", partner.id);
       if (error) throw error;
       // Removed broken insert into user_roles (partner is not in app_role enum). 
       // AuthContext handles access strictly via delivery_partners status.

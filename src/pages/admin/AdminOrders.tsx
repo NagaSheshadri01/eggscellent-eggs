@@ -71,7 +71,7 @@ const AdminOrders = () => {
   }, [qc]);
 
   const update = async (id: string, status: string) => {
-    const { error } = await supabase.from("orders").update({ order_status: status as any }).eq("id", id);
+    const { error } = await (supabase as any).from("orders").update({ order_status: status as any }).eq("id", id);
     if (error) toast.error(error.message);
     else {
       toast.success("Updated");
@@ -91,7 +91,7 @@ const AdminOrders = () => {
       affected_orders: selectedIds
     });
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("orders")
       .update({
         delivery_partner_id: targetPartner,
@@ -124,7 +124,7 @@ const AdminOrders = () => {
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const filtered = (orders ?? []).filter(o => {
-    const orderIdMatch = o.id.toLowerCase().includes(q.toLowerCase());
+    const orderIdMatch = o.id.toLowerCase().includes(q.toLowerCase()) || (o.custom_order_id && o.custom_order_id.toLowerCase().includes(q.toLowerCase()));
     const snap = (o.address_snapshot as any) || {};
     const pincode = snap.pincode || "";
     const pincodeMatch = String(pincode).toLowerCase().includes(q.toLowerCase());
@@ -252,7 +252,7 @@ const AdminOrders = () => {
                         <div className="flex flex-col gap-2">
                           <div>
                             <Link to={`/admin/orders/${o.id}`} className="text-brown font-mono font-bold text-xs hover:underline uppercase tracking-tight">
-                              #{o.id.slice(0, 8)}
+                              {o.custom_order_id || `#${o.id.slice(0, 8)}`}
                             </Link>
                             <div className="flex flex-col mt-0.5">
                               <span className="text-[10px] font-semibold text-brown">{(o as any).profiles?.full_name || snap.full_name || "Customer"}</span>

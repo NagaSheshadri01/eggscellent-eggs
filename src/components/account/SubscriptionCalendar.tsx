@@ -66,10 +66,12 @@ const SubscriptionCalendar = () => {
   };
 
   // Selected date management for slide-over toggle panel
+  // NOTE: We intentionally do NOT store ledgerRows here — they are derived live
+  // from ledgerMap so that realtime admin updates (Out of Stock / Restore Stock)
+  // instantly reflect inside the open card without needing a close/reopen.
   const [selectedDayInfo, setSelectedDayInfo] = useState<{
     dateStr: string;
     dayNum: number;
-    ledgerRows: any[];
     isPast?: boolean;
   } | null>(null);
 
@@ -82,6 +84,39 @@ const SubscriptionCalendar = () => {
     });
     return map;
   }, [ledger]);
+
+  // LIVE ledger rows for the currently open day card — recomputed on every
+  // ledger refetch so realtime admin status changes surface immediately.
+  const liveLedgerRows = useMemo(() => {
+    if (!selectedDayInfo) return [];
+    const { dateStr } = selectedDayInfo;
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    const currentDayIndex = dateObj.getDay();
+    let rows = [...(ledgerMap.get(dateStr) || [])];
+
+    // JIT-hydrate virtual base subscription rows (same logic as handleDayClick)
+    activeSubscriptions.forEach((sub: any) => {
+      const days = (sub.selected_days || []).map((d: any) => Number(d));
+      const isScheduledDay = days.includes(currentDayIndex);
+      const exists = rows.some(row => row.product_slug === sub.product_slug);
+      if (isScheduledDay && !exists) {
+        rows.unshift({
+          isVirtual: true,
+          subscription_id: sub.id,
+          delivery_date: dateStr,
+          product_slug: sub.product_slug,
+          quantity: sub.quantity || 1,
+          effective_price: sub.subscription_plans?.price_per_delivery || sub.products?.discounted_price || 0,
+          status: 'scheduled',
+          virtual_product_name: sub.products?.name || sub.product_slug
+        });
+      }
+    });
+
+    return selectedDayInfo.isPast
+      ? rows.filter((r: any) => r.status !== 'cancelled')
+      : rows;
+  }, [selectedDayInfo, ledgerMap, activeSubscriptions]);
 
   // Today reference for past/future validation
   const todayStr = useMemo(() => {
@@ -96,25 +131,13 @@ const SubscriptionCalendar = () => {
     const dateStr = toDateString(year, month, day);
     const dateObj = new Date(year, month, day);
     const currentDayIndex = dateObj.getDay();
-    let ledgerRows = [...(ledgerMap.get(dateStr) || [])];
 
-    // Hydrate JIT base subscriptions
+    // Compute rows inline just for the empty-state guard check
+    let previewRows = [...(ledgerMap.get(dateStr) || [])];
     activeSubscriptions.forEach((sub: any) => {
       const days = (sub.selected_days || []).map((d: any) => Number(d));
-      const isScheduledDay = days.includes(currentDayIndex);
-      const baseProductExistsInLedger = ledgerRows.some(row => row.product_slug === sub.product_slug);
-      
-      if (isScheduledDay && !baseProductExistsInLedger) {
-        ledgerRows.unshift({
-          isVirtual: true,
-          subscription_id: sub.id,
-          delivery_date: dateStr,
-          product_slug: sub.product_slug,
-          quantity: sub.quantity || 1,
-          effective_price: sub.subscription_plans?.price_per_delivery || sub.products?.discounted_price || 0,
-          status: 'scheduled',
-          virtual_product_name: sub.products?.name || sub.product_slug
-        });
+      if (days.includes(currentDayIndex) && !previewRows.some(r => r.product_slug === sub.product_slug)) {
+        previewRows.unshift({ product_slug: sub.product_slug, status: 'scheduled' });
       }
     });
 
@@ -122,7 +145,7 @@ const SubscriptionCalendar = () => {
     const isToday = dateStr === todayStr;
 
     if (isPastDate || isToday) {
-      const activeLedgerRows = ledgerRows.filter((r: any) => r.status !== "cancelled");
+      const activeLedgerRows = previewRows.filter((r: any) => r.status !== 'cancelled');
       if (activeLedgerRows.length === 0) {
         toast.error(isToday ? "No subscription deliveries scheduled for today." : "No subscription deliveries were scheduled for this past date.", {
           id: "past-empty",
@@ -130,45 +153,17 @@ const SubscriptionCalendar = () => {
         });
         return;
       }
-      
-      setSelectedDayInfo({
-        dateStr,
-        dayNum: day,
-        ledgerRows: activeLedgerRows,
-        isPast: true
-      });
+      setSelectedDayInfo({ dateStr, dayNum: day, isPast: true });
       return;
     }
 
-    setSelectedDayInfo({
-      dateStr,
-      dayNum: day,
-      ledgerRows,
-    });
+    setSelectedDayInfo({ dateStr, dayNum: day });
   };
 
-  const handleToggleStatus = async () => {
-    if (!selectedDayInfo?.ledgerRow) return;
-    const { ledgerRow } = selectedDayInfo;
-    const newStatus = ledgerRow.status === "skipped" ? "scheduled" : "skipped";
 
-    try {
-      await toggleSkip.mutateAsync({
-        id: ledgerRow.id,
-        status: newStatus,
-      });
-      setSelectedDayInfo({
-        ...selectedDayInfo,
-        ledgerRow: { ...ledgerRow, status: newStatus }
-      });
-    } catch (e) {
-      // toast handled in hook mutation callbacks
-    }
-  };
 
   const handleUpdateVolume = async (ledgerRow: any, delta: number) => {
     const newQty = Math.max(0, ledgerRow.quantity + delta);
-    
     try {
       await updateVolume.mutateAsync({ 
         id: ledgerRow.isVirtual ? null : ledgerRow.id,
@@ -178,14 +173,8 @@ const SubscriptionCalendar = () => {
         product_slug: ledgerRow.product_slug,
         effective_price: ledgerRow.effective_price
       });
-      
-      // Remove virtual flag on local update so it behaves like a real row
-      const updatedRow = { ...ledgerRow, quantity: newQty, status: newQty <= 0 ? "skipped" : "scheduled", isVirtual: false };
-      setSelectedDayInfo((prev: any) => {
-        if (!prev) return prev;
-        const newRows = prev.ledgerRows.map((r: any) => r.product_slug === ledgerRow.product_slug ? updatedRow : r);
-        return { ...prev, ledgerRows: newRows };
-      });
+      // liveLedgerRows will recompute automatically via React Query cache invalidation
+      // from useDeliveryCalendar's onSuccess handler — no manual state patch needed.
     } catch (e) {}
   };
 
@@ -363,7 +352,9 @@ const SubscriptionCalendar = () => {
                     <div className="w-full flex items-center justify-between">
                       <span className={`text-xs font-semibold font-mono ${textStyle}`}>{day}</span>
                       {isLocked && hasLedger && (
-                        <Lock className="w-2.5 h-2.5 text-muted-foreground opacity-60" title="Past Record Immutable" />
+                        <span title="Past Record Immutable">
+                          <Lock className="w-2.5 h-2.5 text-muted-foreground opacity-60" />
+                        </span>
                       )}
                     </div>
 
@@ -419,10 +410,10 @@ const SubscriptionCalendar = () => {
             <div className="space-y-4 py-2 text-left">
               {selectedDayInfo.isPast ? (
                 (() => {
-                  const subItems = selectedDayInfo.ledgerRows.filter((row: any) => 
+                  const subItems = liveLedgerRows.filter((row: any) =>
                     activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)
                   );
-                  const addonItems = selectedDayInfo.ledgerRows.filter((row: any) => 
+                  const addonItems = liveLedgerRows.filter((row: any) =>
                     !activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)
                   );
 
@@ -453,8 +444,8 @@ const SubscriptionCalendar = () => {
                       );
                     } else if (row.status === "failed") {
                       statusBadge = (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-                          🔴 Exception / Failed
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                          😔 Out of Stock
                         </span>
                       );
                     } else if (row.status === "scheduled") {
@@ -514,9 +505,19 @@ const SubscriptionCalendar = () => {
 
                         <div className="flex justify-between items-center pt-2 border-t border-stone-100 text-[10px] font-bold text-stone-700">
                           <span>Transaction Ledger</span>
-                          <span className="text-emerald-700 bg-emerald-50/50 border border-emerald-100 px-2 py-0.5 rounded">
-                            ₹{totalCost.toFixed(2)} Debited
-                          </span>
+                          {row.status === "delivered" ? (
+                            <span className="text-emerald-700 bg-emerald-50/50 border border-emerald-100 px-2 py-0.5 rounded">
+                              ₹{totalCost.toFixed(2)} Debited
+                            </span>
+                          ) : row.status === "failed" ? (
+                            <span className="text-orange-600 bg-orange-50/50 border border-orange-100 px-2 py-0.5 rounded">
+                              Not Charged
+                            </span>
+                          ) : (
+                            <span className="text-amber-700 bg-amber-50/50 border border-amber-100 px-2 py-0.5 rounded">
+                              ₹{totalCost.toFixed(2)} Will be Debited
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -557,7 +558,8 @@ const SubscriptionCalendar = () => {
               ) : (
                 <>
                   {(() => {
-                    const activeRows = selectedDayInfo.ledgerRows ? selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped') : [];
+                    const failedRows = liveLedgerRows.filter((r: any) => r.status === 'failed');
+                    const activeRows = liveLedgerRows.filter((r: any) => r.status !== 'skipped' && r.status !== 'failed');
                     
                     const subRows = activeRows.filter((row: any) => 
                       activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)
@@ -574,39 +576,66 @@ const SubscriptionCalendar = () => {
                       );
                     }
 
-                    const renderAdjustableRow = (row: any, isSubbed: boolean) => (
-                      <div key={row.id || row.product_slug} className="flex items-center justify-between bg-white p-3 rounded-xl border border-border/50 shadow-soft">
-                        <div className="min-w-0 pr-2">
-                          <div className="font-semibold text-brown capitalize flex items-center gap-1.5 truncate">
-                            {row.virtual_product_name || row.product_slug.replace(/-/g, " ")}
+                    const renderAdjustableRow = (row: any, isSubbed: boolean) => {
+                      const matchingProduct = products.find((p: any) => p.slug === row.product_slug);
+                      const productName = matchingProduct?.name || row.virtual_product_name || row.product_slug.replace(/-/g, " ");
+                      
+                      return (
+                        <div key={row.id || row.product_slug} className="flex items-center justify-between bg-white p-3 rounded-xl border border-border/50 shadow-soft">
+                          <div className="min-w-0 pr-2">
+                            <div className="font-semibold text-brown capitalize flex items-center gap-1.5 truncate">
+                              {productName}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono">Rate: ₹{row.effective_price.toFixed(2)}</span>
+                              {isSubbed ? (
+                                <span className="text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1 py-0.5 rounded font-extrabold uppercase font-sans">
+                                  Rate Locked
+                                </span>
+                              ) : (
+                                <span className="text-[8px] bg-stone-100 text-stone-600 border border-stone-200 px-1 py-0.5 rounded font-extrabold uppercase font-sans">
+                                  One-Time Add-On
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-                            <span className="font-mono">Rate: ₹{row.effective_price.toFixed(2)}</span>
-                            {isSubbed ? (
-                              <span className="text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1 py-0.5 rounded font-extrabold uppercase font-sans">
-                                Rate Locked
-                              </span>
-                            ) : (
-                              <span className="text-[8px] bg-stone-100 text-stone-600 border border-stone-200 px-1 py-0.5 rounded font-extrabold uppercase font-sans">
-                                One-Time Add-On
-                              </span>
-                            )}
+                          <div className="flex items-center gap-2 bg-background border border-border/50 rounded-xl p-1 shadow-sm shrink-0">
+                            <button onClick={() => handleUpdateVolume(row, -1)} disabled={updateVolume.isPending || row.quantity <= 0} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown disabled:opacity-50 transition-colors">
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="text-sm font-bold w-6 text-center">{row.quantity}</span>
+                            <button onClick={() => handleUpdateVolume(row, 1)} disabled={updateVolume.isPending} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown transition-colors">
+                              <Plus className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 bg-background border border-border/50 rounded-xl p-1 shadow-sm shrink-0">
-                          <button onClick={() => handleUpdateVolume(row, -1)} disabled={updateVolume.isPending || row.quantity <= 0} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown disabled:opacity-50 transition-colors">
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="text-sm font-bold w-6 text-center">{row.quantity}</span>
-                          <button onClick={() => handleUpdateVolume(row, 1)} disabled={updateVolume.isPending} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-secondary text-brown transition-colors">
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
+                      );
+                    };
 
                     return (
                       <div className="space-y-4">
+                        {/* Out of Stock Banner — shown when admin marks item as failed */}
+                        {failedRows.length > 0 && (
+                          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                            <h5 className="text-xs font-bold text-orange-800 flex items-center gap-1.5 uppercase tracking-wider font-display">
+                              <span>😔</span> Out of Stock — We're Sorry!
+                            </h5>
+                            {failedRows.map((row: any) => {
+                              const matchingProduct = products.find((p: any) => p.slug === row.product_slug);
+                              const productName = matchingProduct?.name || row.product_slug.replace(/-/g, " ");
+                              return (
+                                <div key={row.id} className="flex items-center justify-between bg-white/70 p-3 rounded-xl border border-orange-100">
+                                  <div>
+                                    <div className="text-xs font-bold text-orange-800 capitalize">{productName}</div>
+                                    <div className="text-[10px] text-orange-600 mt-0.5">Unfortunately, this item is out of stock for today's delivery. You will <strong>not</strong> be charged for this item.</div>
+                                  </div>
+                                  <span className="text-lg shrink-0">📦</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         {/* Card A: Subscriptions */}
                         {subRows.length > 0 && (
                           <div className="bg-emerald-50/25 border border-emerald-200/50 rounded-2xl p-4 space-y-3 shadow-sm">
@@ -640,7 +669,7 @@ const SubscriptionCalendar = () => {
                     <div className="space-y-2 max-h-[40vh] overflow-y-auto no-scrollbar pb-2">
                       {products
                         .filter((p: any) => {
-                          const activeItems = selectedDayInfo.ledgerRows ? selectedDayInfo.ledgerRows.filter((r: any) => r.status !== 'skipped') : [];
+                          const activeItems = liveLedgerRows.filter((r: any) => r.status !== 'skipped');
                           return !activeItems.some((item: any) => item.product_slug === p.slug);
                         })
                         .map(p => {

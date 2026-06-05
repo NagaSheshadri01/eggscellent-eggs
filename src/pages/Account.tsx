@@ -41,14 +41,14 @@ const Account = ({ defaultTab }: AccountProps) => {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle().then(({ data }) => setProfile(data));
+    (supabase as any).from("profiles").select("*").eq("id", user.id).maybeSingle().then(({ data }: any) => setProfile(data));
   }, [user]);
 
   const save = async () => {
     if (!user || !profile) return;
     setSaving(true);
-    const { error } = await supabase.from("profiles").update({
-      full_name: profile.full_name, phone: profile.phone,
+    const { error } = await (supabase as any).from("profiles").update({
+      full_name: (profile as any).full_name, phone: (profile as any).phone,
     }).eq("id", user.id);
     setSaving(false);
     if (error) toast.error(error.message); else toast.success("Profile saved");

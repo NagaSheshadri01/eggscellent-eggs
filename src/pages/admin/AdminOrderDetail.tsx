@@ -17,19 +17,19 @@ const AdminOrderDetail = () => {
   const load = async () => {
     if (!id) return;
     const [{ data: o }, { data: it }] = await Promise.all([
-      supabase.from("orders").select("*").eq("id", id).maybeSingle(),
-      supabase.from("order_items").select("*").eq("order_id", id),
+      (supabase as any).from("orders").select("*").eq("id", id).maybeSingle(),
+      (supabase as any).from("order_items").select("*").eq("order_id", id),
     ]);
     setOrder(o); setItems(it ?? []);
-    if (o?.user_id) {
-      const { data: p } = await supabase.from("profiles").select("*").eq("id", o.user_id).maybeSingle();
+    if (o && (o as any).user_id) {
+      const { data: p } = await (supabase as any).from("profiles").select("*").eq("id", (o as any).user_id).maybeSingle();
       setProfile(p);
     }
   };
   useEffect(() => { load(); }, [id]);
 
   const updateStatus = async (s: string) => {
-    const { error } = await supabase.from("orders").update({ order_status: s as any }).eq("id", id!);
+    const { error } = await (supabase as any).from("orders").update({ order_status: s as any }).eq("id", id!);
     if (error) toast.error(error.message); else { toast.success("Status updated"); load(); }
   };
 
@@ -43,7 +43,7 @@ const AdminOrderDetail = () => {
 
       <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <div>
-          <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Order #{order.id.slice(0,8).toUpperCase()}</h1>
+          <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Order #{order.custom_order_id || order.id.slice(0,8).toUpperCase()}</h1>
           <p className="text-sm text-muted-foreground">{new Date(order.created_at).toLocaleString()}</p>
         </div>
         <Select value={order.order_status} onValueChange={updateStatus}>

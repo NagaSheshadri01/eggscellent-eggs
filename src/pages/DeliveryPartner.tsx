@@ -23,7 +23,7 @@ const DeliveryPartner = () => {
   const submit = async () => {
     if (!form.full_name || !form.phone) return toast.error("Name and phone are required");
     setBusy(true);
-    const { error } = await supabase.from("delivery_partners").insert({
+    const { error } = await (supabase as any).from("delivery_partners").insert({
       ...form,
       user_id: user?.id ?? null,
       experience_years: form.experience_years ? Number(form.experience_years) : null,

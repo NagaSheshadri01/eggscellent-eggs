@@ -18,8 +18,8 @@ const useStaff = () =>
     queryKey: ["staff_roles"],
     queryFn: async () => {
       const [rolesRes, partnersRes] = await Promise.all([
-        supabase.from("user_roles").select("id, user_id, role").eq("role", "admin"),
-        supabase.from("delivery_partners").select("*").eq("status", "approved").eq("active", true)
+        (supabase as any).from("user_roles").select("id, user_id, role").eq("role", "admin"),
+        (supabase as any).from("delivery_partners").select("*").eq("status", "approved").eq("active", true)
       ]);
       if (rolesRes.error) throw rolesRes.error;
       if (partnersRes.error) throw partnersRes.error;
@@ -31,7 +31,7 @@ const useStaff = () =>
       const ids = Array.from(new Set(combined.map((r) => r.user_id)));
       
       const { data: profs } = ids.length
-        ? await supabase.from("profiles").select("id, full_name, email, phone").in("id", ids)
+        ? await (supabase as any).from("profiles").select("id, full_name, email, phone").in("id", ids)
         : { data: [] as any[] };
       const byId = new Map((profs ?? []).map((p: any) => [p.id, p]));
       const partnerData = new Map((partnersRes.data ?? []).filter(p => p.user_id).map((p: any) => [p.user_id, p]));
@@ -66,7 +66,7 @@ const AdminStaff = () => {
     mutationFn: async () => {
       const norm = toE164(identifier.trim());
       if (!norm) throw new Error("Enter a valid phone number (E.164, e.g. +91…)");
-      const { data: prof, error } = await supabase
+      const { data: prof, error } = await (supabase as any)
         .from("profiles")
         .select("id, full_name, email, phone")
         .eq("phone", norm)
@@ -74,7 +74,7 @@ const AdminStaff = () => {
       if (error) throw error;
       if (!prof) throw new Error("No registered user with that phone number");
       if (role === "admin") {
-        const { error: insErr } = await supabase
+        const { error: insErr } = await (supabase as any)
           .from("user_roles")
           .upsert({ user_id: prof.id, role: "admin" as any }, { onConflict: "user_id" });
         if (insErr) {
@@ -83,7 +83,7 @@ const AdminStaff = () => {
         }
       } else if (role === "partner") {
         // HARD INSERT: We must ensure this record exists in the DB disk before continuing
-        const { error: dpErr } = await supabase
+        const { error: dpErr } = await (supabase as any)
           .from("delivery_partners")
           .insert({ 
             user_id: prof.id, 
@@ -99,7 +99,7 @@ const AdminStaff = () => {
           console.error("PARTNER DB COMMIT FAILED:", dpErr.message);
           // If it fails because of duplicate, we try upsert as fallback
           if (dpErr.code === "23505") {
-            const { error: upErr } = await supabase.from("delivery_partners").upsert({
+            const { error: upErr } = await (supabase as any).from("delivery_partners").upsert({
                user_id: prof.id, 
                full_name: partnerName || prof.full_name || "Partner", 
                phone: prof.phone || "",
@@ -113,7 +113,7 @@ const AdminStaff = () => {
         }
 
         // Assign the role in the permissions table
-        const { error: roleErr } = await supabase
+        const { error: roleErr } = await (supabase as any)
           .from("user_roles")
           .upsert({ user_id: prof.id, role: "partner" as any }, { onConflict: "user_id" });
         
@@ -135,10 +135,10 @@ const AdminStaff = () => {
   const demote = useMutation({
     mutationFn: async (row: RoleRow) => {
       if (row.role === "admin") {
-        const { error } = await supabase.from("user_roles").delete().eq("id", row.id);
+        const { error } = await (supabase as any).from("user_roles").delete().eq("id", row.id);
         if (error) throw error;
       } else if (row.role === "partner") {
-        const { error } = await supabase.from("delivery_partners").update({ active: false, status: "rejected" }).eq("id", row.id);
+        const { error } = await (supabase as any).from("delivery_partners").update({ active: false, status: "rejected" }).eq("id", row.id);
         if (error) throw error;
       }
     },

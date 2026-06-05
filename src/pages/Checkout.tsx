@@ -19,12 +19,14 @@ import { useOffers, type Offer } from "@/hooks/useOffers";
 import { payNow } from "@/lib/payments/razorpay";
 import { format } from "date-fns";
 import { useSubscriptionPlans } from "@/hooks/useSubscriptionPlans";
+import { useDeliverySlots } from "@/hooks/useDeliverySlots";
 
 const slots = ["08:00 AM – 12:00 PM", "02:00 PM – 06:00 PM", "06:00 PM – 08:00 PM"];
 
 const Checkout = () => {
   const { items, total, clear, appliedCoupon, setAppliedCoupon, discount, grandTotal, selectedAddressId } = useCart();
   const { data: activePlans } = useSubscriptionPlans();
+  const { data: dbSlots } = useDeliverySlots(true);
   const hasSubscriptionInCart = items.some(item => item.purchase_type === 'subscription');
   const hasOnlySubscriptions = items.length > 0 && items.every(i => i.purchase_type === 'subscription');
   const { user } = useAuth();
@@ -48,12 +50,12 @@ const Checkout = () => {
     queryKey: ['user-wallet-balance', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const { data } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
       return data;
     },
     enabled: !!user && hasSubscriptionInCart
   });
-  const currentBalance = walletData?.balance || 0;
+  const currentBalance = (walletData as any)?.balance || 0;
   // Only block if they can't afford a SINGLE delivery drop
   const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
@@ -95,9 +97,9 @@ const Checkout = () => {
     if (!selectedAddr) return;
     const check = async () => {
       setCheckingAddr(true);
-      const { data: addr } = await supabase.from("addresses").select("pincode").eq("id", selectedAddr).maybeSingle();
+      const { data: addr } = await (supabase as any).from("addresses").select("pincode").eq("id", selectedAddr).maybeSingle();
       if (addr?.pincode) {
-        const { data: serv } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", addr.pincode).eq("active", true).maybeSingle();
+        const { data: serv } = await (supabase as any).from("serviceable_pincodes").select("pincode").eq("pincode", addr.pincode).eq("active", true).maybeSingle();
         setAddrServiceable(!!serv);
         if (!serv) toast.error("📍 This saved address is outside our current delivery zone. Please choose another.", { duration: 5000 });
       }
@@ -116,11 +118,11 @@ const Checkout = () => {
   useEffect(() => {
     if (!items.length) return;
     const ids = items.map((i) => i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id);
-    supabase
+    (supabase as any)
       .from("products")
       .select("id, discounted_price, active")
       .in("id", ids)
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (!data) return;
         let stale = false;
         const priceMap = Object.fromEntries(data.map((p) => [p.id, p]));
@@ -151,7 +153,7 @@ const Checkout = () => {
     const codeToTry = manualCode || coupon.trim().toUpperCase();
     if (!codeToTry) return;
     
-    const { data, error } = await supabase.from("coupons").select("*").eq("code", codeToTry).eq("active", true).maybeSingle();
+    const { data, error } = await (supabase as any).from("coupons").select("*").eq("code", codeToTry).eq("active", true).maybeSingle();
     if (error || !data) return toast.error("Invalid coupon");
     if (data.expiry && new Date(data.expiry) < new Date()) return toast.error("Coupon expired");
     
@@ -174,8 +176,8 @@ const Checkout = () => {
 
     if (subItems.length > 0) {
       const singleDeliveryCost = subItems.reduce((s, i) => s + i.discountPrice * i.qty, 0);
-      const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
-      const currentWalletBalance = wallet?.balance || 0;
+      const { data: wallet } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const currentWalletBalance = (wallet as any)?.balance || 0;
 
       if (currentWalletBalance < singleDeliveryCost) {
         setPlacing(false);
@@ -235,7 +237,10 @@ const Checkout = () => {
     }
 
     if (instantItems.length > 0 || (subItems.length === 0 && items.length === 0)) {
-      const { data: order, error } = await supabase.from("orders").insert({
+      const matchedSlot = dbSlots?.find(s => s.label === slot);
+      const resolvedSlotId = matchedSlot?.id || null;
+
+      const { data: order, error } = await (supabase as any).from("orders").insert({
         user_id: user.id,
         address_id: selectedAddr,
         address_snapshot: addr as any,
@@ -247,6 +252,7 @@ const Checkout = () => {
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
         order_status: "placed",
         delivery_slot: slot,
+        slot_id: resolvedSlotId,
         coupon_code: appliedCoupon?.code,
         lat, lng,
         pincode: (addr as any)?.pincode ?? null,
@@ -265,7 +271,7 @@ const Checkout = () => {
           quantity: i.qty,
           price: i.discountPrice,
         }));
-        const { error: e2 } = await supabase.from("order_items").insert(itemsRows);
+        const { error: e2 } = await (supabase as any).from("order_items").insert(itemsRows);
         if (e2) {
           setPlacing(false);
           if (e2.message.includes("INSUFFICIENT_STOCK")) {

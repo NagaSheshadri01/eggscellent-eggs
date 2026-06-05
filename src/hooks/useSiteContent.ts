@@ -7,7 +7,7 @@ export const useSiteContent = () => {
   return useQuery({
     queryKey: ["site_content"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("cms_content" as any).select("key,value");
+      const { data, error } = await (supabase as any).from("cms_content").select("key,value");
       if (error) throw error;
       const map: SiteContentMap = {};
       (data ?? []).forEach((r: any) => { map[r.key] = r.value; });
@@ -28,8 +28,8 @@ export const useUpdateSiteSection = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ key, value }: { key: string; value: any }) => {
-      const { error } = await supabase
-        .from("cms_content" as any)
+      const { error } = await (supabase as any)
+        .from("cms_content")
         .upsert({ key, value }, { onConflict: "key" });
       if (error) throw error;
     },

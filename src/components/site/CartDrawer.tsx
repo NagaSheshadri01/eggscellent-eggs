@@ -82,12 +82,12 @@ const CartDrawer = () => {
     queryKey: ['user-wallet-balance', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const { data } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
       return data;
     },
     enabled: !!user && hasSubscriptionInCart
   });
-  const currentBalance = walletData?.balance || 0;
+  const currentBalance = (walletData as any)?.balance || 0;
   // Only block if they can't afford a SINGLE delivery drop
   const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
@@ -114,9 +114,9 @@ const CartDrawer = () => {
     if (!selectedAddressId) return;
     const check = async () => {
       setCheckingAddr(true);
-      const { data: addr } = await supabase.from("addresses").select("pincode").eq("id", selectedAddressId).maybeSingle();
+      const { data: addr } = await (supabase as any).from("addresses").select("pincode").eq("id", selectedAddressId).maybeSingle();
       if (addr?.pincode) {
-        const { data: serv } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", addr.pincode).eq("active", true).maybeSingle();
+        const { data: serv } = await (supabase as any).from("serviceable_pincodes").select("pincode").eq("pincode", addr.pincode).eq("active", true).maybeSingle();
         setAddrServiceable(!!serv);
         if (!serv) toast.error("📍 Address outside delivery zone", { duration: 5000 });
       }
@@ -243,8 +243,8 @@ const CartDrawer = () => {
 
     if (subItems.length > 0) {
       const singleDeliveryCost = subItems.reduce((s, i) => s + i.discountPrice * i.qty, 0);
-      const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
-      const currentWalletBalance = wallet?.balance || 0;
+      const { data: wallet } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const currentWalletBalance = (wallet as any)?.balance || 0;
 
       if (currentWalletBalance < singleDeliveryCost) {
         setPlacing(false);
@@ -261,8 +261,8 @@ const CartDrawer = () => {
       const r = await payNow(finalTotal);
       if (!r.ok) { setPlacing(false); toast.error("Payment failed"); return; }
       onlinePaid = true;
-    } else if (payment === "wallet") {
-      const { error } = await supabase.rpc('deduct_wallet', { uid: user.id, amount: finalTotal });
+    } else if ((payment as string) === "wallet") {
+      const { error } = await (supabase as any).rpc('deduct_wallet', { uid: user.id, amount: finalTotal });
       if (error) { setPlacing(false); toast.error("Wallet deduction failed"); return; }
       onlinePaid = true;
     }
@@ -272,6 +272,9 @@ const CartDrawer = () => {
 
     // 1. Process Instant Items (Standard Order)
     if (instantItems.length > 0) {
+      const chosenSlot = dbSlots?.find(s => s.id === selectedSlotId);
+      const chosenSlotLabel = chosenSlot?.label || "Standard Delivery";
+
       const { data: order, error } = await (supabase as any).from("orders").insert({
         user_id: user.id,
         address_id: selectedAddressId,
@@ -285,6 +288,7 @@ const CartDrawer = () => {
         order_status: "placed",
         coupon_code: appliedCoupon?.code,
         slot_id: selectedSlotId,
+        delivery_slot: chosenSlotLabel,
         scheduled_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : null,
         lat: (addr as any)?.lat ?? null,
         lng: (addr as any)?.lng ?? null,
@@ -337,7 +341,7 @@ const CartDrawer = () => {
             address_id: selectedAddressId,
             status: 'active',
             next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"), // Tomorrow default
-            slot_id: selectedSlotId,
+            slot_id: selectedSlotId || 'subscription',
           };
         })
       );

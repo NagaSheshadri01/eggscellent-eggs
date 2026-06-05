@@ -28,7 +28,7 @@ export const useFeatureFlags = () => {
   return useQuery({
     queryKey: ["feature_flags"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("app_settings")
         .select("value")
         .eq("key", "feature_flags")
@@ -45,7 +45,7 @@ export const useUpdateFeatureFlags = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (value: FeatureFlags) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("app_settings")
         .upsert({ key: "feature_flags", value }, { onConflict: "key" });
       if (error) throw error;

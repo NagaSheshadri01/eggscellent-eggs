@@ -42,7 +42,7 @@ const JitVerifySheet = ({ open, missing, blocking = false, onOpenChange, onCompl
     const norm = phone.replace(/\s/g, "");
     if (!/^\+?\d{10,15}$/.test(norm)) return toast.error("Enter a valid phone number");
     setBusy(true);
-    const { data: exists } = await supabase.rpc("phone_exists", { _phone: norm });
+    const { data: exists } = await (supabase as any).rpc("phone_exists", { _phone: norm });
     if (exists) { setBusy(false); return toast.error("This phone is already linked to another account"); }
     const { data, error } = await supabase.functions.invoke("phone-auth", { body: { action: "send-otp", phone: norm } });
     setBusy(false);

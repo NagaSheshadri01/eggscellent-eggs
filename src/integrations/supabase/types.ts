@@ -668,62 +668,41 @@ export type Database = {
       }
       subscription_plans: {
         Row: {
-          active: boolean
-          created_at: string
-          default_quantity: number
-          description: string | null
-          discount_type: string | null
-          discount_value: number | null
-          display_order: number
-          duration_days: number | null
-          frequency: string
           id: string
-          popular: boolean
-          product_id: string | null
           title: string
-          updated_at: string
+          description: string | null
+          product_slug: string
+          quantity: number
+          frequency_type: string
+          custom_days: number[] | null
+          price_per_delivery: number
+          is_active: boolean
+          created_at: string
         }
         Insert: {
-          active?: boolean
-          created_at?: string
-          default_quantity?: number
-          description?: string | null
-          discount_type?: string | null
-          discount_value?: number | null
-          display_order?: number
-          duration_days?: number | null
-          frequency: string
           id?: string
-          popular?: boolean
-          product_id?: string | null
           title: string
-          updated_at?: string
+          description?: string | null
+          product_slug: string
+          quantity?: number
+          frequency_type: string
+          custom_days?: number[] | null
+          price_per_delivery: number
+          is_active?: boolean
+          created_at?: string
         }
         Update: {
-          active?: boolean
-          created_at?: string
-          default_quantity?: number
-          description?: string | null
-          discount_type?: string | null
-          discount_value?: number | null
-          display_order?: number
-          duration_days?: number | null
-          frequency?: string
           id?: string
-          popular?: boolean
-          product_id?: string | null
           title?: string
-          updated_at?: string
+          description?: string | null
+          product_slug?: string
+          quantity?: number
+          frequency_type?: string
+          custom_days?: number[] | null
+          price_per_delivery?: number
+          is_active?: boolean
+          created_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "subscription_plans_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       subscriptions: {
         Row: {
@@ -736,6 +715,7 @@ export type Database = {
           payment_method: string
           plan_id: string | null
           product_id: string
+          product_slug: string
           quantity: number
           slot_id: string | null
           start_date: string
@@ -753,6 +733,7 @@ export type Database = {
           payment_method?: string
           plan_id?: string | null
           product_id: string
+          product_slug?: string
           quantity?: number
           slot_id?: string | null
           start_date: string
@@ -770,6 +751,7 @@ export type Database = {
           payment_method?: string
           plan_id?: string | null
           product_id?: string
+          product_slug?: string
           quantity?: number
           slot_id?: string | null
           start_date?: string

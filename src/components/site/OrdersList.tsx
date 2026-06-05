@@ -16,7 +16,7 @@ const OrdersList = ({ limit }: { limit?: number }) => {
 
   useEffect(() => {
     if (!user) return;
-    let q = supabase.from("orders").select("id,total,order_status,created_at,coupon_code,order_items(product_name,product_image)").eq("user_id", user.id).order("created_at", { ascending: false });
+    let q = supabase.from("orders").select("id,total,order_status,created_at,coupon_code,custom_order_id,order_items(product_name,product_image)").eq("user_id", user.id).order("created_at", { ascending: false });
     if (limit) q = q.limit(limit);
     q.then(({ data }) => setOrders(data ?? []));
   }, [user, limit]);
@@ -56,7 +56,7 @@ const OrdersList = ({ limit }: { limit?: number }) => {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <div className="font-display font-semibold text-brown">#{o.id.slice(0, 8).toUpperCase()}</div>
+              <div className="font-display font-semibold text-brown">#{o.custom_order_id || o.id.slice(0, 8).toUpperCase()}</div>
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-secondary text-brown">{statusLabel[o.order_status]}</span>
             </div>
             <div className="text-xs text-muted-foreground mt-0.5 truncate">

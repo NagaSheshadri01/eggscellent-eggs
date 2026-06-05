@@ -47,7 +47,7 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
 
   const advance = async () => {
     if (!flow) return;
-    const { error } = await supabase.rpc("partner_update_order_status", {
+    const { error } = await (supabase as any).rpc("partner_update_order_status", {
       _order_id: order.id, _new_status: flow.next,
     });
     if (error) toast.error(error.message);
@@ -81,7 +81,9 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
     <div className="bg-card rounded-2xl shadow-soft p-5 space-y-4 border border-border/50">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest mb-1">#{order.id.slice(0, 8)}</div>
+          <div className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest mb-1">
+            #{order.id.slice(0, 8)} {order.custom_order_id && `(${order.custom_order_id})`}
+          </div>
           <div className="font-display font-bold text-brown text-lg leading-tight">{snap.full_name || "Customer"}</div>
         </div>
         <Badge className="bg-primary/10 text-brown border-none text-[10px] uppercase tracking-tighter shrink-0">
@@ -155,7 +157,7 @@ const Partner = () => {
   const { data: status, isLoading: statusLoading } = usePartnerStatus();
   const qc = useQueryClient();
 
-  const partnerId = status?.partner?.id;
+  const partnerId = (status as any)?.partner?.id;
   const [activeFeed, setActiveFeed] = useState<'instant' | 'subscription'>('instant');
   const [loc, setLoc] = useState<{lat: number, lng: number} | null>(null);
   const [warehouse, setWarehouse] = useState(WAREHOUSE_DEFAULT);
@@ -232,7 +234,9 @@ const Partner = () => {
           )
         `)
         .eq('delivery_partner_id', user!.id)
-        .in('delivery_date', [todayStr, tomorrowStr]);
+        .in('delivery_date', [todayStr, tomorrowStr])
+        .neq('status', 'failed')
+        .neq('status', 'skipped');
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -246,6 +250,13 @@ const Partner = () => {
         "postgres_changes",
         { event: "*", schema: "public", table: "orders", filter: `delivery_partner_id=eq.${user.id}` },
         () => qc.invalidateQueries({ queryKey: ["partner_orders", user.id] }),
+      )
+      // Live sync: when admin changes a ledger row status (Out of Stock / Restore Stock),
+      // instantly update the partner's tomorrow shift view without a manual refresh.
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "delivery_ledger" },
+        () => qc.invalidateQueries({ queryKey: ["driver-active-shift"] }),
       )
       .on('broadcast', { event: 'direct_assignment' }, ({ payload }) => {
         if (payload.partnerId === user.id) {
@@ -319,7 +330,7 @@ const Partner = () => {
       return;
     }
     
-    const { error } = await supabase.from("orders").update({ order_status: "out_for_delivery" }).in("id", ids);
+    const { error } = await (supabase as any).from("orders").update({ order_status: "out_for_delivery" }).in("id", ids);
     if (error) {
       toast.error("Failed to dispatch: " + error.message);
     } else {
@@ -379,6 +390,33 @@ const Partner = () => {
           const isFutureShift = subscriptionTab === 'tomorrow';
           const displayStops = isFutureShift ? tomorrowActiveStops : activeStops;
 
+          // Group displayStops by userId (so multiple products for a single customer on this date merge into 1 stop)
+          const groupedStops = displayStops.reduce((acc: any[], item: any) => {
+            const userId = item.subscriptions?.user_id || item.user_id;
+            const existingStop = acc.find(s => s.userId === userId);
+
+            if (existingStop) {
+              existingStop.items.push(item);
+            } else {
+              acc.push({
+                userId,
+                customerInfo: item.subscriptions?.profiles || item.profiles,
+                address: item.subscriptions?.addresses || item.addresses,
+                items: [item]
+              });
+            }
+            return acc;
+          }, []);
+
+          // Helper to count unique customer stops for badge tabs
+          const getUniqueStopsCount = (itemsList: any[]) => {
+            const userIds = new Set(itemsList.map(s => s.subscriptions?.user_id || s.user_id));
+            return userIds.size;
+          };
+
+          const todayStopsCount = getUniqueStopsCount(todayStops);
+          const tomorrowStopsCount = getUniqueStopsCount(tomorrowStops);
+
           return (
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -398,7 +436,7 @@ const Partner = () => {
                         subscriptionTab === 'today' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
                       }`}
                     >
-                      Today's Shift ({todayStops.length})
+                      Today's Shift ({todayStopsCount})
                     </button>
                     <button
                       onClick={() => setSubscriptionTab('tomorrow')}
@@ -406,7 +444,7 @@ const Partner = () => {
                         subscriptionTab === 'tomorrow' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
                       }`}
                     >
-                      Tomorrow's Shift ({tomorrowStops.length})
+                      Tomorrow's Shift ({tomorrowStopsCount})
                     </button>
                   </div>
                 )}
@@ -415,7 +453,7 @@ const Partner = () => {
               {subDeliveries.isLoading && <div className="space-y-3"><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div>}
               {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error as any).message}</div>}
 
-              {!subDeliveries.isLoading && displayStops.length === 0 && (
+              {!subDeliveries.isLoading && groupedStops.length === 0 && (
                 <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border animate-in fade-in duration-300">
                   <Repeat className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-30" />
                   <p className="font-display font-bold text-brown">
@@ -427,9 +465,9 @@ const Partner = () => {
                 </div>
               )}
 
-              {displayStops.length > 0 && (() => {
-                const allCoords = displayStops
-                  .map((s: any) => s.subscriptions?.addresses)
+              {groupedStops.length > 0 && (() => {
+                const allCoords = groupedStops
+                  .map((s: any) => s.address)
                   .filter((a: any) => a?.lat && a?.lng);
                 const routeUrl = allCoords.length > 0
                   ? `https://www.google.com/maps/dir/?api=1&origin=${warehouse.lat},${warehouse.lng}&destination=${allCoords[allCoords.length-1].lat},${allCoords[allCoords.length-1].lng}${allCoords.length > 1 ? `&waypoints=${allCoords.slice(0,-1).map((a: any) => `${a.lat},${a.lng}`).join('|')}` : ''}&travelmode=driving`
@@ -447,7 +485,7 @@ const Partner = () => {
                             {isFutureShift ? "🌅 Tomorrow's Pre-assigned Shift" : "🌅 Early Morning Subscription Shift"}
                           </h2>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {isFutureShift ? `${tomorrowActiveStops.length} stops mapped` : `${activeStops.length} recurring stops remaining`}
+                            {isFutureShift ? `${tomorrowStopsCount} stops mapped` : `${groupedStops.length} recurring stops remaining`}
                           </p>
                         </div>
                       </div>
@@ -480,29 +518,26 @@ const Partner = () => {
                         <ShieldCheck className="w-4 h-4" /> Shift Manifesto & Verification
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {displayStops.map((s: any) => {
-                          const matchingProduct = productsList.find((p: any) => p.slug === s.subscriptions?.product_slug);
-                          const productName = matchingProduct?.name || s.subscriptions?.product_slug || "Premium Eggs";
-                          const effectivePrice = matchingProduct?.discountPrice || matchingProduct?.discounted_price || 150.00;
-
+                        {groupedStops.map((stop: any) => {
                           return (
                             <div 
-                              key={s.id}
+                              key={stop.userId}
                               className="transition-all duration-500 ease-out transform"
                             >
                               <SwipePartnerOrderCard
-                                deliveryItem={s}
-                                productName={productName}
-                                effectivePrice={effectivePrice}
+                                groupedStop={stop}
+                                productsList={productsList}
                                 isLocked={isFutureShift}
-                                onConfirmDelivery={async (stopId) => {
-                                  // Optimistic Collapse State setting
-                                  setCompletedStops(prev => ({ ...prev, [stopId]: true }));
-                                  await updateStopStatus.mutateAsync({ stopId, status: 'delivered' });
-                                  toast.success("Delivery confirmed and wallet deducted successfully!");
+                                onConfirmDelivery={async () => {
+                                  // Atomically confirm all scheduled items in this stop card
+                                  for (const item of stop.items) {
+                                    setCompletedStops(prev => ({ ...prev, [item.id]: true }));
+                                    await updateStopStatus.mutateAsync({ stopId: item.id, status: 'delivered' });
+                                  }
+                                  toast.success("All products in this stop confirmed and wallet deducted successfully!");
                                 }}
-                                onLogIssue={(stopId) => {
-                                  setSelectedIssueStopId(stopId);
+                                onLogIssue={(itemId) => {
+                                  setSelectedIssueStopId(itemId);
                                 }}
                               />
                             </div>
@@ -616,7 +651,7 @@ const Partner = () => {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="font-display font-bold text-brown text-base">{snap.full_name || "Customer"}</span>
-                                <Badge variant="outline" className="text-[9px] font-mono border-border/50">#{o.id.slice(0, 8)}</Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono border-border/50">#{o.id.slice(0, 8)}{o.custom_order_id ? ` / ${o.custom_order_id}` : ''}</Badge>
                               </div>
                               {(() => {
                                 const address = {
@@ -638,7 +673,7 @@ const Partner = () => {
                               })()}
                               <div className="mt-3 flex items-center gap-2">
                                 <div className="text-[10px] font-bold text-primary uppercase tracking-tighter bg-primary/10 px-2 py-0.5 rounded">
-                                  Verification Note: Match with Bill ID #{o.id.slice(0, 8)}
+                                  Verification Note: Match with Bill ID #{o.id.slice(0, 8)}{o.custom_order_id ? ` (${o.custom_order_id})` : ''}
                                 </div>
                               </div>
                             </div>
@@ -670,7 +705,7 @@ const Partner = () => {
                             {o.order_status === "confirmed" && (
                               <button
                                 onClick={async () => {
-                                  const { error } = await supabase
+                                  const { error } = await (supabase as any)
                                     .from("orders")
                                     .update({ order_status: "out_for_delivery" })
                                     .eq("id", o.id);
@@ -688,7 +723,7 @@ const Partner = () => {
                             {o.order_status === "out_for_delivery" && (
                               <button
                                 onClick={async () => {
-                                  const { error } = await supabase
+                                  const { error } = await (supabase as any)
                                     .from("orders")
                                     .update({ order_status: "delivered" })
                                     .eq("id", o.id);

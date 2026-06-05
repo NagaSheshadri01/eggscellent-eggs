@@ -17,7 +17,7 @@ const AdminFaqs = () => {
   const invalidate = useInvalidateFaqs();
 
   const load = async () => {
-    const { data } = await supabase.from("faq").select("*").order("created_at", { ascending: false });
+    const { data } = await (supabase as any).from("faq").select("*").order("created_at", { ascending: false });
     setFaqs(data ?? []);
     invalidate();
   };
@@ -25,21 +25,21 @@ const AdminFaqs = () => {
 
   const add = async () => {
     if (!draft.question || !draft.answer) return;
-    const { error } = await supabase.from("faq").insert({ ...draft, display_order: (faqs?.length ?? 0) + 1 });
+    const { error } = await (supabase as any).from("faq").insert({ ...draft, display_order: (faqs?.length ?? 0) + 1 });
     if (error) toast.error(error.message); else { setDraft({ question: "", answer: "" }); load(); }
   };
-  const del = async (id: string) => { await supabase.from("faq").delete().eq("id", id); load(); };
+  const del = async (id: string) => { await (supabase as any).from("faq").delete().eq("id", id); load(); };
 
   const startEdit = (f: any) => { setEditingId(f.id); setEdit({ question: f.question, answer: f.answer }); };
   const cancelEdit = () => { setEditingId(null); setEdit({ question: "", answer: "" }); };
   const saveEdit = async () => {
     if (!editingId) return;
-    const { error } = await supabase.from("faq").update({ question: edit.question, answer: edit.answer }).eq("id", editingId);
+    const { error } = await (supabase as any).from("faq").update({ question: edit.question, answer: edit.answer }).eq("id", editingId);
     if (error) return toast.error(error.message);
     cancelEdit(); load();
   };
   const toggleActive = async (f: any) => {
-    const { error } = await supabase.from("faq").update({ active: !f.active }).eq("id", f.id);
+    const { error } = await (supabase as any).from("faq").update({ active: !f.active }).eq("id", f.id);
     if (error) return toast.error(error.message);
     load();
   };
@@ -48,8 +48,8 @@ const AdminFaqs = () => {
     const j = i + dir;
     if (j < 0 || j >= faqs.length) return;
     const a = faqs[i], b = faqs[j];
-    await supabase.from("faq").update({ display_order: b.display_order }).eq("id", a.id);
-    await supabase.from("faq").update({ display_order: a.display_order }).eq("id", b.id);
+    await (supabase as any).from("faq").update({ display_order: b.display_order }).eq("id", a.id);
+    await (supabase as any).from("faq").update({ display_order: a.display_order }).eq("id", b.id);
     load();
   };
 
