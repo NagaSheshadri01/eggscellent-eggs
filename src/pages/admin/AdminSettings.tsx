@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Plus, MapPin, Truck, Building2, Clock } from "lucide-react";
+import { Trash2, Plus, MapPin, Truck, Building2, Clock, Navigation } from "lucide-react";
 import { toast } from "sonner";
 import { useAppSettings, useUpdateAppSetting } from "@/hooks/useAppSettings";
 import { usePincodes, useUpsertPincode, useDeletePincode } from "@/hooks/useServiceablePincodes";
@@ -124,31 +124,9 @@ const AdminSettings = () => {
         </div>
       </Section>
 
-      <Section icon={MapPin} title="Warehouse Location">
-        <p className="text-sm text-muted-foreground mb-4">Set the physical origin for delivery radius calculations.</p>
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              navigator.geolocation.getCurrentPosition(
-                async (pos) => {
-                  const { latitude, longitude } = pos.coords;
-                  try {
-                    await save("warehouse_config", { lat: latitude, lng: longitude });
-                    toast.success("Warehouse location updated");
-                  } catch (e: any) { toast.error(e.message); }
-                },
-                (err) => toast.error("Geolocation failed: " + err.message)
-              );
-            }}
-          >
-            <MapPin className="w-4 h-4 mr-2" /> Detect Warehouse Location
-          </Button>
-          <div className="flex gap-4 text-sm font-mono bg-secondary/50 px-4 py-2 rounded-lg">
-            <div>Lat: <span className="text-brown font-bold">{data.warehouse?.lat?.toFixed(6) || "Not set"}</span></div>
-            <div>Lng: <span className="text-brown font-bold">{data.warehouse?.lng?.toFixed(6) || "Not set"}</span></div>
-          </div>
-        </div>
+      <Section icon={Navigation} title="Logistics & Distance Pricing">
+        <p className="text-sm text-muted-foreground mb-4">Manage dynamic delivery fees calculated using real-time Haversine distance.</p>
+        <DistancePricingManager />
       </Section>
     </div>
   );
@@ -250,6 +228,140 @@ const DeliverySlotsManager = () => {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+};
+
+const DistancePricingManager = () => {
+  const { data: config, refetch: refetchConfig } = useQuery({
+    queryKey: ["admin_delivery_config"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("delivery_config") as any).select("*").eq("id", 1).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    }
+  });
+
+  const { data: tiers, refetch: refetchTiers } = useQuery({
+    queryKey: ["admin_delivery_pricing_tiers"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("delivery_pricing_tiers") as any).select("*").order("max_distance_km", { ascending: true });
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const [storeLat, setStoreLat] = useState("");
+  const [storeLng, setStoreLng] = useState("");
+  const [newTier, setNewTier] = useState({ max_distance_km: "", delivery_fee: "" });
+
+  useEffect(() => {
+    if (config) {
+      setStoreLat(config.store_latitude?.toString() || "");
+      setStoreLng(config.store_longitude?.toString() || "");
+    }
+  }, [config]);
+
+  const saveConfig = async () => {
+    try {
+      const { error } = await (supabase.from("delivery_config") as any).upsert({ 
+        id: 1, 
+        store_latitude: Number(storeLat), 
+        store_longitude: Number(storeLng) 
+      });
+      if (error) throw error;
+      toast.success("Store coordinates saved");
+      refetchConfig();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const addTier = async () => {
+    if (!newTier.max_distance_km || !newTier.delivery_fee) return toast.error("Fill all fields");
+    try {
+      const { error } = await (supabase.from("delivery_pricing_tiers") as any).insert([{
+        max_distance_km: Number(newTier.max_distance_km),
+        delivery_fee: Number(newTier.delivery_fee)
+      }]);
+      if (error) throw error;
+      toast.success("Tier added");
+      setNewTier({ max_distance_km: "", delivery_fee: "" });
+      refetchTiers();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const updateTier = async (id: string, updates: any) => {
+    try {
+      const { error } = await (supabase.from("delivery_pricing_tiers") as any).update(updates).eq("id", id);
+      if (error) throw error;
+      toast.success("Tier updated");
+      refetchTiers();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const deleteTier = async (id: string) => {
+    if (!confirm("Delete this pricing tier?")) return;
+    try {
+      const { error } = await (supabase.from("delivery_pricing_tiers") as any).delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Tier deleted");
+      refetchTiers();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-secondary/10 p-4 rounded-xl border border-border">
+        <h3 className="font-semibold text-brown mb-3 flex items-center gap-2"><MapPin className="w-4 h-4" /> Store Anchor Coordinates</h3>
+        <div className="flex gap-3 items-end">
+          <div className="flex-1">
+            <Label>Latitude</Label>
+            <Input type="number" step="0.0000001" value={storeLat} onChange={e => setStoreLat(e.target.value)} placeholder="17.5011000" />
+          </div>
+          <div className="flex-1">
+            <Label>Longitude</Label>
+            <Input type="number" step="0.0000001" value={storeLng} onChange={e => setStoreLng(e.target.value)} placeholder="78.5020000" />
+          </div>
+          <Button variant="hero" onClick={saveConfig}>Save Anchor</Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">The central warehouse coordinates from where all Haversine distances are calculated.</p>
+      </div>
+
+      <div>
+        <h3 className="font-semibold text-brown mb-3 flex items-center gap-2"><Truck className="w-4 h-4" /> Distance Pricing Tiers</h3>
+        
+        <div className="grid grid-cols-[1fr_1fr_auto] gap-3 mb-4 items-end bg-primary/5 p-4 rounded-xl border border-primary/20">
+          <div>
+            <Label className="text-primary">Up to Distance (km)</Label>
+            <Input type="number" step="0.1" value={newTier.max_distance_km} onChange={e => setNewTier({...newTier, max_distance_km: e.target.value})} placeholder="e.g. 5.0" />
+          </div>
+          <div>
+            <Label className="text-primary">Delivery Fee (₹)</Label>
+            <Input type="number" step="1" value={newTier.delivery_fee} onChange={e => setNewTier({...newTier, delivery_fee: e.target.value})} placeholder="e.g. 40" />
+          </div>
+          <Button variant="default" onClick={addTier}><Plus className="w-4 h-4 mr-1" /> Add Tier</Button>
+        </div>
+
+        <div className="space-y-2">
+          {(tiers || []).map((tier: any) => (
+            <div key={tier.id} className="flex gap-3 items-center bg-card p-3 rounded-xl border border-border">
+              <div className="flex-1 flex gap-3">
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground uppercase">Up to (km)</Label>
+                  <Input type="number" step="0.1" value={tier.max_distance_km} onChange={e => updateTier(tier.id, { max_distance_km: Number(e.target.value) })} />
+                </div>
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground uppercase">Fee (₹)</Label>
+                  <Input type="number" step="1" value={tier.delivery_fee} onChange={e => updateTier(tier.id, { delivery_fee: Number(e.target.value) })} />
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" className="mt-5" onClick={() => deleteTier(tier.id)}>
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+          {tiers?.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No pricing tiers defined. Add a tier to start charging.</p>}
+        </div>
       </div>
     </div>
   );

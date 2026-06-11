@@ -20,6 +20,7 @@ import { payNow } from "@/lib/payments/razorpay";
 import { format } from "date-fns";
 import { useSubscriptionPlans } from "@/hooks/useSubscriptionPlans";
 import { useDeliverySlots } from "@/hooks/useDeliverySlots";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 const slots = ["08:00 AM – 12:00 PM", "02:00 PM – 06:00 PM", "06:00 PM – 08:00 PM"];
 
@@ -27,14 +28,32 @@ const Checkout = () => {
   const { items, total, clear, appliedCoupon, setAppliedCoupon, discount, grandTotal, selectedAddressId } = useCart();
   const { data: activePlans } = useSubscriptionPlans();
   const { data: dbSlots } = useDeliverySlots(true);
+  const { data: appSettings } = useAppSettings();
   const hasSubscriptionInCart = items.some(item => item.purchase_type === 'subscription');
   const hasOnlySubscriptions = items.length > 0 && items.every(i => i.purchase_type === 'subscription');
   const { user } = useAuth();
   const nav = useNavigate();
   const { isComplete, missing, hasPhone, refetch: refetchProfile, isLoading: profileLoading } = useProfileCompleteness();
   const { data: availableOffers } = useOffers({ onlyActive: true });
+  
+  const [step, setStep] = useState(1);
+  const [selectedAddr, setSelectedAddr] = useState<string>(selectedAddressId || "");
 
-  const deliveryFee = total >= 199 ? 0 : 29;
+  // Fetch dynamic distance-based delivery fee
+  const { data: dynamicDeliveryFee, isFetching: loadingDeliveryFee } = useQuery({
+    queryKey: ['delivery-fee', selectedAddr],
+    queryFn: async () => {
+      if (!selectedAddr) return null;
+      const { data, error } = await (supabase as any).rpc('calculate_order_delivery_fee', {
+        p_address_id: selectedAddr
+      });
+      if (error) throw error;
+      return Number(data);
+    },
+    enabled: !!selectedAddr
+  });
+
+  const deliveryFee = dynamicDeliveryFee !== null && dynamicDeliveryFee !== undefined ? dynamicDeliveryFee : (appSettings?.delivery?.delivery_fee ?? 29);
   const calculatedDiscount = discount;
   const grand = Math.max(0, total + deliveryFee - calculatedDiscount);
 
@@ -53,17 +72,15 @@ const Checkout = () => {
       const { data } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
       return data;
     },
-    enabled: !!user && hasSubscriptionInCart
+    enabled: !!user
   });
   const currentBalance = (walletData as any)?.balance || 0;
   // Only block if they can't afford a SINGLE delivery drop
   const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
 
-  const [step, setStep] = useState(1);
-  const [selectedAddr, setSelectedAddr] = useState<string>(selectedAddressId || "");
   const [slot, setSlot] = useState(hasSubscriptionInCart ? "early_morning" : slots[0]);
-  const [payment, setPayment] = useState<"online" | "upi" | "cod">("online");
+  const [payment, setPayment] = useState<"online" | "upi" | "cod" | "wallet">("online");
   const [coupon, setCoupon] = useState("");
   const [placing, setPlacing] = useState(false);
   const placedRef = useRef(false);
@@ -237,47 +254,66 @@ const Checkout = () => {
     }
 
     if (instantItems.length > 0 || (subItems.length === 0 && items.length === 0)) {
-      const matchedSlot = dbSlots?.find(s => s.label === slot);
-      const resolvedSlotId = matchedSlot?.id || null;
+      if (payment === "wallet") {
+        const { data: orderId, error } = await (supabase as any).rpc('process_wallet_checkout', {
+          p_user_id: user.id,
+          p_grand_total: grand,
+          p_address_id: selectedAddr,
+          p_items: instantItems.map(item => ({ 
+            product_id: item.id, 
+            product_name: item.name, 
+            product_image: item.image, 
+            unit: item.unit, 
+            quantity: item.qty, 
+            price: item.discountPrice 
+          }))
+        });
 
-      const { data: order, error } = await (supabase as any).from("orders").insert({
-        user_id: user.id,
-        address_id: selectedAddr,
-        address_snapshot: addr as any,
-        subtotal: total,
-        delivery_fee: deliveryFee,
-        discount: calculatedDiscount,
-        total: grand,
-        payment_method: (payment === "online" ? "upi" : payment) as any,
-        payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
-        order_status: "placed",
-        delivery_slot: slot,
-        slot_id: resolvedSlotId,
-        coupon_code: appliedCoupon?.code,
-        lat, lng,
-        pincode: (addr as any)?.pincode ?? null,
-      } as any).select().single();
-      
-      if (error || !order) { setPlacing(false); return toast.error(error?.message || "Could not place order"); }
-      orderIdToNavigate = order.id;
+        if (error || !orderId) { setPlacing(false); return toast.error(error?.message || "Could not place order via wallet"); }
+        orderIdToNavigate = orderId;
+      } else {
+        const matchedSlot = dbSlots?.find(s => s.label === slot);
+        const resolvedSlotId = matchedSlot?.id || null;
 
-      if (instantItems.length > 0) {
-        const itemsRows = instantItems.map(i => ({
-          order_id: order.id,
-          product_id: i.id,
-          product_name: i.name,
-          product_image: i.image,
-          unit: i.unit,
-          quantity: i.qty,
-          price: i.discountPrice,
-        }));
-        const { error: e2 } = await (supabase as any).from("order_items").insert(itemsRows);
-        if (e2) {
-          setPlacing(false);
-          if (e2.message.includes("INSUFFICIENT_STOCK")) {
-            return toast.error("Sorry, one or more items in your cart just went out of stock. Please update your cart");
+        const { data: order, error } = await (supabase as any).from("orders").insert({
+          user_id: user.id,
+          address_id: selectedAddr,
+          address_snapshot: addr as any,
+          subtotal: total,
+          delivery_fee: deliveryFee,
+          discount: calculatedDiscount,
+          total: grand,
+          payment_method: (payment === "online" ? "upi" : payment) as any,
+          payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
+          order_status: "placed",
+          delivery_slot: slot,
+          slot_id: resolvedSlotId,
+          coupon_code: appliedCoupon?.code,
+          lat, lng,
+          pincode: (addr as any)?.pincode ?? null,
+        } as any).select().single();
+        
+        if (error || !order) { setPlacing(false); return toast.error(error?.message || "Could not place order"); }
+        orderIdToNavigate = order.id;
+
+        if (instantItems.length > 0) {
+          const itemsRows = instantItems.map(i => ({
+            order_id: order.id,
+            product_id: i.id,
+            product_name: i.name,
+            product_image: i.image,
+            unit: i.unit,
+            quantity: i.qty,
+            price: i.discountPrice,
+          }));
+          const { error: e2 } = await (supabase as any).from("order_items").insert(itemsRows);
+          if (e2) {
+            setPlacing(false);
+            if (e2.message.includes("INSUFFICIENT_STOCK")) {
+              return toast.error("Sorry, one or more items in your cart just went out of stock. Please update your cart");
+            }
+            return toast.error(e2.message);
           }
-          return toast.error(e2.message);
         }
       }
     }
@@ -373,9 +409,10 @@ const Checkout = () => {
                 { v: "online", label: "Pay online (Razorpay demo)", desc: "Simulated payment — completes instantly" },
                 { v: "upi", label: "UPI", desc: "Pay via Google Pay, PhonePe, Paytm" },
                 { v: "cod", label: "Cash on delivery", desc: "Pay when your eggs arrive" },
-              ].map(o => (
-                <label key={o.v} className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-smooth ${payment === o.v ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
-                  <RadioGroupItem value={o.v} />
+                { v: "wallet", label: "Pay via Wallet Balance", desc: currentBalance < grand ? `Insufficient wallet funds (Balance: ₹${currentBalance}) — Top up to use.` : `Deduct ₹${grand} from your wallet (Balance: ₹${currentBalance})`, disabled: currentBalance < grand }
+              ].map((o: any) => (
+                <label key={o.v} className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-smooth ${payment === o.v ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"} ${o.disabled ? "opacity-50 pointer-events-none grayscale" : ""}`}>
+                  <RadioGroupItem value={o.v} disabled={o.disabled} />
                   <div className="flex-1">
                     <div className="font-semibold text-brown text-sm">{o.label}</div>
                     <div className="text-xs text-muted-foreground">{o.desc}</div>
@@ -461,7 +498,16 @@ const Checkout = () => {
               </div>
             )}
             {!hasSubscriptionInCart && (
-              <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span className={deliveryFee === 0 ? "text-success font-semibold" : ""}>{deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}</span></div>
+              <div className="flex justify-between text-muted-foreground items-center">
+                <span className="flex items-center gap-2">Delivery Charge {loadingDeliveryFee && <Loader2 className="w-3 h-3 animate-spin" />}</span>
+                {loadingDeliveryFee ? (
+                  <span className="animate-pulse bg-secondary w-10 h-4 rounded"></span>
+                ) : (
+                  <span className={deliveryFee === 0 ? "text-success font-semibold bg-success/10 px-2 py-0.5 rounded-md border border-success/20" : "font-semibold"}>
+                    {deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}
+                  </span>
+                )}
+              </div>
             )}
             {calculatedDiscount > 0 && (
               <div className="flex justify-between text-success font-medium">

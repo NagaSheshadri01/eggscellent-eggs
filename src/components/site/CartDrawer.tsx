@@ -22,6 +22,7 @@ import JitVerifySheet from "@/components/site/JitVerifySheet";
 import { useProfileCompleteness } from "@/hooks/useProfileCompleteness";
 import { payNow } from "@/lib/payments/razorpay";
 import { useSubscriptionPlans } from "@/hooks/useSubscriptionPlans";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 type CheckoutStep = "cart" | "address" | "slots" | "payment";
 
@@ -57,6 +58,7 @@ const CartDrawer = () => {
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const { data: activePlans } = useSubscriptionPlans();
+  const { data: appSettings } = useAppSettings();
 
   const hasWeeklySub = useMemo(() => {
     return items.some(item => item.purchase_type === 'subscription' && item.frequency_type === 'weekly');
@@ -66,8 +68,11 @@ const CartDrawer = () => {
     return items.some(item => item.purchase_type === 'subscription');
   }, [items]);
 
-  const isDeliveryFree = total >= 199 || offerResult.isDeliveryFree;
-  const deliveryFee = isDeliveryFree ? 0 : 29;
+  const deliveryFeeConfig = appSettings?.delivery?.delivery_fee ?? 29;
+  const freeDeliveryThreshold = appSettings?.delivery?.free_delivery_threshold ?? 199;
+
+  const isDeliveryFree = total >= freeDeliveryThreshold || offerResult.isDeliveryFree;
+  const deliveryFee = isDeliveryFree ? 0 : deliveryFeeConfig;
   const finalTotal = grandTotal + deliveryFee;
 
   // Per-delivery cost = single drop, no monthly multiplier baked in

@@ -47,6 +47,7 @@ interface DeliveryStop {
     custom_order_id?: string;
   }>;
   netQuantity: number;
+  custom_order_id?: string;
 }
 
 export const AdminLogistics = () => {
@@ -104,15 +105,18 @@ export const AdminLogistics = () => {
     queryKey: ["admin-logistics-manifest-today", todayStr],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("delivery_ledger")
+        .from("master_orders")
         .select(`
           *,
-          subscriptions:subscription_id (
-            id,
-            product_slug,
-            quantity,
-            profiles:user_id (id, full_name, phone, email),
-            addresses:address_id (*)
+          profiles:user_id (id, full_name, phone, email),
+          delivery_ledger (
+            *,
+            subscriptions:subscription_id (
+              id,
+              product_slug,
+              quantity,
+              addresses:address_id (*)
+            )
           )
         `)
         .eq("delivery_date", todayStr);
@@ -127,19 +131,21 @@ export const AdminLogistics = () => {
     queryKey: ["tomorrow-dispatch-manifest", tomorrowStr],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("delivery_ledger")
+        .from("master_orders")
         .select(`
           *,
-          subscriptions:subscription_id (
-            id,
-            product_slug,
-            quantity,
-            profiles:user_id (id, full_name, phone, email),
-            addresses:address_id (*)
+          profiles:user_id (id, full_name, phone, email),
+          delivery_ledger (
+            *,
+            subscriptions:subscription_id (
+              id,
+              product_slug,
+              quantity,
+              addresses:address_id (*)
+            )
           )
         `)
-        .eq("delivery_date", tomorrowStr)
-        .in("status", ["scheduled", "failed"]);
+        .eq("delivery_date", tomorrowStr);
 
       if (error) throw error;
       return data || [];
@@ -424,45 +430,49 @@ export const AdminLogistics = () => {
     const groups: Record<string, Record<string, DeliveryStop[]>> = {};
     const stopMap = new Map<string, DeliveryStop>();
 
-    activeDeliveries.forEach((d: any) => {
-      const sub = d.subscriptions || {};
-      const addr = sub.addresses || {};
-      const profile = sub.profiles || {};
+    activeDeliveries.forEach((masterOrder: any) => {
+      // Find an address from any of the ledger items
+      let addr: any = {};
+      masterOrder.delivery_ledger?.forEach((ledgerItem: any) => {
+        if (ledgerItem.subscriptions?.addresses) {
+          addr = ledgerItem.subscriptions.addresses;
+        }
+      });
+      
+      const profile = masterOrder.profiles || {};
       const pincode = addr.pincode || "Unknown Pincode";
       const area = addr.landmark || addr.city || "Unknown Area";
       
-      const userId = sub.user_id || "guest";
-      const addressId = addr.id || "no-addr";
-      const stopId = `${userId}-${addressId}`;
+      const userId = masterOrder.user_id || "guest";
+      const stopId = masterOrder.id; // The master box ID is exactly the stop ID
 
-      if (!stopMap.has(stopId)) {
-        const newStop: DeliveryStop = {
-          id: stopId,
-          userId,
-          customerInfo: profile,
-          address: addr,
-          assignedDriverId: d.delivery_partner_id,
-          items: [],
-          netQuantity: 0
-        };
-        stopMap.set(stopId, newStop);
-        
-        if (!groups[pincode]) groups[pincode] = {};
-        if (!groups[pincode][area]) groups[pincode][area] = [];
-        groups[pincode][area].push(newStop);
-      }
+      const newStop: DeliveryStop = {
+        id: stopId,
+        userId,
+        customerInfo: profile,
+        address: addr,
+        assignedDriverId: masterOrder.delivery_partner_id,
+        items: [],
+        netQuantity: 0,
+        custom_order_id: masterOrder.custom_order_id
+      };
 
-      const stop = stopMap.get(stopId)!;
-      const qty = d.quantity ?? sub.quantity ?? 1;
-      stop.items.push({
-        ledgerId: d.id,
-        productSlug: d.product_slug || sub.product_slug,
-        quantity: qty,
-        price: d.effective_price || 0,
-        status: d.status || 'scheduled',
-        custom_order_id: d.custom_order_id
+      masterOrder.delivery_ledger?.forEach((d: any) => {
+        const qty = d.quantity ?? d.subscriptions?.quantity ?? 1;
+        newStop.items.push({
+          ledgerId: d.id,
+          productSlug: d.product_slug || d.subscriptions?.product_slug,
+          quantity: qty,
+          price: d.effective_price || 0,
+          status: d.status || 'scheduled',
+          custom_order_id: masterOrder.custom_order_id
+        });
+        newStop.netQuantity += qty;
       });
-      stop.netQuantity += qty;
+
+      if (!groups[pincode]) groups[pincode] = {};
+      if (!groups[pincode][area]) groups[pincode][area] = [];
+      groups[pincode][area].push(newStop);
     });
 
     return groups;
@@ -683,30 +693,34 @@ export const AdminLogistics = () => {
                                             : "bg-red-50/10"
                                         }`}
                                       >
-                                        <td className="px-4 py-3 text-center align-top">
+                                        <td className="px-4 py-3 text-center align-top w-12">
                                           <Checkbox
                                             checked={isAllSelected}
                                             onCheckedChange={() => handleToggleRow(stop)}
+                                            className="mt-1"
                                           />
                                         </td>
-                                        <td className="px-4 py-3 align-top">
-                                          <div className="font-semibold text-brown flex items-center gap-2">
-                                            {profile.full_name || "Guest User"}
-                                            <span className="text-[10px] bg-primary/20 text-primary-foreground font-bold px-1.5 rounded uppercase">Total: {stop.netQuantity}</span>
+                                        <td className="px-4 py-3 align-top max-w-[200px]">
+                                          <div className="font-bold text-brown truncate">{profile.full_name || 'Guest User'}</div>
+                                          <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-1.5 py-0.5 rounded shadow-sm flex items-center gap-0.5">
+                                              TOTAL: {stop.netQuantity}
+                                            </span>
                                           </div>
-                                          <div className="text-[10px] text-muted-foreground">{profile.phone || "—"}</div>
+                                          <div className="text-[10px] text-muted-foreground mt-0.5 break-all">{profile.phone || profile.email || '—'}</div>
                                         </td>
-                                        <td className="px-4 py-3 align-top space-y-2">
-                                          {stop.items.map((item, idx) => {
-                                            const isCanceledOrFailed = item.status === 'failed' || item.status === 'skipped';
-                                            return (
-                                              <div key={idx} className="flex flex-col">
-                                                <div className="flex items-center gap-1.5 font-medium text-brown flex-wrap">
-                                                  <Package className="w-3.5 h-3.5 text-primary shrink-0" />
-                                                  <span className="font-mono text-xs font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
-                                                    {item.custom_order_id || `#${item.ledgerId.slice(0, 8)}`}
-                                                  </span>
-                                                  <span className={`text-sm ${isCanceledOrFailed ? 'line-through text-muted-foreground/60' : ''}`}>
+                                        <td className="px-4 py-3 align-top min-w-[280px]">
+                                          <div className="bg-stone-900 text-amber-400 font-mono text-xl font-black px-4 py-2 rounded-lg tracking-widest border border-stone-800 shadow-md flex items-center gap-2 mb-3 w-max">
+                                            📦 BOX ID: <span className="text-white font-mono">{stop.custom_order_id}</span>
+                                          </div>
+                                          <div className="space-y-2">
+                                            {stop.items.map((item, idx) => {
+                                              const isCanceledOrFailed = item.status === 'failed' || item.status === 'skipped';
+                                              return (
+                                                <div key={idx} className="flex flex-col">
+                                                  <div className="flex items-center gap-1.5 font-medium text-brown flex-wrap">
+                                                    <Package className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                    <span className={`text-sm ${isCanceledOrFailed ? 'line-through text-muted-foreground/60' : ''}`}>
                                                     {item.quantity}x {item.productSlug} <span className="text-[10px] text-muted-foreground">(₹{item.price})</span>
                                                   </span>
                                                   {adminManifestTab === 'today' && (
@@ -744,6 +758,7 @@ export const AdminLogistics = () => {
                                               </div>
                                             );
                                           })}
+                                          </div>
                                         </td>
                                         <td className="px-4 py-3 align-top">
                                           <div className="font-medium text-brown capitalize">

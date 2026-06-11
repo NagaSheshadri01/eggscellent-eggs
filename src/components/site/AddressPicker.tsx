@@ -14,6 +14,10 @@ import LocationBlockedDialog from "@/components/site/LocationBlockedDialog";
 export type Address = {
   id: string;
   label?: string | null;
+  address_tag?: string | null;
+  address_name?: string | null;
+  address_phone?: string | null;
+  area_locality?: string | null;
   full_name: string;
   phone: string;
   address_line_1: string;
@@ -27,9 +31,9 @@ export type Address = {
 
 type Mode = "list" | "choose" | "auto" | "manual";
 
-type DraftAddress = Partial<Address> & { email?: string; lat?: number; lng?: number };
+type DraftAddress = Partial<Address> & { email?: string; lat?: number; lng?: number; isLocationLocked?: boolean };
 
-const empty: DraftAddress = { label: "Home" };
+const empty: DraftAddress = { address_tag: "Home" };
 
 type Props = {
   selectedId?: string;
@@ -94,10 +98,11 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
   const reset = () => {
     setDraft({
-      label: "Home",
+      address_tag: "Home",
       full_name: profile?.full_name || "",
       phone: profile?.phone || "",
       email: profile?.email || "",
+      isLocationLocked: false,
     });
     setEditingId(null);
   };
@@ -111,43 +116,18 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
   const runGeolocation = () => {
     setBusy(true);
     navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`, { headers: { "Accept-Language": "en" } });
-        const j = await r.json();
-        const a = j.address || {};
-        const area = [a.suburb, a.neighbourhood, a.road].filter(Boolean).join(", ");
-        const postcode = a.postcode || "";
-        
-        // Step 1: Immediately run isServiceable
-        if (postcode) {
-          const { data: serv } = await (supabase as any).from("serviceable_pincodes").select("pincode").eq("pincode", postcode).eq("active", true).maybeSingle();
-          if (!serv) {
-            toast.error(`📍 We detected pincode ${postcode}, but we don't serve this area yet. Please enter your address manually.`, { duration: 5000 });
-            setMode("manual");
-            setDraft(d => ({ ...d, pincode: "" }));
-            setIsPincodeValid(false);
-            return;
-          }
-        }
-
-        setDraft({
-          label: "Home",
-          full_name: profile?.full_name || "",
-          phone: profile?.phone || "",
-          email: profile?.email || "",
-          address_line_2: area,
-          city: a.city || a.town || a.village || a.county || "",
-          state: a.state || "",
-          pincode: postcode,
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
-        setIsPincodeValid(true);
-        setMode("manual");
-      } catch {
-        toast.error("Couldn't detect location, enter manually");
-        setMode("manual");
-      } finally { setBusy(false); }
+      setDraft({
+        address_tag: "Home",
+        full_name: profile?.full_name || "",
+        phone: profile?.phone || "",
+        email: profile?.email || "",
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        isLocationLocked: true
+      });
+      setIsPincodeValid(true);
+      setMode("manual");
+      setBusy(false);
     }, (err) => {
       setBusy(false);
       if (err.code === err.PERMISSION_DENIED) {
@@ -211,11 +191,12 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
     const payload = {
       user_id: user.id,
-      label: draft.label || "Home",
+      address_tag: draft.address_tag || "Home",
+      address_name: draft.address_name || null,
       full_name: draft.full_name!, phone: draft.phone!,
       address_line_1: draft.address_line_1!,
-      address_line_2: draft.address_line_2 || null,
-      city: draft.city!, state: draft.state!, pincode: draft.pincode!,
+      area_locality: draft.area_locality || draft.address_line_2 || null,
+      city: "Hyderabad", state: "Telangana", pincode: draft.pincode!,
       landmark: draft.landmark || null,
       is_default: draft.is_default ?? list.length === 0,
       lat: draft.lat, lng: draft.lng,
@@ -271,24 +252,15 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
         {list.length > 0 && (
           <button onClick={() => { reset(); setMode("list"); }} className="text-xs text-muted-foreground hover:text-brown flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
         )}
-        <button onClick={detect} disabled={busy} className="w-full text-left p-5 rounded-2xl border border-border hover:border-primary/50 transition-smooth bg-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full gradient-yolk grid place-items-center shrink-0">
-            <Navigation className="w-5 h-5 text-brown" />
+        <button onClick={detect} disabled={busy} className="w-full text-left p-6 rounded-2xl border-2 border-primary hover:bg-primary/5 transition-smooth bg-card flex flex-col items-center justify-center gap-3 text-center shadow-soft">
+          <div className="w-14 h-14 rounded-full gradient-yolk grid place-items-center shrink-0 shadow-md">
+            <Navigation className="w-6 h-6 text-brown" />
           </div>
-          <div className="flex-1">
-            <div className="font-display font-semibold text-brown">Locate me automatically</div>
-            <div className="text-xs text-muted-foreground">Use your device's location for faster checkout</div>
+          <div>
+            <div className="font-display font-bold text-brown text-lg">📍 Auto-Detect My Doorstep Pin</div>
+            <div className="text-xs text-muted-foreground mt-1 max-w-[200px] mx-auto">Use your device's hardware GPS to pinpoint your exact location for precise delivery tracking.</div>
           </div>
-          {busy && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-        </button>
-        <button onClick={() => { reset(); setMode("manual"); }} className="w-full text-left p-5 rounded-2xl border border-border hover:border-primary/50 transition-smooth bg-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-secondary grid place-items-center shrink-0">
-            <Pencil className="w-5 h-5 text-brown" />
-          </div>
-          <div className="flex-1">
-            <div className="font-display font-semibold text-brown">Enter address manually</div>
-            <div className="text-xs text-muted-foreground">Type your delivery address</div>
-          </div>
+          {busy && <Loader2 className="w-5 h-5 animate-spin text-primary mt-2" />}
         </button>
       </div>
     );
@@ -296,103 +268,114 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
   // Manual / auto-fill form
   if (mode === "manual" || mode === "auto") {
+    if (!draft.isLocationLocked && !editingId) {
+      return (
+        <div className="space-y-3">
+          {blockedDialog}
+          <button onClick={() => { reset(); setMode(list.length ? "list" : "choose"); }} className="text-xs text-muted-foreground hover:text-brown flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
+          <div className="p-8 text-center bg-amber-50 rounded-2xl border border-amber-200">
+            <Navigation className="w-8 h-8 text-amber-500 mx-auto mb-3 opacity-50" />
+            <h3 className="font-bold text-amber-900 mb-1">GPS Lock Required</h3>
+            <p className="text-xs text-amber-700 mb-4">You must securely lock your geospatial coordinates first before entering address details.</p>
+            <Button variant="hero" onClick={detect} disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "📍 Auto-Detect My Doorstep Pin"}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {blockedDialog}
         <button onClick={() => { reset(); setMode(list.length ? "list" : "choose"); }} className="text-xs text-muted-foreground hover:text-brown flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</button>
 
-        <div className="space-y-1.5">
-          <Label>Save as</Label>
-          <div className="flex gap-2">
-            {["Home","Work","Other"].map(l => (
-              <button key={l} type="button" onClick={() => setDraft(d => ({ ...d, label: l }))} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-smooth ${draft.label === l ? "border-primary bg-primary/10 text-brown" : "border-border text-muted-foreground"}`}>{l}</button>
+        <div className="space-y-2">
+          <Label>Location Tag</Label>
+          <div className="flex flex-wrap gap-2">
+            {["Home", "Work", "Custom"].map(l => (
+              <button key={l} type="button" onClick={() => setDraft(d => ({ ...d, address_tag: l }))} className={`px-4 py-2 rounded-full text-sm font-semibold border transition-smooth ${draft.address_tag === l ? "border-primary bg-primary/10 text-brown shadow-sm" : "border-border text-muted-foreground hover:bg-secondary/50"}`}>{l === 'Home' ? '🏠 Home' : l === 'Work' ? '💼 Work' : '✨ Custom'}</button>
             ))}
+          </div>
+          {draft.address_tag === "Custom" && (
+            <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+              <Input
+                value={draft.address_name || ""}
+                onChange={e => setDraft(d => ({ ...d, address_name: e.target.value }))}
+                placeholder="E.g. Gym, Parents' House"
+                autoFocus
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="bg-secondary/10 p-4 rounded-2xl border border-border space-y-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Full Name *</Label>
+              <Input
+                value={draft.full_name || ""}
+                onChange={e => setDraft(d => ({ ...d, full_name: e.target.value }))}
+                placeholder="John Doe"
+              />
+            </div>
+            <div>
+              <Label>Phone Number *</Label>
+              <Input
+                value={draft.phone || ""}
+                onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))}
+                placeholder="+91 …"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Flat / Door / Building Name *</Label>
+              <Input
+                value={draft.address_line_1 || ""}
+                onChange={e => setDraft(d => ({ ...d, address_line_1: e.target.value }))}
+                placeholder="Flat 302, Green Valley Apts"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Area / Locality *</Label>
+              <Input
+                value={draft.area_locality || ""}
+                onChange={e => setDraft(d => ({ ...d, area_locality: e.target.value }))}
+                placeholder="Kondapur, Secunderabad"
+              />
+            </div>
+            <div className="relative sm:col-span-2">
+              <Label>6-Digit Pincode *</Label>
+              <Input
+                value={draft.pincode || ""}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setDraft(d => ({ ...d, pincode: val }));
+                  if (val.length === 6) validatePincode(val);
+                  else setIsPincodeValid(true);
+                }}
+                onBlur={e => validatePincode(e.target.value)}
+                className={!isPincodeValid && draft.pincode?.length === 6 ? "border-destructive focus-visible:ring-destructive" : ""}
+                placeholder="500001"
+              />
+              {!isPincodeValid && draft.pincode?.length === 6 && (
+                <p className="text-[10px] text-destructive font-bold mt-1 animate-in fade-in slide-in-from-top-1">This pincode is outside our delivery zone.</p>
+              )}
+              {checkingPincode && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-8 text-muted-foreground" />}
+            </div>
+            {/* Keeping Email for receipt reasons as per previous requirement but hiding city/state as they are default Hyderabad */}
+            <div className="sm:col-span-2 hidden">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={draft.email || ""}
+                onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div>
-            <Label>Full name *</Label>
-            <Input
-              value={draft.full_name || ""}
-              onChange={e => setDraft(d => ({ ...d, full_name: e.target.value }))}
-              placeholder="Your full name"
-            />
-          </div>
-          <div>
-            <Label>Email *</Label>
-            <Input
-              type="email"
-              value={draft.email || ""}
-              onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
-              placeholder="your@email.com"
-            />
-          </div>
-          <div>
-            <Label>Mobile *</Label>
-            <Input
-              value={draft.phone || ""}
-              onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))}
-              placeholder="+91 …"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <Label>House / Flat / Door no *</Label>
-            <Input
-              value={draft.address_line_1 || ""}
-              onChange={e => setDraft(d => ({ ...d, address_line_1: e.target.value }))}
-              placeholder="Flat 302, Building name"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Area / Street</Label>
-            <Input
-              value={draft.address_line_2 || ""}
-              onChange={e => setDraft(d => ({ ...d, address_line_2: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label>City *</Label>
-            <Input
-              value={draft.city || ""}
-              onChange={e => setDraft(d => ({ ...d, city: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label>State *</Label>
-            <Input
-              value={draft.state || ""}
-              onChange={e => setDraft(d => ({ ...d, state: e.target.value }))}
-            />
-          </div>
-          <div className="relative">
-            <Label>Pincode *</Label>
-            <Input
-              value={draft.pincode || ""}
-              onChange={e => {
-                const val = e.target.value.slice(0, 6);
-                setDraft(d => ({ ...d, pincode: val }));
-                if (val.length === 6) validatePincode(val);
-                else setIsPincodeValid(true);
-              }}
-              onBlur={e => validatePincode(e.target.value)}
-              className={!isPincodeValid && draft.pincode?.length === 6 ? "border-destructive focus-visible:ring-destructive" : ""}
-            />
-            {!isPincodeValid && draft.pincode?.length === 6 && (
-              <p className="text-[10px] text-destructive font-bold mt-1 animate-in fade-in slide-in-from-top-1">This pincode is outside our delivery zone.</p>
-            )}
-            {checkingPincode && <Loader2 className="w-3 h-3 animate-spin absolute right-3 top-9 text-muted-foreground" />}
-          </div>
-          <div>
-            <Label>Landmark</Label>
-            <Input
-              value={draft.landmark || ""}
-              onChange={e => setDraft(d => ({ ...d, landmark: e.target.value }))}
-            />
-          </div>
-        </div>
-        <Button variant="hero" className="w-full" onClick={save} disabled={busy || !isPincodeValid || checkingPincode}>
-          {busy || checkingPincode ? <Loader2 className="w-4 h-4 animate-spin" /> : (!isPincodeValid ? "Location Not Serviceable" : (editingId ? "Update address" : "Save address"))}
+        <Button variant="hero" className="w-full h-12 text-base shadow-lg" onClick={save} disabled={busy || !isPincodeValid || checkingPincode}>
+          {busy || checkingPincode ? <Loader2 className="w-5 h-5 animate-spin" /> : (!isPincodeValid ? "Location Not Serviceable" : (editingId ? "Update Address" : "Save Secure Address"))}
         </Button>
       </div>
     );
@@ -409,12 +392,12 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
               <RadioGroupItem value={a.id} className="mt-1" />
               <div className="flex-1 text-sm min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {a.label && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-secondary text-brown">{a.label}</span>}
+                  {a.address_tag && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-secondary text-brown">{a.address_tag === 'Custom' ? a.address_name : a.address_tag}</span>}
                   {a.is_default && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-primary/20 text-brown">Default</span>}
                   <span className="font-semibold text-brown">{a.full_name}</span>
                   <span className="text-muted-foreground">· {a.phone}</span>
                 </div>
-                <div className="text-muted-foreground mt-1">{a.address_line_1}{a.address_line_2 ? `, ${a.address_line_2}` : ""}</div>
+                <div className="text-muted-foreground mt-1">{a.address_line_1}{a.area_locality ? `, ${a.area_locality}` : ""}</div>
                 <div className="text-muted-foreground">{a.city}, {a.state} {a.pincode}</div>
               </div>
             </label>
@@ -428,12 +411,12 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
                 <div className="w-10 h-10 rounded-full bg-secondary grid place-items-center shrink-0"><MapPin className="w-5 h-5 text-brown" /></div>
                 <div className="flex-1 min-w-0 text-sm">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {a.label && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-secondary text-brown">{a.label}</span>}
+                    {a.address_tag && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-secondary text-brown">{a.address_tag === 'Custom' ? a.address_name : a.address_tag}</span>}
                     {a.is_default && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-primary/20 text-brown">Default</span>}
                     <span className="font-semibold text-brown">{a.full_name}</span>
                     <span className="text-muted-foreground">· {a.phone}</span>
                   </div>
-                  <div className="text-muted-foreground mt-1">{a.address_line_1}{a.address_line_2 ? `, ${a.address_line_2}` : ""}</div>
+                  <div className="text-muted-foreground mt-1">{a.address_line_1}{a.area_locality ? `, ${a.area_locality}` : ""}</div>
                   <div className="text-muted-foreground">{a.city}, {a.state} {a.pincode}</div>
                 </div>
               </div>

@@ -16,6 +16,10 @@ export type Database = {
     Tables: {
       addresses: {
         Row: {
+          address_name: string | null
+          address_phone: string | null
+          area_locality: string | null
+          address_tag: string | null
           address_line_1: string
           address_line_2: string | null
           city: string
@@ -34,6 +38,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          address_name?: string | null
+          address_phone?: string | null
+          area_locality?: string | null
+          address_tag?: string | null
           address_line_1: string
           address_line_2?: string | null
           city: string
@@ -52,6 +60,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          address_name?: string | null
+          address_phone?: string | null
+          area_locality?: string | null
+          address_tag?: string | null
           address_line_1?: string
           address_line_2?: string | null
           city?: string
@@ -167,6 +179,45 @@ export type Database = {
           id?: string
           min_order_amount?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      delivery_config: {
+        Row: {
+          id: number
+          store_latitude: number
+          store_longitude: number
+        }
+        Insert: {
+          id?: number
+          store_latitude?: number
+          store_longitude?: number
+        }
+        Update: {
+          id?: number
+          store_latitude?: number
+          store_longitude?: number
+        }
+        Relationships: []
+      }
+      delivery_pricing_tiers: {
+        Row: {
+          id: string
+          max_distance_km: number
+          delivery_fee: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          max_distance_km: number
+          delivery_fee: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          max_distance_km?: number
+          delivery_fee?: number
+          created_at?: string
         }
         Relationships: []
       }
@@ -816,6 +867,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_order_delivery_fee: {
+        Args: { p_address_id: string }
+        Returns: number
+      }
       compute_next_delivery_date: {
         Args: { _frequency: string; _from: string }
         Returns: string

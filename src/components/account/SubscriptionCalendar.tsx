@@ -48,6 +48,17 @@ const SubscriptionCalendar = () => {
     enabled: !!user?.id,
   });
 
+  const { data: walletData } = useQuery({
+    queryKey: ['user-wallet-balance', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      return data;
+    },
+    enabled: !!user?.id
+  });
+  const walletBalance = (walletData as any)?.balance || 0;
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -163,6 +174,17 @@ const SubscriptionCalendar = () => {
 
 
   const handleUpdateVolume = async (ledgerRow: any, delta: number) => {
+    if (delta > 0) {
+      const singleDropCost = ledgerRow.effective_price || 0;
+      if (walletBalance <= 0 || walletBalance < singleDropCost) {
+        toast.error("Insufficient Wallet Balance! Please recharge your wallet before adding additional products or increments.", {
+          duration: 4000,
+          position: "top-center"
+        });
+        return;
+      }
+    }
+
     const newQty = Math.max(0, ledgerRow.quantity + delta);
     try {
       await updateVolume.mutateAsync({ 
@@ -187,6 +209,14 @@ const SubscriptionCalendar = () => {
     
     const finalPrice = planPrice !== undefined ? planPrice : price;
 
+    if (walletBalance <= 0 || walletBalance < finalPrice) {
+      toast.error("Insufficient Wallet Balance! Please recharge your wallet before adding additional products or increments.", {
+        duration: 4000,
+        position: "top-center"
+      });
+      return;
+    }
+
     try {
       await addStandaloneItem.mutateAsync({
         date: selectedDayInfo.dateStr,
@@ -204,6 +234,15 @@ const SubscriptionCalendar = () => {
 
   return (
     <div className="space-y-6">
+      {walletBalance <= 0 && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-600 rounded-2xl p-4 flex gap-3 items-center shadow-sm">
+          <ShieldAlert className="w-5 h-5 shrink-0" />
+          <p className="text-sm font-medium">
+            Calendar adjustments are currently locked due to an insufficient balance. Please recharge your wallet to reactivate.
+          </p>
+        </div>
+      )}
+
       {/* Calendar Dashboard Card */}
       <div className="bg-card rounded-3xl border border-border/60 shadow-soft p-5 sm:p-6 relative overflow-hidden grain">
         <div className="absolute -right-6 -bottom-6 w-32 h-32 rounded-full gradient-yolk opacity-10 blur-xl pointer-events-none" />
@@ -559,7 +598,23 @@ const SubscriptionCalendar = () => {
                 <>
                   {(() => {
                     const failedRows = liveLedgerRows.filter((r: any) => r.status === 'failed');
-                    const activeRows = liveLedgerRows.filter((r: any) => r.status !== 'skipped' && r.status !== 'failed');
+                    const rawActiveRows = liveLedgerRows.filter((r: any) => r.status !== 'skipped' && r.status !== 'failed');
+                    
+                    // Collapse duplicates by product_slug
+                    const aggregatedActiveMap = new Map<string, any>();
+                    for (const row of rawActiveRows) {
+                      if (!aggregatedActiveMap.has(row.product_slug)) {
+                        aggregatedActiveMap.set(row.product_slug, { ...row });
+                      } else {
+                        const existing = aggregatedActiveMap.get(row.product_slug);
+                        existing.quantity += row.quantity;
+                        // Prefer the lowest effective price (usually the subscription locked rate)
+                        if (row.effective_price < existing.effective_price) {
+                          existing.effective_price = row.effective_price;
+                        }
+                      }
+                    }
+                    const activeRows = Array.from(aggregatedActiveMap.values());
                     
                     const subRows = activeRows.filter((row: any) => 
                       activeSubscriptions.some((sub: any) => sub.product_slug === row.product_slug)

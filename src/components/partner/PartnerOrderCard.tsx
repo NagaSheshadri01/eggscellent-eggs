@@ -27,6 +27,8 @@ interface PartnerOrderCardProps {
         quantity: number;
       };
     }>;
+    master_order_id: string;
+    custom_order_id: string;
   };
   productsList: any[];
   onConfirmDelivery: () => Promise<void>;
@@ -114,9 +116,8 @@ export const PartnerOrderCard = ({
     };
   }, [isSliding, sliderVal]);
 
-  const uniqueBillIds = Array.from(new Set(
-    items.map((item: any) => item.custom_order_id || item.bill_id || item.id?.slice(0, 8).toUpperCase())
-  )).join(", ");
+  // Ensure touch scrolling is not blocked when not sliding
+
 
   return (
     <div className="bg-card rounded-2xl shadow-soft p-5 border border-border/50 space-y-4 hover:shadow-card transition-smooth">
@@ -125,9 +126,6 @@ export const PartnerOrderCard = ({
           <span className="font-display font-extrabold text-brown text-base">
             {profile.full_name || "Customer"}
           </span>
-          <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest mt-0.5">
-            Master Box Code: {uniqueBillIds}
-          </div>
         </div>
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-brown">
           Prepaid Wallet
@@ -142,6 +140,11 @@ export const PartnerOrderCard = ({
             {addr.address_line_1 || "—"}, Pincode: {addr.pincode || ""}
           </div>
         </div>
+      </div>
+
+      {/* Giant Box ID Tracking Tag */}
+      <div className="bg-stone-900 text-amber-400 font-mono text-xl font-black px-4 py-2 rounded-lg tracking-widest border border-stone-800 shadow-md flex items-center justify-center gap-2">
+        📦 BOX ID: <span className="text-white font-mono">{groupedStop.custom_order_id}</span>
       </div>
 
       {/* Manifest Contents */}
@@ -162,9 +165,6 @@ export const PartnerOrderCard = ({
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-stone-800">
                     {productName} × {quantity} Packs
-                  </span>
-                  <span className="font-mono text-[9px] font-bold text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">
-                    {item.custom_order_id || item.id?.slice(0, 8).toUpperCase()}
                   </span>
                 </div>
                 <span className="text-xs text-stone-400">

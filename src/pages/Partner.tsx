@@ -222,21 +222,22 @@ const Partner = () => {
     enabled: !!user?.id && activeFeed === 'subscription',
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from('delivery_ledger')
+        .from('master_orders')
         .select(`
           *,
-          subscriptions!inner(
-            user_id,
-            product_slug,
-            quantity,
-            addresses (*),
-            profiles (full_name, phone)
+          profiles:user_id (id, full_name, phone),
+          delivery_ledger!inner (
+            *,
+            subscriptions:subscription_id (
+              id,
+              product_slug,
+              quantity,
+              addresses:address_id (*)
+            )
           )
         `)
         .eq('delivery_partner_id', user!.id)
-        .in('delivery_date', [todayStr, tomorrowStr])
-        .neq('status', 'failed')
-        .neq('status', 'skipped');
+        .in('delivery_date', [todayStr, tomorrowStr]);
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -390,28 +391,35 @@ const Partner = () => {
           const isFutureShift = subscriptionTab === 'tomorrow';
           const displayStops = isFutureShift ? tomorrowActiveStops : activeStops;
 
-          // Group displayStops by userId (so multiple products for a single customer on this date merge into 1 stop)
-          const groupedStops = displayStops.reduce((acc: any[], item: any) => {
-            const userId = item.subscriptions?.user_id || item.user_id;
-            const existingStop = acc.find(s => s.userId === userId);
+          // Master Orders already act as the group! We map them to the same structure.
+          const groupedStops = displayStops.map((masterOrder: any) => {
+            const userId = masterOrder.user_id;
+            // Filter child ledger rows if needed (e.g. exclude failed ones for driver view)
+            const activeItems = masterOrder.delivery_ledger?.filter((item: any) => item.status !== 'failed' && item.status !== 'skipped') || [];
+            
+            // Find an address
+            let addr = {};
+            activeItems.forEach((ledgerItem: any) => {
+              if (ledgerItem.subscriptions?.addresses) {
+                addr = ledgerItem.subscriptions.addresses;
+              }
+            });
 
-            if (existingStop) {
-              existingStop.items.push(item);
-            } else {
-              acc.push({
-                userId,
-                customerInfo: item.subscriptions?.profiles || item.profiles,
-                address: item.subscriptions?.addresses || item.addresses,
-                items: [item]
-              });
-            }
-            return acc;
-          }, []);
+            return {
+              userId,
+              customerInfo: masterOrder.profiles,
+              address: addr,
+              items: activeItems,
+              master_order_id: masterOrder.id,
+              custom_order_id: masterOrder.custom_order_id
+            };
+          }).filter((group: any) => group.items.length > 0);
 
           // Helper to count unique customer stops for badge tabs
           const getUniqueStopsCount = (itemsList: any[]) => {
-            const userIds = new Set(itemsList.map(s => s.subscriptions?.user_id || s.user_id));
-            return userIds.size;
+            return itemsList.filter((mo: any) => 
+              (mo.delivery_ledger || []).some((item: any) => item.status !== 'failed' && item.status !== 'skipped')
+            ).length;
           };
 
           const todayStopsCount = getUniqueStopsCount(todayStops);

@@ -25,6 +25,7 @@ const AdminProducts = () => {
   const save = async () => {
     if (!editing) return;
     if (!editing.name || !editing.slug) return toast.error("Name and slug are required");
+    if (editing.discounted_price <= 0) return toast.error("Price must be greater than 0");
     try {
       await upsert.mutateAsync({
         ...editing,
