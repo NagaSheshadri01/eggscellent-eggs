@@ -232,12 +232,14 @@ export const AdminLogistics = () => {
     mutationFn: async ({ ledgerIds, partnerId }: { ledgerIds: string[]; partnerId: string }) => {
       const selectedDriverId = partnerId === "unassigned" ? null : partnerId;
       const extractedLedgerIdsArray = ledgerIds;
-      const { error } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from('delivery_ledger')
         .update({ delivery_partner_id: selectedDriverId })
-        .in('id', extractedLedgerIdsArray);
+        .in('id', extractedLedgerIdsArray)
+        .select('id');
 
       if (error) throw error;
+      if (data && data.length === 0) throw new Error("Assignment failed: No rows updated (Permission denied?)");
       return { ledgerIds, partnerId };
     },
     onSuccess: (data) => {
@@ -744,7 +746,7 @@ export const AdminLogistics = () => {
                                                       ❌ Out of Stock
                                                     </button>
                                                   )}
-                                                  {item.status === 'failed' && adminManifestTab === 'tomorrow' && (
+                                                  {item.status === 'failed' && (
                                                     <button
                                                       onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'scheduled' })}
                                                       disabled={updateItemStatusMutation.isPending}
@@ -1676,7 +1678,7 @@ export const AdminLogistics = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unassigned">-- Clear Assignment --</SelectItem>
-                  {(partnersQ.data || []).map((p: any) => (
+                  {partnersQ.data?.filter((p: any) => p.user_id).map((p: any) => (
                     <SelectItem key={p.user_id} value={p.user_id}>
                       {p.full_name}
                     </SelectItem>

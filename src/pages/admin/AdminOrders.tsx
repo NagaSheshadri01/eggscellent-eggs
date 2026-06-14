@@ -91,16 +91,19 @@ const AdminOrders = () => {
       affected_orders: selectedIds
     });
 
-    const { error } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("orders")
       .update({
         delivery_partner_id: targetPartner,
         order_status: "confirmed" as any
       })
-      .in("id", selectedIds);
+      .in("id", selectedIds)
+      .select("id");
 
     if (error) {
       toast.error("Bulk assignment failed: " + error.message);
+    } else if (data && data.length === 0) {
+      toast.error("Assignment failed: No rows updated (Permission denied?)");
     } else {
       // Direct Hand-off Broadcast
       const channel = supabase.channel('dispatch_room');
@@ -361,7 +364,7 @@ const AdminOrders = () => {
                   <SelectValue placeholder="Choose Partner..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {(partners || []).map(p => (
+                  {(partners || []).filter((p: any) => p.user_id).map(p => (
                     <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>
                   ))}
                 </SelectContent>

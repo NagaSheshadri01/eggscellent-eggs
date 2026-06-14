@@ -122,11 +122,13 @@ const AdminSubscriptions = () => {
 
   const assignPartner = useMutation({
     mutationFn: async ({ deliveryId, partnerId }: { deliveryId: string; partnerId: string }) => {
-      const { error } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("delivery_ledger")
         .update({ delivery_partner_id: partnerId === "unassigned" ? null : partnerId })
-        .eq("id", deliveryId);
+        .eq("id", deliveryId)
+        .select("id");
       if (error) throw error;
+      if (data && data.length === 0) throw new Error("Assignment failed: No rows updated (Permission denied?)");
     },
     onSuccess: () => {
       toast.success("Delivery partner assigned");
@@ -349,7 +351,7 @@ const AdminSubscriptions = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="unassigned">-- Unassigned --</SelectItem>
-                          {partners.map((p: any) => (
+                          {partners.filter((p: any) => p.user_id).map((p: any) => (
                             <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>
                           ))}
                         </SelectContent>
