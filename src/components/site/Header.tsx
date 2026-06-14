@@ -13,7 +13,7 @@ import { isSyntheticEmail } from "@/lib/services/user.service";
 
 const Header = () => {
   const { count, setOpen } = useCart();
-  const { user, signOut, isPartner } = useAuth();
+  const { user, signOut, isPartner, isAdmin } = useAuth();
   const nav = useNavigate();
   const { data: settings } = useAppSettings();
   const { data: wallet, isLoading: isWalletLoading } = useWallet();
@@ -75,6 +75,16 @@ const Header = () => {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="truncate">{displayId}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => nav('/admin/logistics')}>
+                    💼 Admin Portal
+                  </DropdownMenuItem>
+                )}
+                {isPartner && (
+                  <DropdownMenuItem onClick={() => nav('/partner')}>
+                    🛵 Partner Portal
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => nav("/profile")}><UserCircle className="w-4 h-4 mr-2" /> Profile</DropdownMenuItem>
                 {isPartner && (
                   <DropdownMenuItem onClick={() => nav("/partner/history")}><Package className="w-4 h-4 mr-2" /> Delivery History</DropdownMenuItem>
