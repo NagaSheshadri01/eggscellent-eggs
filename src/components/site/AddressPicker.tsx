@@ -250,9 +250,6 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
     }
 
     if (!user) return;
-    if (!draft.email?.trim()) return toast.error("Please provide an email for order receipts");
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim());
-    if (!emailOk) return toast.error("Please enter a valid email address");
 
     setBusy(true);
     
@@ -260,10 +257,6 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
     let profileUpdated = false;
     if (draft.full_name && draft.full_name !== profile?.full_name) {
       await userService.updateProfile(user.id, { full_name: draft.full_name });
-      profileUpdated = true;
-    }
-    if (!hasEmail && draft.email) {
-      await userService.updateProfile(user.id, { email: draft.email });
       profileUpdated = true;
     }
     if (profileUpdated) refetchProfile();
@@ -449,14 +442,6 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
                     <p className="text-[10px] text-destructive font-bold mt-1 animate-in fade-in slide-in-from-top-1">This pincode is outside our delivery zone.</p>
                   )}
                   {checkingPincode && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-8 text-muted-foreground" />}
-                </div>
-                <div className="sm:col-span-2 hidden">
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    value={draft.email || ""}
-                    onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
-                  />
                 </div>
               </div>
             </div>
