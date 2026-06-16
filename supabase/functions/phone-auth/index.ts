@@ -1,3 +1,4 @@
+// @ts-ignore: Deno URL import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -15,7 +16,9 @@ const json = (body: unknown, status = 200) =>
 const normalize = (p: string) => p.replace(/\s+/g, "").trim();
 
 const admin = createClient(
+// @ts-ignore
   Deno.env.get("SUPABASE_URL")!,
+// @ts-ignore
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
@@ -25,7 +28,9 @@ const admin = createClient(
 const synthEmail = (phone: string) => `${phone.replace(/\D/g, "")}@auth.eggscellent.app`;
 
 const authClient = createClient(
+// @ts-ignore
   Deno.env.get("SUPABASE_URL")!,
+// @ts-ignore
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -67,7 +72,8 @@ const ensureCustomerRole = async (userId: string) => {
   if (error && !error.message.toLowerCase().includes("duplicate")) throw error;
 };
 
-Deno.serve(async (req) => {
+// @ts-ignore
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -126,7 +132,7 @@ Deno.serve(async (req) => {
 
       // Mode B: phone-as-login. Find or create the auth user, then mint a one-time password and return it.
       const password = crypto.randomUUID() + "Aa1!";
-      let userId: string | null = null;
+      let userId: string;
       let userEmail: string | null = null;
       let createdSynthetic = false;
 
@@ -169,7 +175,9 @@ Deno.serve(async (req) => {
 
       // Sign in to obtain tokens we can return to the client
       const anonClient = createClient(
+// @ts-ignore
         Deno.env.get("SUPABASE_URL")!,
+// @ts-ignore
         Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!,
         { auth: { persistSession: false, autoRefreshToken: false } },
       );
