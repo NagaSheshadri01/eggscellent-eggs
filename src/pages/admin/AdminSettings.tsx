@@ -6,11 +6,46 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Plus, MapPin, Truck, Building2, Clock, Navigation } from "lucide-react";
+import { Trash2, Plus, MapPin, Truck, Building2, Clock, Navigation, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAppSettings, useUpdateAppSetting } from "@/hooks/useAppSettings";
 import { usePincodes, useUpsertPincode, useDeletePincode } from "@/hooks/useServiceablePincodes";
 
+import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import L from "leaflet";
+
+// Leaflet icon fix
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+const MapController = ({ center }: { center: { lat: number; lng: number } }) => {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center, map]);
+  return null;
+};
+
+const DraggableMarker = ({ position, setPosition }: any) => {
+  return (
+    <Marker
+      draggable={true}
+      eventHandlers={{
+        dragend: (e) => {
+          const marker = e.target;
+          const pos = marker.getLatLng();
+          setPosition({ lat: pos.lat, lng: pos.lng });
+        },
+      }}
+      position={position}
+    />
+  );
+};
 
 const Section = ({ icon: Icon, title, children }: any) => (
   <div className="bg-card rounded-2xl shadow-soft p-5 sm:p-6 space-y-4">
@@ -255,6 +290,29 @@ const DistancePricingManager = () => {
   const [storeLat, setStoreLat] = useState("");
   const [storeLng, setStoreLng] = useState("");
   const [newTier, setNewTier] = useState({ max_distance_km: "", delivery_fee: "" });
+  const [isDetecting, setIsDetecting] = useState(false);
+
+  const handleLocationDiscovery = () => {
+    setIsDetecting(true);
+    if (!navigator.geolocation || !window.isSecureContext) {
+      toast.error("Geolocation is not supported or context is not secure.");
+      setIsDetecting(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setStoreLat(position.coords.latitude.toString());
+        setStoreLng(position.coords.longitude.toString());
+        setIsDetecting(false);
+        toast.success("Store location detected via GPS!");
+      },
+      (error) => {
+        toast.error("Failed to lock GPS: " + error.message);
+        setIsDetecting(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
 
   useEffect(() => {
     if (config) {
@@ -322,9 +380,36 @@ const DistancePricingManager = () => {
             <Label>Longitude</Label>
             <Input type="number" step="0.0000001" value={storeLng} onChange={e => setStoreLng(e.target.value)} placeholder="78.5020000" />
           </div>
-          <Button variant="hero" onClick={saveConfig}>Save Anchor</Button>
+        </div>
+        <div className="flex gap-3 mt-3">
+          <Button variant="outline" className="flex-1" onClick={handleLocationDiscovery} disabled={isDetecting}>
+            {isDetecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Navigation className="w-4 h-4 mr-2 text-primary" />} Auto-Detect Anchor
+          </Button>
+          <Button variant="hero" className="flex-1" onClick={saveConfig}>Save Anchor</Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">The central warehouse coordinates from where all Haversine distances are calculated.</p>
+
+        <div className="mt-4 w-full h-64 rounded-xl overflow-hidden border border-border z-0 relative shadow-inner">
+          <MapContainer center={[Number(storeLat) || 17.5011, Number(storeLng) || 78.5020]} zoom={15} style={{ height: "100%", width: "100%", zIndex: 0 }}>
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <MapController center={{ lat: Number(storeLat) || 17.5011, lng: Number(storeLng) || 78.5020 }} />
+            {storeLat && storeLng && (
+              <DraggableMarker 
+                position={[Number(storeLat), Number(storeLng)]} 
+                setPosition={(pos: any) => { 
+                  setStoreLat(pos.lat.toString()); 
+                  setStoreLng(pos.lng.toString()); 
+                }} 
+              />
+            )}
+          </MapContainer>
+          <div className="absolute top-2 left-2 right-2 bg-background/90 backdrop-blur text-xs p-2 rounded-lg border shadow-sm text-center font-medium z-[1000] pointer-events-none">
+            Drag the pin precisely over your warehouse/store location.
+          </div>
+        </div>
       </div>
 
       <div>
