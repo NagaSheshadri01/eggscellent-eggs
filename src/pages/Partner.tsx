@@ -31,13 +31,68 @@ const STATUS_FLOW: Record<string, { next: string; label: string }> = {
   out_for_delivery: { next: "delivered",        label: "Mark delivered" },
 };
 
-function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+
+const optimizeDeliveryRoute = (storeCoordinates: { lat: number; lng: number }, inputStops: any[]) => {
+  let sortedStops: any[] = [];
+  let remainingStops = [...inputStops];
+  let currentPosition = { lat: storeCoordinates.lat, lng: storeCoordinates.lng };
+
+  while (remainingStops.length > 0) {
+    let nearestIndex = 0;
+    let shortestDistance = Infinity;
+
+    for (let i = 0; i < remainingStops.length; i++) {
+      const addr = remainingStops[i].addresses || remainingStops[i].address;
+      const stopLat = parseFloat(addr?.lat);
+      const stopLng = parseFloat(addr?.lng);
+      
+      if (!isNaN(stopLat) && !isNaN(stopLng)) {
+        const dist = calculateDistance(currentPosition.lat, currentPosition.lng, stopLat, stopLng);
+        if (dist < shortestDistance) {
+          shortestDistance = dist;
+          nearestIndex = i;
+        }
+      }
+    }
+
+    const nextStop = remainingStops.splice(nearestIndex, 1)[0];
+    sortedStops.push(nextStop);
+    
+    const nextAddr = nextStop.addresses || nextStop.address;
+    const nextLat = parseFloat(nextAddr?.lat);
+    const nextLng = parseFloat(nextAddr?.lng);
+    
+    if (!isNaN(nextLat) && !isNaN(nextLng)) {
+      currentPosition = { lat: nextLat, lng: nextLng };
+    }
+  }
+  return sortedStops;
+};
+
+const generateMapLink = (store: { lat: number; lng: number }, sortedStops: any[]) => {
+  const origin = `${store.lat},${store.lng}`;
+  const waypointCoordinates = sortedStops
+    .filter(stop => stop.order_status !== "delivered")
+    .map(stop => {
+      const addr = stop.addresses || stop.address;
+      return addr?.lat && addr?.lng ? `${addr.lat},${addr.lng}` : null;
+    })
+    .filter(Boolean);
+  
+  if (waypointCoordinates.length === 0) return null;
+  return `https://www.google.com/maps/dir/${origin}/${waypointCoordinates.join('/')}`;
+};
 
 const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: () => void; compact?: boolean }) => {
   const snap: AddrSnap = order.address_snapshot || {};
@@ -283,8 +338,14 @@ const Partner = () => {
       if (!groups[slotId]) groups[slotId] = [];
       groups[slotId].push(o);
     });
+    
+    // Apply proximity sorting
+    Object.keys(groups).forEach(key => {
+      groups[key] = optimizeDeliveryRoute(warehouse, groups[key]);
+    });
+    
     return groups;
-  }, [orders.data]);
+  }, [orders.data, warehouse]);
 
   if (loading || roleLoading) {
     return (
@@ -313,16 +374,7 @@ const Partner = () => {
     );
   }
 
-  const getMultiStopUrl = (shiftOrders: any[]) => {
-    const routeOrders = shiftOrders.filter(o => o.order_status !== "delivered" && o.addresses?.lat && o.addresses?.lng);
-    if (routeOrders.length === 0) return null;
-
-    const waypoints = routeOrders.map(o => `${o.addresses.lat},${o.addresses.lng}`);
-    const lastStop = waypoints.pop();
-    const wpString = waypoints.join("|");
-    
-    return `https://www.google.com/maps/dir/?api=1&origin=${warehouse.lat},${warehouse.lng}&destination=${lastStop}${wpString ? `&waypoints=${wpString}` : ""}&travelmode=driving`;
-  };
+  // Route link generated dynamically via generateMapLink
 
   const bulkMarkOutForDelivery = async (shiftOrders: any[]) => {
     const ids = shiftOrders.filter(o => o.order_status === "confirmed").map(o => o.id);
@@ -392,7 +444,7 @@ const Partner = () => {
           const displayStops = isFutureShift ? tomorrowActiveStops : activeStops;
 
           // Master Orders already act as the group! We map them to the same structure.
-          const groupedStops = displayStops.map((masterOrder: any) => {
+          let groupedStops = displayStops.map((masterOrder: any) => {
             const userId = masterOrder.user_id;
             // Filter child ledger rows if needed (e.g. exclude failed ones for driver view)
             const activeItems = masterOrder.delivery_ledger?.filter((item: any) => item.status !== 'failed' && item.status !== 'skipped') || [];
@@ -414,6 +466,8 @@ const Partner = () => {
               custom_order_id: masterOrder.custom_order_id
             };
           }).filter((group: any) => group.items.length > 0);
+          
+          groupedStops = optimizeDeliveryRoute(warehouse, groupedStops);
 
           // Helper to count unique customer stops for badge tabs
           const getUniqueStopsCount = (itemsList: any[]) => {
@@ -474,12 +528,7 @@ const Partner = () => {
               )}
 
               {groupedStops.length > 0 && (() => {
-                const allCoords = groupedStops
-                  .map((s: any) => s.address)
-                  .filter((a: any) => a?.lat && a?.lng);
-                const routeUrl = allCoords.length > 0
-                  ? `https://www.google.com/maps/dir/?api=1&origin=${warehouse.lat},${warehouse.lng}&destination=${allCoords[allCoords.length-1].lat},${allCoords[allCoords.length-1].lng}${allCoords.length > 1 ? `&waypoints=${allCoords.slice(0,-1).map((a: any) => `${a.lat},${a.lng}`).join('|')}` : ''}&travelmode=driving`
-                  : null;
+                const routeUrl = groupedStops.length > 0 ? generateMapLink(warehouse, groupedStops) : null;
 
                 return (
                   <div className="bg-card rounded-2xl shadow-soft border border-border/50 overflow-hidden animate-in fade-in duration-500">
@@ -526,12 +575,15 @@ const Partner = () => {
                         <ShieldCheck className="w-4 h-4" /> Shift Manifesto & Verification
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {groupedStops.map((stop: any) => {
+                        {groupedStops.map((stop: any, index: number) => {
                           return (
                             <div 
                               key={stop.userId}
-                              className="transition-all duration-500 ease-out transform"
+                              className="transition-all duration-500 ease-out transform relative"
                             >
+                              <div className="absolute top-2 right-2 z-10 bg-black/80 text-white px-2 py-0.5 rounded text-xs font-bold shadow-md">
+                                📍 Stop #{index + 1} ({String.fromCharCode(66 + index)})
+                              </div>
                               <SwipePartnerOrderCard
                                 groupedStop={stop}
                                 productsList={productsList}
@@ -621,7 +673,7 @@ const Partner = () => {
                       variant="outline" 
                       className="border-primary text-primary hover:bg-primary/5 h-12 px-6 font-bold"
                       onClick={() => {
-                        const url = getMultiStopUrl(shiftOrders);
+                        const url = generateMapLink(warehouse, shiftOrders);
                         if (url) window.open(url, "_blank");
                         else toast.info("No active stops found for this route.");
                       }}
@@ -655,8 +707,11 @@ const Partner = () => {
                             {idx + 1}
                           </div>
                           
-                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 bg-secondary/5 rounded-2xl p-4 border border-transparent hover:border-primary/20 hover:bg-white transition-all">
-                            <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 bg-secondary/5 rounded-2xl p-4 border border-transparent hover:border-primary/20 hover:bg-white transition-all relative">
+                            <div className="absolute top-2 right-2 z-10 bg-black/80 text-white px-2 py-0.5 rounded text-xs font-bold shadow-md">
+                              📍 Stop #{idx + 1} ({String.fromCharCode(66 + idx)})
+                            </div>
+                            <div className="flex-1 min-w-0 pt-2">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="font-display font-bold text-brown text-base">{snap.full_name || "Customer"}</span>
                                 <Badge variant="outline" className="text-[9px] font-mono border-border/50">#{o.id.slice(0, 8)}{o.custom_order_id ? ` / ${o.custom_order_id}` : ''}</Badge>
