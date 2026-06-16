@@ -369,8 +369,8 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
             <div className="w-full h-64 rounded-2xl overflow-hidden shadow-soft border border-border z-0 relative">
               <MapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={16} style={{ height: "100%", width: "100%", zIndex: 0 }}>
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                  attribution='&copy; <a href="https://maps.google.com">Google Maps</a>'
                 />
                 <MapController center={mapCenter} />
                 {coordinates.lat && coordinates.lng && (
