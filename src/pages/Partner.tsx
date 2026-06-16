@@ -80,6 +80,53 @@ const optimizeDeliveryRoute = (storeCoordinates: { lat: number; lng: number }, i
   return sortedStops;
 };
 
+const getTotalRouteDistance = (store: { lat: number; lng: number }, stops: any[]) => {
+  let totalDist = 0;
+  let currentPos = store;
+  
+  for (const stop of stops) {
+    const addr = stop.addresses || stop.address;
+    const stopLat = parseFloat(addr?.lat);
+    const stopLng = parseFloat(addr?.lng);
+    if (!isNaN(stopLat) && !isNaN(stopLng)) {
+      totalDist += calculateDistance(currentPos.lat, currentPos.lng, stopLat, stopLng);
+      currentPos = { lat: stopLat, lng: stopLng };
+    }
+  }
+  return totalDist;
+};
+
+const applyTwoOptOptimization = (storeCoordinates: { lat: number; lng: number }, initialRoute: any[]) => {
+  let existingRoute = [...initialRoute];
+  let mutating = true;
+  let iterations = 0;
+  const maxIterations = 200;
+
+  while (mutating && iterations < maxIterations) {
+    mutating = false;
+    iterations++;
+
+    for (let i = 0; i < existingRoute.length - 1; i++) {
+      for (let j = i + 1; j < existingRoute.length; j++) {
+        let testRoute = [...existingRoute];
+        const subRouteSlice = testRoute.slice(i, j + 1).reverse();
+        testRoute.splice(i, subRouteSlice.length, ...subRouteSlice);
+
+        const currentCost = getTotalRouteDistance(storeCoordinates, existingRoute);
+        const testCost = getTotalRouteDistance(storeCoordinates, testRoute);
+
+        if (testCost < currentCost) {
+          existingRoute = testRoute;
+          mutating = true;
+          break;
+        }
+      }
+      if (mutating) break;
+    }
+  }
+  return existingRoute;
+};
+
 const generateMapLink = (store: { lat: number; lng: number }, sortedStops: any[]) => {
   const origin = `${store.lat},${store.lng}`;
   const waypointCoordinates = sortedStops
@@ -338,7 +385,8 @@ const Partner = () => {
     
     // Apply proximity sorting
     Object.keys(groups).forEach(key => {
-      groups[key] = optimizeDeliveryRoute(warehouse, groups[key]);
+      const basicRoute = optimizeDeliveryRoute(warehouse, groups[key]);
+      groups[key] = applyTwoOptOptimization(warehouse, basicRoute);
     });
     
     return groups;
@@ -464,7 +512,8 @@ const Partner = () => {
             };
           }).filter((group: any) => group.items.length > 0);
           
-          groupedStops = optimizeDeliveryRoute(warehouse, groupedStops);
+          const basicRoute = optimizeDeliveryRoute(warehouse, groupedStops);
+          groupedStops = applyTwoOptOptimization(warehouse, basicRoute);
 
           // Helper to count unique customer stops for badge tabs
           const getUniqueStopsCount = (itemsList: any[]) => {
