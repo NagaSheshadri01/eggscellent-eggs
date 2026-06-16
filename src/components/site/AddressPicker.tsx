@@ -138,7 +138,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
       }
     };
     fetchProfile();
-  }, [user]);
+  }, [user?.id]);
 
   const reset = () => {
     setDraft({
@@ -243,9 +243,20 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
       toast.error("Location coordinates are required. Please position your marker pin on the map viewport.");
       return;
     }
-    const { full_name, phone, address_line_1, pincode, area_locality } = draft;
-    if (!full_name?.trim() || !phone?.trim() || !address_line_1?.trim() || !pincode?.trim() || !area_locality?.trim()) {
-      toast.error("Please fill out all remaining structural text details.");
+    const missing = [];
+    if (!draft.full_name?.trim()) missing.push("Full Name");
+    if (!draft.phone?.trim()) missing.push("Phone Number");
+    if (!draft.address_line_1?.trim()) missing.push("Flat/Door");
+    if (!draft.area_locality?.trim()) missing.push("Area/Locality");
+    if (!draft.pincode?.trim()) missing.push("Pincode");
+
+    if (missing.length > 0) {
+      toast.error(`Required fields missing: ${missing.join(", ")}`);
+      return;
+    }
+
+    if (draft.address_tag === "Custom" && !draft.address_name?.trim()) {
+      toast.error("Please provide a name for your custom location tag.");
       return;
     }
 
@@ -363,7 +374,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
                 />
                 <MapController center={mapCenter} />
                 {coordinates.lat && coordinates.lng && (
-                  <DraggableMarker position={[coordinates.lat, coordinates.lng]} setPosition={(pos: any) => { setCoordinates({ lat: pos.lat, lng: pos.lng }); }} />
+                  <DraggableMarker position={[coordinates.lat, coordinates.lng]} setPosition={(pos: any) => { setCoordinates({ lat: pos.lat, lng: pos.lng }); setDraft(d => ({ ...d, lat: pos.lat, lng: pos.lng })); }} />
                 )}
               </MapContainer>
               <div className="absolute top-2 left-2 right-2 bg-background/90 backdrop-blur text-xs p-2 rounded-lg border shadow-sm text-center font-medium z-[1000] pointer-events-none">
@@ -446,7 +457,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
               </div>
             </div>
 
-            <Button variant="hero" className="w-full h-12 text-base shadow-lg" onClick={handleSaveAddress} disabled={busy || !isPincodeValid || checkingPincode}>
+            <Button variant="hero" className="w-full h-12 text-base shadow-lg" onClick={handleSaveAddress} disabled={busy || !isPincodeValid}>
               {busy || checkingPincode ? <Loader2 className="w-5 h-5 animate-spin" /> : (!isPincodeValid ? "Location Not Serviceable" : (editingId ? "Update Address" : "Save Secure Address"))}
             </Button>
           </div>
