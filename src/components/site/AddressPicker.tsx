@@ -12,7 +12,7 @@ import { MapPin, Navigation, Pencil, Loader2, Plus, Trash2, Star, ArrowLeft } fr
 import LocationBlockedDialog from "@/components/site/LocationBlockedDialog";
 
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap, AttributionControl } from "react-leaflet";
 import L from "leaflet";
 
 // Leaflet icon fix
@@ -367,11 +367,12 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
         ) : (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="w-full h-64 rounded-2xl overflow-hidden shadow-soft border border-border z-0 relative">
-              <MapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={16} style={{ height: "100%", width: "100%", zIndex: 0 }}>
+              <MapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={16} style={{ height: "100%", width: "100%", zIndex: 0 }} attributionControl={false}>
                 <TileLayer
                   url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
                   attribution='&copy; <a href="https://maps.google.com">Google Maps</a>'
                 />
+                <AttributionControl prefix={false} />
                 <MapController center={mapCenter} />
                 {coordinates.lat && coordinates.lng && (
                   <DraggableMarker position={[coordinates.lat, coordinates.lng]} setPosition={(pos: any) => { setCoordinates({ lat: pos.lat, lng: pos.lng }); setDraft(d => ({ ...d, lat: pos.lat, lng: pos.lng })); }} />
