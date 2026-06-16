@@ -225,12 +225,9 @@ const Partner = () => {
 
   useEffect(() => {
     const fetchWarehouse = async () => {
-      const { data } = await (supabase.from("app_settings") as any).select("value").eq("key", "warehouse_config").maybeSingle();
-      if (data?.value) {
-        try {
-          const config = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
-          if (config.lat && config.lng) setWarehouse(config);
-        } catch (e) { console.error("Invalid warehouse config", e); }
+      const { data, error } = await (supabase.from("delivery_config") as any).select("store_latitude, store_longitude").eq("id", 1).maybeSingle();
+      if (data?.store_latitude && data?.store_longitude) {
+        setWarehouse({ lat: data.store_latitude, lng: data.store_longitude });
       }
     };
     fetchWarehouse();
