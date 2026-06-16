@@ -12,7 +12,7 @@ import { useAppSettings, useUpdateAppSetting } from "@/hooks/useAppSettings";
 import { usePincodes, useUpsertPincode, useDeletePincode } from "@/hooks/useServiceablePincodes";
 
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap, AttributionControl } from "react-leaflet";
 import L from "leaflet";
 
 // Leaflet icon fix
@@ -390,11 +390,12 @@ const DistancePricingManager = () => {
         <p className="text-xs text-muted-foreground mt-2">The central warehouse coordinates from where all Haversine distances are calculated.</p>
 
         <div className="mt-4 w-full h-64 rounded-xl overflow-hidden border border-border z-0 relative shadow-inner">
-          <MapContainer center={[Number(storeLat) || 17.5011, Number(storeLng) || 78.5020]} zoom={15} style={{ height: "100%", width: "100%", zIndex: 0 }}>
+          <MapContainer center={[Number(storeLat) || 17.5011, Number(storeLng) || 78.5020]} zoom={15} style={{ height: "100%", width: "100%", zIndex: 0 }} attributionControl={false}>
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              attribution='&copy; <a href="https://maps.google.com">Google Maps</a>'
             />
+            <AttributionControl prefix={false} />
             <MapController center={{ lat: Number(storeLat) || 17.5011, lng: Number(storeLng) || 78.5020 }} />
             {storeLat && storeLng && (
               <DraggableMarker 
