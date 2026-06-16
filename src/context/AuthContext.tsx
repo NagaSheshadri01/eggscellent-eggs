@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, ReactNode 
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { userService } from "@/lib/services/user.service";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 type AuthCtx = {
   session: Session | null;
@@ -22,6 +24,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [roleLoading, setRoleLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPartner, setIsPartner] = useState(false);
+  const queryClient = useQueryClient();
 
   const resolveRoleNow = useCallback(async (uid: string) => {
     setRoleLoading(true);
@@ -121,7 +124,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [resolveRoleNow]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // 1. Terminate the active Supabase session tokens
+      await supabase.auth.signOut();
+      
+      // 2. Completely wipe out the TanStack / React Query in-memory data cache
+      queryClient.clear();
+      
+      toast.success("Logged out successfully.");
+      
+      // 3. Force a clean, hard reload-redirect to the home route.
+      // This absolutely guarantees that all local component states, custom states, 
+      // and layout contexts are cleanly unmounted and reset from scratch.
+      window.location.replace('/');
+      
+    } catch (error) {
+      console.error("Error during authentication termination sequence:", error);
+      toast.error("Logout failed. Please refresh and try again.");
+    }
   };
 
   return (
