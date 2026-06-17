@@ -12,7 +12,7 @@ import { MapPin, Navigation, Pencil, Loader2, Plus, Trash2, Star, ArrowLeft } fr
 import LocationBlockedDialog from "@/components/site/LocationBlockedDialog";
 
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, useMap, AttributionControl } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap, AttributionControl, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 
 // Leaflet icon fix
@@ -31,20 +31,17 @@ const MapController = ({ center }: { center: { lat: number; lng: number } }) => 
   return null;
 };
 
-const DraggableMarker = ({ position, setPosition }: any) => {
-  return (
-    <Marker
-      draggable={true}
-      eventHandlers={{
-        dragend: (e) => {
-          const marker = e.target;
-          const pos = marker.getLatLng();
-          setPosition({ lat: pos.lat, lng: pos.lng });
-        },
-      }}
-      position={position}
-    />
-  );
+const MapCenterWatcher = ({ onCenterChanged }: { onCenterChanged: (coords: { lat: number; lng: number }) => void }) => {
+  const map = useMapEvents({
+    moveend() {
+      const center = map.getCenter();
+      onCenterChanged({
+        lat: center.lat,
+        lng: center.lng
+      });
+    }
+  });
+  return null;
 };
 
 export type Address = {
@@ -366,20 +363,38 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="w-full h-64 rounded-2xl overflow-hidden shadow-soft border border-border z-0 relative">
-              <MapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={16} style={{ height: "100%", width: "100%", zIndex: 0 }} attributionControl={false}>
+            <div className="relative w-full h-[280px] rounded-xl overflow-hidden border border-stone-200 shadow-inner z-0">
+              <MapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={16} className="w-full h-full" style={{ height: "100%", width: "100%", zIndex: 0 }} attributionControl={false}>
                 <TileLayer
                   url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
                   attribution='&copy; <a href="https://maps.google.com">Google Maps</a>'
                 />
                 <AttributionControl prefix={false} />
                 <MapController center={mapCenter} />
-                {coordinates.lat && coordinates.lng && (
-                  <DraggableMarker position={[coordinates.lat, coordinates.lng]} setPosition={(pos: any) => { setCoordinates({ lat: pos.lat, lng: pos.lng }); setDraft(d => ({ ...d, lat: pos.lat, lng: pos.lng })); }} />
-                )}
+                <MapCenterWatcher 
+                  onCenterChanged={(newCoords) => {
+                    setCoordinates(newCoords);
+                    setDraft(d => ({ ...d, lat: newCoords.lat, lng: newCoords.lng }));
+                  }} 
+                />
               </MapContainer>
+
+              {/* 🌟 SWIGGY-STYLE FIXED CENTER PIN OVERLAY */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1000]">
+                <div className="flex flex-col items-center justify-center translate-y-[-16px]"> 
+                  {/* Sharp high-visibility Red Delivery Pin Asset */}
+                  <svg 
+                    className="w-8 h-8 drop-shadow-md text-red-500 fill-current animate-bounce-short" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                  {/* Subtle pin anchor shadow point underneath */}
+                  <div className="w-2 h-2 bg-stone-900/30 rounded-full blur-[1px] mt-[-2px]"></div>
+                </div>
+              </div>
               <div className="absolute top-2 left-2 right-2 bg-background/90 backdrop-blur text-xs p-2 rounded-lg border shadow-sm text-center font-medium z-[1000] pointer-events-none">
-                Drag the pin precisely over your building/house.
+                Pan the map to position the pin exactly on your location.
               </div>
             </div>
 
