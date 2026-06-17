@@ -87,13 +87,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }, 0);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, sess) => {
-      setSession(sess);
-      const uid = sess?.user?.id ?? null;
-      if (uid && uid !== lastUserId) {
-        lastUserId = uid;
-        resolveRole(sess!);
-      } else if (!uid) {
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: s } } = await supabase.auth.getSession();
+        setSession(s);
+        const uid = s?.user?.id ?? null;
+        if (uid && uid !== lastUserId) {
+          lastUserId = uid;
+          resolveRole(s!);
+        }
+      } catch (error) {
+        console.error("Error fetching initial session:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setSession(sess);
+        const uid = sess?.user?.id ?? null;
+        if (uid && uid !== lastUserId) {
+          lastUserId = uid;
+          resolveRole(sess!);
+        }
+        setLoading(false);
+      } else if (event === 'SIGNED_OUT') {
+        setSession(null);
         lastUserId = null;
         setIsAdmin(false);
         setIsPartner(false);
@@ -101,18 +123,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // ② Tear down on sign-out so channels don't linger after the user logs off
         if (rolesChannel) { supabase.removeChannel(rolesChannel); rolesChannel = null; }
         if (profileChannel) { supabase.removeChannel(profileChannel); profileChannel = null; }
+        setLoading(false);
       }
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      const uid = s?.user?.id ?? null;
-      if (uid && uid !== lastUserId) {
-        lastUserId = uid;
-        resolveRole(s!);
-      }
-      setLoading(false);
     });
 
     return () => {

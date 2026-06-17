@@ -23,7 +23,7 @@ const RequireAuth = ({
   }, [denied]);
 
   if (loading || roleLoading)
-    return <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>;
+    return <div className="flex h-screen w-screen items-center justify-center bg-stone-50 font-medium text-stone-600">Loading your profile securely...</div>;
   if (!user) return <Navigate to={`/auth?next=${encodeURIComponent(loc.pathname)}`} replace />;
   if (partnerOnly && !isPartner && !isAdmin && !loading) return <Navigate to="/auth" replace />;
   if (denied) return <Navigate to="/" replace />;
