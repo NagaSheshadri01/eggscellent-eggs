@@ -363,7 +363,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
           </div>
         ) : (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="relative w-full h-[280px] rounded-xl overflow-hidden border border-stone-200 shadow-inner z-0">
+            <div className="relative w-full h-[280px] rounded-xl overflow-hidden border border-stone-200 shadow-sm z-0">
               <MapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={16} className="w-full h-full" style={{ height: "100%", width: "100%", zIndex: 0 }} attributionControl={false}>
                 <TileLayer
                   url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
@@ -381,16 +381,16 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
               {/* 🌟 SWIGGY-STYLE FIXED CENTER PIN OVERLAY */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1000]">
-                <div className="flex flex-col items-center justify-center translate-y-[-16px]"> 
+                <div className="flex flex-col items-center justify-center -translate-y-4"> 
                   {/* Sharp high-visibility Red Delivery Pin Asset */}
                   <svg 
-                    className="w-8 h-8 drop-shadow-md text-red-500 fill-current animate-bounce-short" 
+                    className="w-9 h-9 drop-shadow-lg text-red-500 fill-current" 
                     viewBox="0 0 24 24"
                   >
                     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
                   </svg>
                   {/* Subtle pin anchor shadow point underneath */}
-                  <div className="w-2 h-2 bg-stone-900/30 rounded-full blur-[1px] mt-[-2px]"></div>
+                  <div className="w-2 h-1 bg-stone-900/40 rounded-full blur-[1px] mt-0.5"></div>
                 </div>
               </div>
               <div className="absolute top-2 left-2 right-2 bg-background/90 backdrop-blur text-xs p-2 rounded-lg border shadow-sm text-center font-medium z-[1000] pointer-events-none">
