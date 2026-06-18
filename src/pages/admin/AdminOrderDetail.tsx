@@ -3,8 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, MapPin, Package, User } from "lucide-react";
+import { ArrowLeft, MapPin, Package, User, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 const STATUSES = ["placed","confirmed","packed","out_for_delivery","delivered","cancelled"];
 
@@ -13,6 +17,10 @@ const AdminOrderDetail = () => {
   const [order, setOrder] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
+
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [isRefunding, setIsRefunding] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -31,6 +39,32 @@ const AdminOrderDetail = () => {
   const updateStatus = async (s: string) => {
     const { error } = await (supabase as any).from("orders").update({ order_status: s as any }).eq("id", id!);
     if (error) toast.error(error.message); else { toast.success("Status updated"); load(); }
+  };
+
+  const handleInitiateRefund = async () => {
+    if (parseFloat(refundAmount) <= 0 || isNaN(parseFloat(refundAmount))) {
+      toast.error("Please specify a valid numeric amount to credit.");
+      return;
+    }
+
+    setIsRefunding(true);
+    const { data, error } = await (supabase as any).rpc('process_admin_wallet_refund', {
+      target_order_id: order.id,
+      refund_amount: parseFloat(refundAmount),
+      refund_reason: refundReason || "Initiated via Admin Portal"
+    });
+
+    setIsRefunding(false);
+
+    if (error) {
+      toast.error(`Refund sequence failed: ${error.message}`);
+      return;
+    }
+
+    toast.success(`Success! ₹${refundAmount} has been returned to the user's wallet.`);
+    setRefundAmount("");
+    setRefundReason("");
+    load();
   };
 
   if (!order) return <Skeleton className="h-96 rounded-2xl" />;
@@ -99,6 +133,41 @@ const AdminOrderDetail = () => {
           {Number(order.discount) > 0 && <div className="flex justify-between text-success"><span>Discount</span><span>− ₹{order.discount}</span></div>}
           <div className="flex justify-between font-display font-bold text-brown pt-2 border-t border-border mt-2"><span>Total</span><span>₹{order.total}</span></div>
           <div className="flex justify-between text-xs text-muted-foreground"><span>Payment</span><span>{order.payment_method} · {order.payment_status}</span></div>
+        </div>
+      </div>
+
+      <div className="bg-red-50 rounded-2xl shadow-soft p-5 mt-4 border border-red-200">
+        <h3 className="font-display font-semibold text-red-800 mb-3 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" /> ⚠️ Adjust Order / Initiate Wallet Refund
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-red-900">Refund Amount (₹)</Label>
+            <Input 
+              type="number" 
+              placeholder="e.g. 150" 
+              value={refundAmount} 
+              onChange={(e) => setRefundAmount(e.target.value)} 
+              className="bg-white border-red-300 focus-visible:ring-red-400"
+            />
+          </div>
+          <div>
+            <Label className="text-red-900">Refund Reason</Label>
+            <Textarea 
+              placeholder="Reason for refund..." 
+              value={refundReason} 
+              onChange={(e) => setRefundReason(e.target.value)}
+              className="bg-white border-red-300 focus-visible:ring-red-400"
+            />
+          </div>
+          <Button 
+            variant="destructive" 
+            onClick={handleInitiateRefund} 
+            disabled={isRefunding || order.order_status === 'refunded'}
+            className="w-full font-bold"
+          >
+            {isRefunding ? "Processing..." : (order.order_status === 'refunded' ? "Order Fully Refunded" : "Initiate Refund")}
+          </Button>
         </div>
       </div>
     </div>

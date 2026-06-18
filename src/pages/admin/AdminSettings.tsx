@@ -278,18 +278,11 @@ const DistancePricingManager = () => {
     }
   });
 
-  const { data: tiers, refetch: refetchTiers } = useQuery({
-    queryKey: ["admin_delivery_pricing_tiers"],
-    queryFn: async () => {
-      const { data, error } = await (supabase.from("delivery_pricing_tiers") as any).select("*").order("max_distance_km", { ascending: true });
-      if (error) throw error;
-      return data;
-    }
-  });
-
   const [storeLat, setStoreLat] = useState("");
   const [storeLng, setStoreLng] = useState("");
-  const [newTier, setNewTier] = useState({ max_distance_km: "", delivery_fee: "" });
+  const [minOrderValue, setMinOrderValue] = useState("");
+  const [tiers, setTiers] = useState<Array<{ from_km: number; to_km: number; price: number }>>([]);
+  const [newTier, setNewTier] = useState({ from_km: "", to_km: "", price: "" });
   const [isDetecting, setIsDetecting] = useState(false);
 
   const handleLocationDiscovery = () => {
@@ -318,6 +311,8 @@ const DistancePricingManager = () => {
     if (config) {
       setStoreLat(config.store_latitude?.toString() || "");
       setStoreLng(config.store_longitude?.toString() || "");
+      setMinOrderValue(config.min_order_value?.toString() || "150");
+      setTiers(config.delivery_tiers || []);
     }
   }, [config]);
 
@@ -326,45 +321,35 @@ const DistancePricingManager = () => {
       const { error } = await (supabase.from("delivery_config") as any).upsert({ 
         id: 1, 
         store_latitude: Number(storeLat), 
-        store_longitude: Number(storeLng) 
+        store_longitude: Number(storeLng),
+        min_order_value: Number(minOrderValue),
+        delivery_tiers: tiers
       });
       if (error) throw error;
-      toast.success("Store coordinates saved");
+      toast.success("Logistics configuration saved securely!");
       refetchConfig();
     } catch (e: any) { toast.error(e.message); }
   };
 
-  const addTier = async () => {
-    if (!newTier.max_distance_km || !newTier.delivery_fee) return toast.error("Fill all fields");
-    try {
-      const { error } = await (supabase.from("delivery_pricing_tiers") as any).insert([{
-        max_distance_km: Number(newTier.max_distance_km),
-        delivery_fee: Number(newTier.delivery_fee)
-      }]);
-      if (error) throw error;
-      toast.success("Tier added");
-      setNewTier({ max_distance_km: "", delivery_fee: "" });
-      refetchTiers();
-    } catch (e: any) { toast.error(e.message); }
+  const addTier = () => {
+    if (newTier.from_km === "" || newTier.to_km === "" || newTier.price === "") return toast.error("Fill all fields");
+    const updatedTiers = [...tiers, { from_km: Number(newTier.from_km), to_km: Number(newTier.to_km), price: Number(newTier.price) }];
+    updatedTiers.sort((a, b) => a.from_km - b.from_km);
+    setTiers(updatedTiers);
+    setNewTier({ from_km: "", to_km: "", price: "" });
   };
 
-  const updateTier = async (id: string, updates: any) => {
-    try {
-      const { error } = await (supabase.from("delivery_pricing_tiers") as any).update(updates).eq("id", id);
-      if (error) throw error;
-      toast.success("Tier updated");
-      refetchTiers();
-    } catch (e: any) { toast.error(e.message); }
+  const updateTier = (index: number, field: string, val: number) => {
+    const updated = [...tiers];
+    updated[index] = { ...updated[index], [field]: val };
+    setTiers(updated);
   };
 
-  const deleteTier = async (id: string) => {
+  const deleteTier = (index: number) => {
     if (!confirm("Delete this pricing tier?")) return;
-    try {
-      const { error } = await (supabase.from("delivery_pricing_tiers") as any).delete().eq("id", id);
-      if (error) throw error;
-      toast.success("Tier deleted");
-      refetchTiers();
-    } catch (e: any) { toast.error(e.message); }
+    const updated = [...tiers];
+    updated.splice(index, 1);
+    setTiers(updated);
   };
 
   return (
@@ -379,6 +364,10 @@ const DistancePricingManager = () => {
           <div className="flex-1">
             <Label>Longitude</Label>
             <Input type="number" step="0.0000001" value={storeLng} onChange={e => setStoreLng(e.target.value)} placeholder="78.5020000" />
+          </div>
+          <div className="flex-1">
+            <Label>Minimum Order Value (₹)</Label>
+            <Input type="number" step="1" value={minOrderValue} onChange={e => setMinOrderValue(e.target.value)} placeholder="150" />
           </div>
         </div>
         <div className="flex gap-3 mt-3">
@@ -416,37 +405,45 @@ const DistancePricingManager = () => {
       <div>
         <h3 className="font-semibold text-brown mb-3 flex items-center gap-2"><Truck className="w-4 h-4" /> Distance Pricing Tiers</h3>
         
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-3 mb-4 items-end bg-primary/5 p-4 rounded-xl border border-primary/20">
+        <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-3 mb-4 items-end bg-primary/5 p-4 rounded-xl border border-primary/20">
           <div>
-            <Label className="text-primary">Up to Distance (km)</Label>
-            <Input type="number" step="0.1" value={newTier.max_distance_km} onChange={e => setNewTier({...newTier, max_distance_km: e.target.value})} placeholder="e.g. 5.0" />
+            <Label className="text-primary">From (km)</Label>
+            <Input type="number" step="0.1" value={newTier.from_km} onChange={e => setNewTier({...newTier, from_km: e.target.value})} placeholder="e.g. 0" />
+          </div>
+          <div>
+            <Label className="text-primary">To (km)</Label>
+            <Input type="number" step="0.1" value={newTier.to_km} onChange={e => setNewTier({...newTier, to_km: e.target.value})} placeholder="e.g. 3" />
           </div>
           <div>
             <Label className="text-primary">Delivery Fee (₹)</Label>
-            <Input type="number" step="1" value={newTier.delivery_fee} onChange={e => setNewTier({...newTier, delivery_fee: e.target.value})} placeholder="e.g. 40" />
+            <Input type="number" step="1" value={newTier.price} onChange={e => setNewTier({...newTier, price: e.target.value})} placeholder="e.g. 30" />
           </div>
           <Button variant="default" onClick={addTier}><Plus className="w-4 h-4 mr-1" /> Add Tier</Button>
         </div>
 
         <div className="space-y-2">
-          {(tiers || []).map((tier: any) => (
-            <div key={tier.id} className="flex gap-3 items-center bg-card p-3 rounded-xl border border-border">
+          {tiers.map((tier, idx) => (
+            <div key={idx} className="flex gap-3 items-center bg-card p-3 rounded-xl border border-border">
               <div className="flex-1 flex gap-3">
                 <div className="flex-1">
-                  <Label className="text-[10px] text-muted-foreground uppercase">Up to (km)</Label>
-                  <Input type="number" step="0.1" value={tier.max_distance_km} onChange={e => updateTier(tier.id, { max_distance_km: Number(e.target.value) })} />
+                  <Label className="text-[10px] text-muted-foreground uppercase">From (km)</Label>
+                  <Input type="number" step="0.1" value={tier.from_km} onChange={e => updateTier(idx, 'from_km', Number(e.target.value))} />
                 </div>
                 <div className="flex-1">
-                  <Label className="text-[10px] text-muted-foreground uppercase">Fee (₹)</Label>
-                  <Input type="number" step="1" value={tier.delivery_fee} onChange={e => updateTier(tier.id, { delivery_fee: Number(e.target.value) })} />
+                  <Label className="text-[10px] text-muted-foreground uppercase">To (km)</Label>
+                  <Input type="number" step="0.1" value={tier.to_km} onChange={e => updateTier(idx, 'to_km', Number(e.target.value))} />
+                </div>
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground uppercase">Fee (₹) (0 = Free)</Label>
+                  <Input type="number" step="1" value={tier.price} onChange={e => updateTier(idx, 'price', Number(e.target.value))} />
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="mt-5" onClick={() => deleteTier(tier.id)}>
+              <Button variant="ghost" size="icon" className="mt-5" onClick={() => deleteTier(idx)}>
                 <Trash2 className="w-4 h-4 text-destructive" />
               </Button>
             </div>
           ))}
-          {tiers?.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No pricing tiers defined. Add a tier to start charging.</p>}
+          {tiers.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No pricing tiers defined. Add a tier to start charging.</p>}
         </div>
       </div>
     </div>

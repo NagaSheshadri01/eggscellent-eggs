@@ -23,6 +23,8 @@ import { useProfileCompleteness } from "@/hooks/useProfileCompleteness";
 import { payNow } from "@/lib/payments/razorpay";
 import { useSubscriptionPlans } from "@/hooks/useSubscriptionPlans";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { useDeliveryConfig } from "@/hooks/useDeliveryConfig";
+import { evaluateTieredDeliveryFee } from "@/utils/distance";
 
 type CheckoutStep = "cart" | "address" | "slots" | "payment";
 
@@ -59,6 +61,24 @@ const CartDrawer = () => {
 
   const { data: activePlans } = useSubscriptionPlans();
   const { data: appSettings } = useAppSettings();
+  const { data: deliveryConfig } = useDeliveryConfig();
+
+  // Fetch dynamic distance-based delivery fee
+  const { data: dynamicDeliveryFee } = useQuery({
+    queryKey: ['delivery-fee', selectedAddressId, deliveryConfig],
+    queryFn: async () => {
+      if (!selectedAddressId || !deliveryConfig) return null;
+      const { data: addr, error } = await (supabase as any).from("addresses").select("lat, lng").eq("id", selectedAddressId).maybeSingle();
+      if (error || !addr || !addr.lat) return 30; // fallback
+
+      return evaluateTieredDeliveryFee(
+        { lat: deliveryConfig.store_latitude, lng: deliveryConfig.store_longitude },
+        { lat: addr.lat, lng: addr.lng },
+        deliveryConfig.delivery_tiers
+      );
+    },
+    enabled: !!selectedAddressId && !!deliveryConfig
+  });
 
   const hasWeeklySub = useMemo(() => {
     return items.some(item => item.purchase_type === 'subscription' && item.frequency_type === 'weekly');
@@ -68,12 +88,15 @@ const CartDrawer = () => {
     return items.some(item => item.purchase_type === 'subscription');
   }, [items]);
 
-  const deliveryFeeConfig = appSettings?.delivery?.delivery_fee ?? 29;
+  const deliveryFeeConfig = dynamicDeliveryFee !== null && dynamicDeliveryFee !== undefined ? dynamicDeliveryFee : 30;
   const freeDeliveryThreshold = appSettings?.delivery?.free_delivery_threshold ?? 199;
 
   const isDeliveryFree = total >= freeDeliveryThreshold || offerResult.isDeliveryFree;
   const deliveryFee = isDeliveryFree ? 0 : deliveryFeeConfig;
   const finalTotal = grandTotal + deliveryFee;
+
+  const minOrderValue = deliveryConfig?.min_order_value || 150;
+  const isBelowMinOrder = total < minOrderValue;
 
   // Per-delivery cost = single drop, no monthly multiplier baked in
   const perDeliveryCost = useMemo(() => {
@@ -762,9 +785,16 @@ const CartDrawer = () => {
 
                 {/* CTA — changes per step */}
                 {step === "cart" && (
-                  <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk" onClick={goToAddress}>
-                    Proceed to Address <ChevronRight className="w-5 h-5 ml-1" />
-                  </Button>
+                  <div className="w-full space-y-3">
+                    {isBelowMinOrder && (
+                      <div className="bg-red-50 text-red-700 p-3 rounded-lg font-medium text-sm border border-red-100">
+                        Minimum order value for delivery is ₹{minOrderValue}. Please add ₹{minOrderValue - total} more to proceed!
+                      </div>
+                    )}
+                    <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk" onClick={goToAddress} disabled={isBelowMinOrder}>
+                      Proceed to Address <ChevronRight className="w-5 h-5 ml-1" />
+                    </Button>
+                  </div>
                 )}
                 {step === "address" && (
                   <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk"

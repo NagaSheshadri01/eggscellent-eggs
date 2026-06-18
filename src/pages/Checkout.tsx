@@ -21,6 +21,8 @@ import { format } from "date-fns";
 import { useSubscriptionPlans } from "@/hooks/useSubscriptionPlans";
 import { useDeliverySlots } from "@/hooks/useDeliverySlots";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { useDeliveryConfig } from "@/hooks/useDeliveryConfig";
+import { evaluateTieredDeliveryFee } from "@/utils/distance";
 
 const slots = ["08:00 AM – 12:00 PM", "02:00 PM – 06:00 PM", "06:00 PM – 08:00 PM"];
 
@@ -29,6 +31,7 @@ const Checkout = () => {
   const { data: activePlans } = useSubscriptionPlans();
   const { data: dbSlots } = useDeliverySlots(true);
   const { data: appSettings } = useAppSettings();
+  const { data: deliveryConfig } = useDeliveryConfig();
   const hasSubscriptionInCart = items.some(item => item.purchase_type === 'subscription');
   const hasOnlySubscriptions = items.length > 0 && items.every(i => i.purchase_type === 'subscription');
   const { user } = useAuth();
@@ -41,16 +44,19 @@ const Checkout = () => {
 
   // Fetch dynamic distance-based delivery fee
   const { data: dynamicDeliveryFee, isFetching: loadingDeliveryFee } = useQuery({
-    queryKey: ['delivery-fee', selectedAddr],
+    queryKey: ['delivery-fee', selectedAddr, deliveryConfig],
     queryFn: async () => {
-      if (!selectedAddr) return null;
-      const { data, error } = await (supabase as any).rpc('calculate_order_delivery_fee', {
-        p_address_id: selectedAddr
-      });
-      if (error) throw error;
-      return Number(data);
+      if (!selectedAddr || !deliveryConfig) return null;
+      const { data: addr, error } = await (supabase as any).from("addresses").select("lat, lng").eq("id", selectedAddr).maybeSingle();
+      if (error || !addr || !addr.lat) return 30; // fallback
+
+      return evaluateTieredDeliveryFee(
+        { lat: deliveryConfig.store_latitude, lng: deliveryConfig.store_longitude },
+        { lat: addr.lat, lng: addr.lng },
+        deliveryConfig.delivery_tiers
+      );
     },
-    enabled: !!selectedAddr
+    enabled: !!selectedAddr && !!deliveryConfig
   });
 
   const deliveryFee = dynamicDeliveryFee !== null && dynamicDeliveryFee !== undefined ? dynamicDeliveryFee : (appSettings?.delivery?.delivery_fee ?? 29);
@@ -78,6 +84,9 @@ const Checkout = () => {
   // Only block if they can't afford a SINGLE delivery drop
   const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
+  
+  const minOrderValue = deliveryConfig?.min_order_value || 150;
+  const isBelowMinOrder = total < minOrderValue;
 
   const [slot, setSlot] = useState(hasSubscriptionInCart ? "early_morning" : slots[0]);
   const [payment, setPayment] = useState<"online" | "upi" | "cod" | "wallet">("online");
@@ -542,6 +551,13 @@ const Checkout = () => {
               )}
             </div>
           )}
+
+          {isBelowMinOrder && (
+            <div className="mb-3 bg-red-50 text-red-700 p-3 rounded-lg font-medium text-sm border border-red-100">
+              Minimum order value for delivery is ₹{minOrderValue}. Please add ₹{minOrderValue - total} more to proceed!
+            </div>
+          )}
+
           <div className="flex gap-3 items-end">
             <div className="flex-1 pb-1">
               <div className="text-xs text-muted-foreground">{hasSubscriptionInCart ? 'Per Delivery' : 'Total'}</div>
@@ -559,7 +575,7 @@ const Checkout = () => {
               <Button
                 variant="hero" size="lg" className="flex-[2]"
                 onClick={placeOrder}
-                disabled={placing || !selectedAddr || profileLoading || !addrServiceable || checkingAddr}
+                disabled={placing || !selectedAddr || profileLoading || !addrServiceable || checkingAddr || isBelowMinOrder}
                 title={!hasPhone ? `Please verify your phone first` : (!addrServiceable ? "Location not serviceable" : undefined)}
               >
                 {placing || checkingAddr ? <Loader2 className="w-4 h-4 animate-spin" /> : (!addrServiceable ? "Location Not Serviceable" : "Place order")}
