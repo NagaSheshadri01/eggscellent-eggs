@@ -338,6 +338,11 @@ const DistancePricingManager = () => {
 
   const handleSavePricingTiers = async () => {
     try {
+      if (!deliveryTiers || deliveryTiers.length === 0) {
+        toast.error("Please add at least one distance bracket tier before saving.");
+        return;
+      }
+
       const sanitizedTiers = deliveryTiers.map(tier => ({
         from_km: Number(tier.from_km),
         to_km: Number(tier.to_km),
