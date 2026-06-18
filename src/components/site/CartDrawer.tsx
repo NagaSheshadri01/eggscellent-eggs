@@ -800,26 +800,20 @@ const CartDrawer = () => {
                     </Button>
                   </div>
                 )}
-                {step === "address" && (
-                  isAddressFormOpen ? (
-                    <div className="w-full text-center py-3 bg-amber-50 text-amber-700 text-xs font-semibold rounded-xl border border-amber-100">
-                      Please save your new address details above to unlock payment.
-                    </div>
-                  ) : (
-                    <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk"
-                      onClick={goToSlots}
-                      disabled={!selectedAddressId || checkingAddr || !addrServiceable || soldOut}
-                    >
-                      {checkingAddr
-                        ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Checking…</>
-                        : !addrServiceable
-                          ? "Area Not Serviceable"
-                          : soldOut
-                            ? "Sold Out for Today"
-                            : <>Proceed to Payment <ChevronRight className="w-5 h-5 ml-1" /></>
-                      }
-                    </Button>
-                  )
+                {step === "address" && !isAddressFormOpen && (
+                  <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk"
+                    onClick={goToSlots}
+                    disabled={!selectedAddressId || checkingAddr || !addrServiceable || soldOut}
+                  >
+                    {checkingAddr
+                      ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Checking…</>
+                      : !addrServiceable
+                        ? "Area Not Serviceable"
+                        : soldOut
+                          ? "Sold Out for Today"
+                          : <>Proceed to Payment <ChevronRight className="w-5 h-5 ml-1" /></>
+                    }
+                  </Button>
                 )}
                 {step === "slots" && (
                   <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk"
