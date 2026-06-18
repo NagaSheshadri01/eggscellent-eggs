@@ -104,20 +104,7 @@ const AdminSettings = () => {
         <p className="text-sm text-muted-foreground mt-1">Operational control center. Changes apply instantly across the site.</p>
       </div>
 
-      <Section icon={Truck} title="Delivery">
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div><Label>Delivery fee (₹)</Label><Input type="number" value={delivery.delivery_fee} onChange={e => setDelivery({ ...delivery, delivery_fee: Number(e.target.value) })} /></div>
-          <div><Label>Free delivery above (₹)</Label><Input type="number" value={delivery.free_delivery_threshold} onChange={e => setDelivery({ ...delivery, free_delivery_threshold: Number(e.target.value) })} /></div>
-          <div><Label>Minimum order amount (₹)</Label><Input type="number" value={delivery.minimum_order_amount} onChange={e => setDelivery({ ...delivery, minimum_order_amount: Number(e.target.value) })} /></div>
-          <div><Label>Max delivery radius (km)</Label><Input type="number" value={delivery.max_delivery_radius_km} onChange={e => setDelivery({ ...delivery, max_delivery_radius_km: Number(e.target.value) })} /></div>
-          <div><Label>Delivery start time</Label><Input type="time" value={delivery.delivery_start_time} onChange={e => setDelivery({ ...delivery, delivery_start_time: e.target.value })} /></div>
-          <div><Label>Delivery end time</Label><Input type="time" value={delivery.delivery_end_time} onChange={e => setDelivery({ ...delivery, delivery_end_time: e.target.value })} /></div>
-        </div>
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-3"><Switch checked={delivery.delivery_enabled} onCheckedChange={(b) => setDelivery({ ...delivery, delivery_enabled: b })} /><span className="text-sm text-brown font-medium">Delivery enabled</span></div>
-          <Button variant="hero" onClick={() => save("delivery", delivery)}>Save delivery</Button>
-        </div>
-      </Section>
+
 
       <Section icon={Building2} title="Business">
         <div className="grid sm:grid-cols-2 gap-3">

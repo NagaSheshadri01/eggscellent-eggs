@@ -59,7 +59,10 @@ const Checkout = () => {
     enabled: !!selectedAddr && !!deliveryConfig
   });
 
-  const deliveryFee = dynamicDeliveryFee !== null && dynamicDeliveryFee !== undefined ? dynamicDeliveryFee : (appSettings?.delivery?.delivery_fee ?? 29);
+  const deliveryFeeConfig = dynamicDeliveryFee !== null && dynamicDeliveryFee !== undefined ? dynamicDeliveryFee : 30;
+  
+  const isDeliveryFree = discount > 0 ? false : false; // Temporarily using discount or offers for this later, but for now we enforce the tiered fee
+  const deliveryFee = deliveryFeeConfig;
   const calculatedDiscount = discount;
   const grand = Math.max(0, total + deliveryFee - calculatedDiscount);
 

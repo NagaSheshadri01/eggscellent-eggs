@@ -89,9 +89,8 @@ const CartDrawer = () => {
   }, [items]);
 
   const deliveryFeeConfig = dynamicDeliveryFee !== null && dynamicDeliveryFee !== undefined ? dynamicDeliveryFee : 30;
-  const freeDeliveryThreshold = appSettings?.delivery?.free_delivery_threshold ?? 199;
 
-  const isDeliveryFree = total >= freeDeliveryThreshold || offerResult.isDeliveryFree;
+  const isDeliveryFree = offerResult.isDeliveryFree;
   const deliveryFee = isDeliveryFree ? 0 : deliveryFeeConfig;
   const finalTotal = grandTotal + deliveryFee;
 
