@@ -75,9 +75,10 @@ type Props = {
   onSelect?: (id: string) => void;
   showSelect?: boolean; // if true, list shows radio for checkout selection
   manageMode?: boolean; // if true, list shows edit/delete/default actions
+  onFormToggle?: (isOpen: boolean) => void;
 };
 
-export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manageMode = false }: Props) => {
+export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manageMode = false, onFormToggle }: Props) => {
   const { user } = useAuth();
   const [list, setList] = useState<Address[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -113,6 +114,12 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [user?.id]);
+
+  useEffect(() => {
+    if (onFormToggle) {
+      onFormToggle(mode !== "list" && mode !== "choose");
+    }
+  }, [mode, onFormToggle]);
 
   // Simple Profile Auto-fill (phone, name, email)
   useEffect(() => {

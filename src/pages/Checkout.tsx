@@ -99,6 +99,7 @@ const Checkout = () => {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [addrServiceable, setAddrServiceable] = useState(true);
   const [checkingAddr, setCheckingAddr] = useState(false);
+  const [isAddressFormOpen, setIsAddressFormOpen] = useState(false);
 
   // Sync address from cart drawer pre-selection
   useEffect(() => {
@@ -370,7 +371,19 @@ const Checkout = () => {
         {/* Address */}
         <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4" onClick={() => setStep(s => Math.max(s, 1))}>
           <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><MapPin className="w-5 h-5 text-primary" /> Delivery address</h2>
-          <AddressPicker showSelect selectedId={selectedAddr} onSelect={(id) => { setSelectedAddr(id); setStep(s => Math.max(s, 2)); }} />
+          <AddressPicker 
+            showSelect 
+            selectedId={selectedAddr} 
+            onSelect={(id) => { 
+              setSelectedAddr(id); 
+              setStep(s => Math.max(s, 2)); 
+              setIsAddressFormOpen(false);
+            }} 
+            onFormToggle={(isOpen) => {
+              setIsAddressFormOpen(isOpen);
+              if (isOpen) setSelectedAddr("");
+            }}
+          />
         </section>
 
         {/* Slot */}
@@ -566,7 +579,12 @@ const Checkout = () => {
               <div className="text-xs text-muted-foreground">{hasSubscriptionInCart ? 'Per Delivery' : 'Total'}</div>
               <div className="font-display font-bold text-brown text-xl">{hasSubscriptionInCart ? `₹${perDeliveryCost}` : `₹${grand}`}</div>
             </div>
-            {hasSubscriptionInCart && isShortfundedForFirstDelivery ? (
+            
+            {isAddressFormOpen ? (
+              <div className="flex-[2] text-center py-3 bg-amber-50 text-amber-700 text-xs font-semibold rounded-xl border border-amber-100 flex items-center justify-center">
+                Please save your new address details above to unlock payment.
+              </div>
+            ) : hasSubscriptionInCart && isShortfundedForFirstDelivery ? (
               <Button
                 variant="hero" size="lg" className="flex-[2] !bg-amber-500 hover:!bg-amber-600 !text-white !border-amber-600"
                 onClick={() => nav(`/account/wallet?redirect=/checkout&recharge=${minimumNeededToActivate}`)}

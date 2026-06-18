@@ -55,6 +55,7 @@ const CartDrawer = () => {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [addrServiceable, setAddrServiceable] = useState(true);
   const [checkingAddr, setCheckingAddr] = useState(false);
+  const [isAddressFormOpen, setIsAddressFormOpen] = useState(false);
   const [selectedWeeklyDay, setSelectedWeeklyDay] = useState<number>(3); // Default to Wednesday [3]
   const placedRef = useRef(false);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -603,7 +604,11 @@ const CartDrawer = () => {
                       <AddressPicker
                         showSelect
                         selectedId={selectedAddressId}
-                        onSelect={(id) => { setSelectedAddressId(id); setAddrServiceable(true); }}
+                        onSelect={(id) => { setSelectedAddressId(id); setAddrServiceable(true); setIsAddressFormOpen(false); }}
+                        onFormToggle={(isOpen) => {
+                          setIsAddressFormOpen(isOpen);
+                          if (isOpen) setSelectedAddressId("");
+                        }}
                       />
                     </div>
                   </div>
@@ -796,19 +801,25 @@ const CartDrawer = () => {
                   </div>
                 )}
                 {step === "address" && (
-                  <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk"
-                    onClick={goToSlots}
-                    disabled={!selectedAddressId || checkingAddr || !addrServiceable || soldOut}
-                  >
-                    {checkingAddr
-                      ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Checking…</>
-                      : !addrServiceable
-                        ? "Area Not Serviceable"
-                        : soldOut
-                          ? "Sold Out for Today"
-                          : <>Proceed to Payment <ChevronRight className="w-5 h-5 ml-1" /></>
-                    }
-                  </Button>
+                  isAddressFormOpen ? (
+                    <div className="w-full text-center py-3 bg-amber-50 text-amber-700 text-xs font-semibold rounded-xl border border-amber-100">
+                      Please save your new address details above to unlock payment.
+                    </div>
+                  ) : (
+                    <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk"
+                      onClick={goToSlots}
+                      disabled={!selectedAddressId || checkingAddr || !addrServiceable || soldOut}
+                    >
+                      {checkingAddr
+                        ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Checking…</>
+                        : !addrServiceable
+                          ? "Area Not Serviceable"
+                          : soldOut
+                            ? "Sold Out for Today"
+                            : <>Proceed to Payment <ChevronRight className="w-5 h-5 ml-1" /></>
+                      }
+                    </Button>
+                  )
                 )}
                 {step === "slots" && (
                   <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk"
