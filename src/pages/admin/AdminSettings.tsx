@@ -278,12 +278,22 @@ const DistancePricingManager = () => {
     }
   });
 
-  const [storeLat, setStoreLat] = useState("");
-  const [storeLng, setStoreLng] = useState("");
-  const [minOrderValue, setMinOrderValue] = useState("");
-  const [tiers, setTiers] = useState<Array<{ from_km: number; to_km: number; price: number }>>([]);
+  const [minOrderValue, setMinOrderValue] = useState<number>(150);
+  const [storeAnchor, setStoreAnchor] = useState({ lat: 17.5011000, lng: 78.5020000 });
+  const [deliveryTiers, setDeliveryTiers] = useState<Array<{ from_km: any; to_km: any; price: any }>>([]);
   const [newTier, setNewTier] = useState({ from_km: "", to_km: "", price: "" });
   const [isDetecting, setIsDetecting] = useState(false);
+
+  useEffect(() => {
+    if (config) {
+      setStoreAnchor({
+        lat: config.store_latitude || 17.5011000,
+        lng: config.store_longitude || 78.5020000
+      });
+      setMinOrderValue(config.min_order_value || 150);
+      setDeliveryTiers(config.delivery_tiers || []);
+    }
+  }, [config]);
 
   const handleLocationDiscovery = () => {
     setIsDetecting(true);
@@ -294,8 +304,7 @@ const DistancePricingManager = () => {
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setStoreLat(position.coords.latitude.toString());
-        setStoreLng(position.coords.longitude.toString());
+        setStoreAnchor({ lat: position.coords.latitude, lng: position.coords.longitude });
         setIsDetecting(false);
         toast.success("Store location detected via GPS!");
       },
@@ -307,145 +316,171 @@ const DistancePricingManager = () => {
     );
   };
 
-  useEffect(() => {
-    if (config) {
-      setStoreLat(config.store_latitude?.toString() || "");
-      setStoreLng(config.store_longitude?.toString() || "");
-      setMinOrderValue(config.min_order_value?.toString() || "150");
-      setTiers(config.delivery_tiers || []);
-    }
-  }, [config]);
-
-  const saveConfig = async () => {
+  const handleSaveCoreConfig = async () => {
     try {
-      const { error } = await (supabase.from("delivery_config") as any).upsert({ 
-        id: 1, 
-        store_latitude: Number(storeLat), 
-        store_longitude: Number(storeLng),
-        min_order_value: Number(minOrderValue),
-        delivery_tiers: tiers
-      });
+      const { error } = await (supabase as any)
+        .from('delivery_config')
+        .update({
+          store_latitude: parseFloat(storeAnchor.lat.toString()),
+          store_longitude: parseFloat(storeAnchor.lng.toString()),
+          min_order_value: Number(minOrderValue)
+        })
+        .eq('id', 1);
+
       if (error) throw error;
-      toast.success("Logistics configuration saved securely!");
+      toast.success("Core warehouse configurations updated successfully!");
       refetchConfig();
-    } catch (e: any) { toast.error(e.message); }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Core configuration save failed: ${err.message}`);
+    }
+  };
+
+  const handleSavePricingTiers = async () => {
+    try {
+      const sanitizedTiers = deliveryTiers.map(tier => ({
+        from_km: Number(tier.from_km),
+        to_km: Number(tier.to_km),
+        price: Number(tier.price)
+      })).sort((a, b) => a.from_km - b.from_km);
+
+      const { error } = await (supabase as any)
+        .from('delivery_config')
+        .update({
+          delivery_tiers: sanitizedTiers
+        })
+        .eq('id', 1);
+
+      if (error) throw error;
+      setDeliveryTiers(sanitizedTiers);
+      toast.success("Distance pricing tiers locked and saved to database!");
+      refetchConfig();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Failed to save pricing matrix: ${err.message}`);
+    }
   };
 
   const addTier = () => {
     if (newTier.from_km === "" || newTier.to_km === "" || newTier.price === "") return toast.error("Fill all fields");
-    const updatedTiers = [...tiers, { from_km: Number(newTier.from_km), to_km: Number(newTier.to_km), price: Number(newTier.price) }];
-    updatedTiers.sort((a, b) => a.from_km - b.from_km);
-    setTiers(updatedTiers);
+    const updatedTiers = [...deliveryTiers, { from_km: Number(newTier.from_km), to_km: Number(newTier.to_km), price: Number(newTier.price) }];
+    updatedTiers.sort((a, b) => Number(a.from_km) - Number(b.from_km));
+    setDeliveryTiers(updatedTiers);
     setNewTier({ from_km: "", to_km: "", price: "" });
   };
 
-  const updateTier = (index: number, field: string, val: number) => {
-    const updated = [...tiers];
+  const updateTier = (index: number, field: string, val: any) => {
+    const updated = [...deliveryTiers];
     updated[index] = { ...updated[index], [field]: val };
-    setTiers(updated);
+    setDeliveryTiers(updated);
   };
 
   const deleteTier = (index: number) => {
     if (!confirm("Delete this pricing tier?")) return;
-    const updated = [...tiers];
+    const updated = [...deliveryTiers];
     updated.splice(index, 1);
-    setTiers(updated);
+    setDeliveryTiers(updated);
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-secondary/10 p-4 rounded-xl border border-border">
-        <h3 className="font-semibold text-brown mb-3 flex items-center gap-2"><MapPin className="w-4 h-4" /> Store Anchor Coordinates</h3>
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <Label>Latitude</Label>
-            <Input type="number" step="0.0000001" value={storeLat} onChange={e => setStoreLat(e.target.value)} placeholder="17.5011000" />
+    <div className="space-y-8 p-6 max-w-4xl mx-auto">
+      
+      {/* CARD 1: CORE CONFIGURATION & ANCHOR */}
+      <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+        <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2"><MapPin className="w-5 h-5 text-amber-600" /> Store Anchor & Core Rules</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-stone-500">Latitude</label>
+            <input type="number" step="0.0000001" value={storeAnchor.lat} onChange={(e) => setStoreAnchor({...storeAnchor, lat: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg mt-1 bg-stone-50" />
           </div>
-          <div className="flex-1">
-            <Label>Longitude</Label>
-            <Input type="number" step="0.0000001" value={storeLng} onChange={e => setStoreLng(e.target.value)} placeholder="78.5020000" />
+          <div>
+            <label className="text-xs font-semibold text-stone-500">Longitude</label>
+            <input type="number" step="0.0000001" value={storeAnchor.lng} onChange={(e) => setStoreAnchor({...storeAnchor, lng: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg mt-1 bg-stone-50" />
           </div>
-          <div className="flex-1">
-            <Label>Minimum Order Value (₹)</Label>
-            <Input type="number" step="1" value={minOrderValue} onChange={e => setMinOrderValue(e.target.value)} placeholder="150" />
+          <div>
+            <label className="text-xs font-semibold text-stone-500">Minimum Order Value (₹)</label>
+            <input type="number" step="1" value={minOrderValue} onChange={(e) => setMinOrderValue(Number(e.target.value))} className="w-full p-2 border rounded-lg mt-1 bg-stone-50" />
           </div>
         </div>
-        <div className="flex gap-3 mt-3">
-          <Button variant="outline" className="flex-1" onClick={handleLocationDiscovery} disabled={isDetecting}>
-            {isDetecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Navigation className="w-4 h-4 mr-2 text-primary" />} Auto-Detect Anchor
-          </Button>
-          <Button variant="hero" className="flex-1" onClick={saveConfig}>Save Anchor</Button>
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">The central warehouse coordinates from where all Haversine distances are calculated.</p>
 
-        <div className="mt-4 w-full h-64 rounded-xl overflow-hidden border border-border z-0 relative shadow-inner">
-          <MapContainer center={[Number(storeLat) || 17.5011, Number(storeLng) || 78.5020]} zoom={15} style={{ height: "100%", width: "100%", zIndex: 0 }} attributionControl={false}>
-            <TileLayer
-              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
-              attribution='&copy; <a href="https://maps.google.com">Google Maps</a>'
-            />
+        <div className="flex gap-3 mt-2">
+          <Button variant="outline" className="flex-1 bg-white border-stone-200 hover:bg-stone-50 text-stone-700" onClick={handleLocationDiscovery} disabled={isDetecting}>
+            {isDetecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Navigation className="w-4 h-4 mr-2" />} Auto-Detect Anchor
+          </Button>
+        </div>
+
+        <div className="mt-4 w-full h-64 rounded-xl overflow-hidden border border-stone-200 z-0 relative shadow-inner">
+          <MapContainer center={[storeAnchor.lat || 17.5011, storeAnchor.lng || 78.5020]} zoom={15} style={{ height: "100%", width: "100%", zIndex: 0 }} attributionControl={false}>
+            <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution='&copy; <a href="https://maps.google.com">Google Maps</a>' />
             <AttributionControl prefix={false} />
-            <MapController center={{ lat: Number(storeLat) || 17.5011, lng: Number(storeLng) || 78.5020 }} />
-            {storeLat && storeLng && (
+            <MapController center={{ lat: storeAnchor.lat || 17.5011, lng: storeAnchor.lng || 78.5020 }} />
+            {storeAnchor.lat && storeAnchor.lng && (
               <DraggableMarker 
-                position={[Number(storeLat), Number(storeLng)]} 
-                setPosition={(pos: any) => { 
-                  setStoreLat(pos.lat.toString()); 
-                  setStoreLng(pos.lng.toString()); 
-                }} 
+                position={[storeAnchor.lat, storeAnchor.lng]} 
+                setPosition={(pos: any) => setStoreAnchor({ lat: pos.lat, lng: pos.lng })} 
               />
             )}
           </MapContainer>
-          <div className="absolute top-2 left-2 right-2 bg-background/90 backdrop-blur text-xs p-2 rounded-lg border shadow-sm text-center font-medium z-[1000] pointer-events-none">
-            Drag the pin precisely over your warehouse/store location.
+          <div className="absolute top-2 left-2 right-2 bg-white/90 backdrop-blur text-xs p-2 rounded-lg border border-stone-200 shadow-sm text-center font-medium z-[1000] pointer-events-none text-stone-700">
+            Drag the pin precisely over your warehouse location.
           </div>
         </div>
+
+        <button onClick={handleSaveCoreConfig} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-all shadow-sm mt-2">
+          Save Core Settings
+        </button>
       </div>
 
-      <div>
-        <h3 className="font-semibold text-brown mb-3 flex items-center gap-2"><Truck className="w-4 h-4" /> Distance Pricing Tiers</h3>
+      {/* CARD 2: STEP-TIER DISTANCE PRICING MATRIX */}
+      <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
+        <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2"><Truck className="w-5 h-5 text-stone-700" /> Distance Pricing Tiers Matrix</h3>
         
-        <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-3 mb-4 items-end bg-primary/5 p-4 rounded-xl border border-primary/20">
+        <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-3 mb-4 items-end bg-stone-50 p-4 rounded-xl border border-stone-200">
           <div>
-            <Label className="text-primary">From (km)</Label>
-            <Input type="number" step="0.1" value={newTier.from_km} onChange={e => setNewTier({...newTier, from_km: e.target.value})} placeholder="e.g. 0" />
+            <label className="text-xs font-semibold text-stone-500">From (km)</label>
+            <input type="number" step="0.1" value={newTier.from_km} onChange={e => setNewTier({...newTier, from_km: e.target.value})} placeholder="e.g. 0" className="w-full p-2 border rounded-lg mt-1 bg-white" />
           </div>
           <div>
-            <Label className="text-primary">To (km)</Label>
-            <Input type="number" step="0.1" value={newTier.to_km} onChange={e => setNewTier({...newTier, to_km: e.target.value})} placeholder="e.g. 3" />
+            <label className="text-xs font-semibold text-stone-500">To (km)</label>
+            <input type="number" step="0.1" value={newTier.to_km} onChange={e => setNewTier({...newTier, to_km: e.target.value})} placeholder="e.g. 3" className="w-full p-2 border rounded-lg mt-1 bg-white" />
           </div>
           <div>
-            <Label className="text-primary">Delivery Fee (₹)</Label>
-            <Input type="number" step="1" value={newTier.price} onChange={e => setNewTier({...newTier, price: e.target.value})} placeholder="e.g. 30" />
+            <label className="text-xs font-semibold text-stone-500">Delivery Fee (₹)</label>
+            <input type="number" step="1" value={newTier.price} onChange={e => setNewTier({...newTier, price: e.target.value})} placeholder="e.g. 30" className="w-full p-2 border rounded-lg mt-1 bg-white" />
           </div>
-          <Button variant="default" onClick={addTier}><Plus className="w-4 h-4 mr-1" /> Add Tier</Button>
+          <Button variant="default" onClick={addTier} className="bg-stone-800 hover:bg-stone-900 text-white h-[42px]"><Plus className="w-4 h-4 mr-1" /> Add Tier</Button>
         </div>
 
         <div className="space-y-2">
-          {tiers.map((tier, idx) => (
-            <div key={idx} className="flex gap-3 items-center bg-card p-3 rounded-xl border border-border">
+          {deliveryTiers.map((tier, idx) => (
+            <div key={idx} className="flex gap-3 items-center bg-white p-3 rounded-xl border border-stone-200">
               <div className="flex-1 flex gap-3">
                 <div className="flex-1">
-                  <Label className="text-[10px] text-muted-foreground uppercase">From (km)</Label>
-                  <Input type="number" step="0.1" value={tier.from_km} onChange={e => updateTier(idx, 'from_km', Number(e.target.value))} />
+                  <label className="text-[10px] text-stone-500 uppercase font-bold">From (km)</label>
+                  <input type="number" step="0.1" value={tier.from_km} onChange={e => updateTier(idx, 'from_km', e.target.value)} className="w-full p-2 border rounded-lg mt-1 bg-stone-50" />
                 </div>
                 <div className="flex-1">
-                  <Label className="text-[10px] text-muted-foreground uppercase">To (km)</Label>
-                  <Input type="number" step="0.1" value={tier.to_km} onChange={e => updateTier(idx, 'to_km', Number(e.target.value))} />
+                  <label className="text-[10px] text-stone-500 uppercase font-bold">To (km)</label>
+                  <input type="number" step="0.1" value={tier.to_km} onChange={e => updateTier(idx, 'to_km', e.target.value)} className="w-full p-2 border rounded-lg mt-1 bg-stone-50" />
                 </div>
                 <div className="flex-1">
-                  <Label className="text-[10px] text-muted-foreground uppercase">Fee (₹) (0 = Free)</Label>
-                  <Input type="number" step="1" value={tier.price} onChange={e => updateTier(idx, 'price', Number(e.target.value))} />
+                  <label className="text-[10px] text-stone-500 uppercase font-bold">Fee (₹) (0 = Free)</label>
+                  <input type="number" step="1" value={tier.price} onChange={e => updateTier(idx, 'price', e.target.value)} className="w-full p-2 border rounded-lg mt-1 bg-stone-50" />
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="mt-5" onClick={() => deleteTier(idx)}>
-                <Trash2 className="w-4 h-4 text-destructive" />
+              <Button variant="ghost" size="icon" className="mt-6 hover:bg-red-50" onClick={() => deleteTier(idx)}>
+                <Trash2 className="w-4 h-4 text-red-500" />
               </Button>
             </div>
           ))}
-          {tiers.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No pricing tiers defined. Add a tier to start charging.</p>}
+          {deliveryTiers.length === 0 && <p className="text-sm text-center text-stone-500 py-4 font-medium">No pricing tiers defined. Add a tier to start charging.</p>}
         </div>
+
+        <button onClick={handleSavePricingTiers} className="w-full py-2.5 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-xl transition-all shadow-sm mt-4">
+          Save Distance Pricing Matrix
+        </button>
       </div>
+
     </div>
   );
 };
