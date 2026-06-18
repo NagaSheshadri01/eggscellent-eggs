@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-const STATUSES = ["placed","confirmed","packed","out_for_delivery","delivered","cancelled"];
+const STATUSES = ["placed","confirmed","packed","out_for_delivery","delivered","cancelled","refunded"];
 
 const AdminOrderDetail = () => {
   const { id } = useParams();
