@@ -16,16 +16,23 @@ export const evaluateTieredDeliveryFee = (
   userCoords: { lat: number; lng: number } | null | undefined,
   configuredTiers: Array<{ from_km: number; to_km: number; price: number }>
 ): number => {
-  // Clean baseline fallback placeholder if coords are missing or no tiers provided
-  if (!userCoords?.lat || !userCoords?.lng || !storeCoords?.lat || !storeCoords?.lng || !configuredTiers || configuredTiers.length === 0) return 30; 
+  if (!userCoords?.lat || !userCoords?.lng || !storeCoords?.lat || !storeCoords?.lng || !configuredTiers || configuredTiers.length === 0) {
+    return 30; // Standard reliable default fallback
+  }
 
-  const calculatedDistance = getHaversineDistance(storeCoords.lat, storeCoords.lng, userCoords.lat, userCoords.lng);
+  // Calculate precise straight-line distance via Haversine
+  const distance = getHaversineDistance(storeCoords.lat, storeCoords.lng, userCoords.lat, userCoords.lng);
 
-  // Scan the admin's custom JSONB tier arrays for a matching range intersection
+  // 1. Attempt to find an exact interval match: [from_km, to_km)
   const matchedTier = configuredTiers.find(
-    tier => calculatedDistance >= Number(tier.from_km) && calculatedDistance < Number(tier.to_km)
+    tier => distance >= Number(tier.from_km) && distance < Number(tier.to_km)
   );
 
-  // Return the explicit tier price. If distance falls completely out of bounds, default to a max zone parameter.
-  return matchedTier ? Number(matchedTier.price) : 60;
+  if (matchedTier) {
+    return Number(matchedTier.price);
+  }
+
+  // 2. OUT OF BOUNDS SAFE FALLBACK: Pick the highest pricing tier cap in the array
+  const sortedTiers = [...configuredTiers].sort((a, b) => Number(b.price) - Number(a.price));
+  return Number(sortedTiers[0].price);
 };

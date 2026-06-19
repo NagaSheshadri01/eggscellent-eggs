@@ -104,6 +104,7 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
       .from("addresses")
       .select("*")
       .eq("user_id", user.id)
+      .eq("is_deleted", false)
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: false });
     const rows = (data ?? []) as Address[];
@@ -305,10 +306,17 @@ export const AddressPicker = ({ selectedId, onSelect, showSelect = false, manage
 
   const del = async (id: string) => {
     if (!confirm("Delete this address?")) return;
-    const { error } = await (supabase as any).from("addresses").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Deleted");
-    load();
+    try {
+      const { error } = await (supabase as any)
+        .from("addresses")
+        .update({ is_deleted: true })
+        .eq("id", id);
+      if (error) throw error;
+      toast.success("Address removed successfully.");
+      load();
+    } catch (err: any) {
+      toast.error(`Could not remove address: ${err.message}`);
+    }
   };
 
   const setDefault = async (id: string) => {
