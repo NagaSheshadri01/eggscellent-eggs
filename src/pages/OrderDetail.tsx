@@ -19,7 +19,7 @@ const OrderDetail = () => {
   const [params] = useSearchParams();
   const success = params.get("success") === "1";
   const { user } = useAuth();
-  const { add } = useCart();
+  const { add, clear } = useCart();
   const nav = useNavigate();
   const [order, setOrder] = useState<any | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -35,6 +35,7 @@ const OrderDetail = () => {
   }, [id, user]);
 
   const reorder = () => {
+    clear(); // Clear existing cart first
     items.forEach(it => add({
       id: it.product_id || it.id,
       name: it.product_name,
