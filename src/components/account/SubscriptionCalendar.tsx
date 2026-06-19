@@ -129,54 +129,60 @@ const HorizontalCalendarLedger = () => {
         ) : (
           <div className="space-y-3">
             {dailyDeliveries.map((item: any) => {
-               // Find matching product detail from the cache
-               const pDetails = products.find((p: any) => p.slug === item.product_slug);
-               const name = item.products?.name || pDetails?.name || item.product_slug;
-               const imageUrl = item.products?.image_url || pDetails?.image_url;
-               
-               return (
-                <div key={item.id || item.product_slug} className="bg-white p-4 rounded-2xl border border-stone-200/60 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-stone-100 rounded-xl overflow-hidden flex items-center justify-center font-bold text-stone-400">
-                      {imageUrl ? <img src={imageUrl} alt={name} className="w-full h-full object-cover" /> : "🥚"}
+                 const pDetails = products.find((p: any) => p.slug === item.product_slug);
+                 const name = item.products?.name || pDetails?.name || item.product_slug;
+                 const imageUrl = item.products?.image_url || pDetails?.image_url;
+                 const isItemInStock = item.products?.is_in_stock !== false && pDetails?.is_in_stock !== false;
+                 
+                 return (
+                  <div key={item.id || item.product_slug} className={`bg-white p-4 rounded-2xl border flex items-center justify-between ${!isItemInStock ? 'opacity-50 bg-stone-100 border-stone-200' : 'border-stone-200/60 shadow-sm'}`}>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-stone-100 rounded-xl overflow-hidden flex items-center justify-center font-bold text-stone-400">
+                        {imageUrl ? <img src={imageUrl} alt={name} className="w-full h-full object-cover" /> : "🥚"}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-stone-800 capitalize">{name}</h4>
+                        <p className="text-[10px] font-mono text-stone-500">₹{item.effective_price?.toFixed(2)} / unit</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-stone-800 capitalize">{name}</h4>
-                      <p className="text-[10px] font-mono text-stone-500">₹{item.effective_price?.toFixed(2)} / unit</p>
+                    <div className="flex flex-col items-end space-y-2">
+                      {item.subscription_id ? (
+                        <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100">
+                          🔄 Recurring
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
+                          📦 One-Time Edit
+                        </span>
+                      )}
+                      
+                      {!isItemInStock ? (
+                        <span className="text-xs font-extrabold text-red-500 bg-red-50 px-3 py-1 rounded-lg border border-red-100">
+                          Out of Stock
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl p-1 shadow-sm shrink-0">
+                          <button 
+                            onClick={() => handleUpdateVolume(item, -1)} 
+                            disabled={updateVolume.isPending || item.quantity <= 0} 
+                            className="w-6 h-6 grid place-items-center rounded-lg hover:bg-stone-200 text-stone-700 disabled:opacity-50 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
+                          <button 
+                            onClick={() => handleUpdateVolume(item, 1)} 
+                            disabled={updateVolume.isPending} 
+                            className="w-6 h-6 grid place-items-center rounded-lg hover:bg-stone-200 text-stone-700 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end space-y-2">
-                    {item.subscription_id ? (
-                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100">
-                        🔄 Recurring
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
-                        📦 One-Time Edit
-                      </span>
-                    )}
-                    {/* Inline volume modifier replaces the static text */}
-                    <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl p-1 shadow-sm shrink-0">
-                      <button 
-                        onClick={() => handleUpdateVolume(item, -1)} 
-                        disabled={updateVolume.isPending || item.quantity <= 0} 
-                        className="w-6 h-6 grid place-items-center rounded-lg hover:bg-stone-200 text-stone-700 disabled:opacity-50 transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
-                      <button 
-                        onClick={() => handleUpdateVolume(item, 1)} 
-                        disabled={updateVolume.isPending} 
-                        className="w-6 h-6 grid place-items-center rounded-lg hover:bg-stone-200 text-stone-700 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         )}
       </div>

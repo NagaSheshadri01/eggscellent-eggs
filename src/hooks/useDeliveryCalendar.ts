@@ -41,7 +41,7 @@ export const useDeliveryCalendar = () => {
       // 2. Fetch existing ledger entries for these subscriptions (exclude cancelled)
       const { data: ledger, error: ledgerError } = await (supabase as any)
         .from("delivery_ledger")
-        .select("*")
+        .select("*, products(name, image_url, price, is_in_stock)")
         .in("subscription_id", subs.map((s: any) => s.id))
         .neq("status", "cancelled")
         .order("delivery_date", { ascending: true });
@@ -104,8 +104,8 @@ export const useDeliveryCalendar = () => {
           // Refetch to return the fully seeded ledger
           const { data: seededLedger } = await (supabase as any)
             .from("delivery_ledger")
-            .select("*")
-            .in("subscription_id", subs.map((s: any) => s.id))
+        .select("*, products(name, image_url, price, is_in_stock)")
+        .in("subscription_id", subs.map((s: any) => s.id))
             .order("delivery_date", { ascending: true });
           
           return seededLedger || [];

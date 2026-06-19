@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { LayoutDashboard, Package, ShoppingBag, Users, HelpCircle, FileText, Tag, ArrowLeft, Settings, Truck, Repeat, ShieldCheck, Sparkles, Navigation } from "lucide-react";
 import Seo from "@/components/Seo";
@@ -17,7 +20,38 @@ const items = [
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
-const AdminLayout = () => (
+const AdminLayout = () => {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const ledgerChannel = supabase
+      .channel('admin-ledger-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'delivery_ledger' },
+        (payload) => {
+          queryClient.invalidateQueries({ queryKey: ["admin-logistics-manifest-today"] });
+          queryClient.invalidateQueries({ queryKey: ["tomorrow-dispatch-manifest"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-logistics-customers"] });
+          queryClient.invalidateQueries({ queryKey: ["orders"] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          queryClient.invalidateQueries({ queryKey: ["orders"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ledgerChannel);
+    };
+  }, [queryClient]);
+
+  return (
+
   <div className="min-h-screen bg-secondary/30 flex w-full">
     <Seo title="Admin — Eggscellent" />
     <aside className="w-60 shrink-0 hidden md:flex flex-col bg-card border-r border-border p-4">
@@ -40,6 +74,7 @@ const AdminLayout = () => (
       <Outlet />
     </main>
   </div>
-);
+  );
+};
 
 export default AdminLayout;
