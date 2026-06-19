@@ -435,7 +435,13 @@ const CartDrawer = () => {
                 </div>
                 <p className="font-display font-semibold text-brown">Your cart is empty</p>
                 <p className="text-sm text-muted-foreground mt-1">Add some farm-fresh eggs to get started.</p>
-                <Button variant="hero" className="mt-6" onClick={() => { setOpen(false); nav("/"); }}>Browse Products</Button>
+                <Button variant="hero" className="mt-6" onClick={() => { 
+                    setOpen(false); 
+                    nav("/#products");
+                    setTimeout(() => {
+                      document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
+                    }, 100);
+                  }}>Browse Products</Button>
               </div>
             </div>
           ) : (
