@@ -6,6 +6,7 @@ import { useCart } from "@/context/CartContext";
 import Header from "@/components/site/Header";
 import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Check, CheckCircle2, Package, Truck, MapPin, Repeat } from "lucide-react";
 
@@ -19,7 +20,7 @@ const OrderDetail = () => {
   const [params] = useSearchParams();
   const success = params.get("success") === "1";
   const { user } = useAuth();
-  const { add, clear } = useCart();
+  const { add, clear, setOpen } = useCart();
   const nav = useNavigate();
   const [order, setOrder] = useState<any | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -44,7 +45,8 @@ const OrderDetail = () => {
       price: Number(it.price),
       discountPrice: Number(it.price),
     }, "instant"));
-    nav("/checkout");
+    setOpen(true);
+    toast.success("Past items added to your cart! Proceed through standard checkout validation steps.");
   };
 
   const currentIdx = order ? STATUSES.indexOf(order.order_status) : -1;

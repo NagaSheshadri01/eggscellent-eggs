@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { Loader2, Calendar, MapPin, RefreshCw, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Settings, PauseCircle, PlayCircle, XCircle } from "lucide-react";
 
 type SubscriptionContract = {
   id: string;
@@ -46,6 +49,8 @@ const AccountSubscriptions = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [pauseModal, setPauseModal] = useState<{ open: boolean; subId: string; status: string }>({ open: false, subId: "", status: "" });
+  const [cancelModal, setCancelModal] = useState<{ open: boolean; subId: string }>({ open: false, subId: "" });
+  const [cancelText, setCancelText] = useState("");
 
   const { data: contracts = [], isLoading, error, refetch } = useQuery<SubscriptionContract[]>({
     queryKey: ["user-subscriptions", user?.id],
@@ -197,12 +202,9 @@ const AccountSubscriptions = () => {
   });
 
   const handleCancel = (subId: string) => {
-    const ok = window.confirm(
-      "⚠️ Are you absolutely sure you want to cancel this subscription? This will immediately halt all future recurring deliveries and cancel upcoming routes."
-    );
-    if (ok) {
-      cancelMutation.mutate(subId);
-    }
+    cancelMutation.mutate(subId);
+    setCancelModal({ open: false, subId: "" });
+    setCancelText("");
   };
 
   const handlePauseIntercept = (subId: string, status: string) => {
@@ -286,7 +288,7 @@ const AccountSubscriptions = () => {
         return (
           <div 
             key={sub.id} 
-            className={`bg-card rounded-3xl border shadow-soft overflow-hidden transition-all duration-300 ${
+            className={`relative bg-card rounded-3xl border shadow-soft overflow-hidden transition-all duration-300 ${
               sub.status === "cancelled" 
                 ? "border-border/30 opacity-60 grayscale" 
                 : sub.status === "paused"
@@ -294,6 +296,33 @@ const AccountSubscriptions = () => {
                 : "border-border/60 hover:border-primary/30"
             }`}
           >
+            {/* Top-right Settings Icon */}
+            {sub.status !== "cancelled" && (
+              <div className="absolute top-4 right-4 z-10">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 hover:bg-secondary/60">
+                      <Settings className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-soft border-border/60">
+                    <DropdownMenuItem 
+                      onClick={() => handlePauseIntercept(sub.id, sub.status)}
+                      className="cursor-pointer py-2.5 rounded-lg font-medium text-xs flex items-center"
+                    >
+                      {sub.status === "active" ? <PauseCircle className="w-4 h-4 mr-2" /> : <PlayCircle className="w-4 h-4 mr-2" />} 
+                      {sub.status === "active" ? "Pause Subscription" : "Resume Subscription"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => { setCancelModal({ open: true, subId: sub.id }); setCancelText(""); }}
+                      className="cursor-pointer py-2.5 rounded-lg font-medium text-xs flex items-center text-red-600 focus:text-red-700 focus:bg-red-50"
+                    >
+                      <XCircle className="w-4 h-4 mr-2" /> Cancel Subscription
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
             {/* Top info row */}
             <div className="p-5 sm:p-6 border-b border-border/40 flex gap-4 items-start">
               <img 
@@ -371,21 +400,7 @@ const AccountSubscriptions = () => {
             {/* Actions row */}
             {sub.status !== "cancelled" && (
               <div className="px-5 py-4 bg-secondary/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-                {/* A. Vacation Pause/Resume */}
-                <Button 
-                  size="sm"
-                  variant={sub.status === "active" ? "secondary" : "hero"}
-                  className="font-bold rounded-xl h-9"
-                  disabled={togglePauseMutation.isPending}
-                  onClick={() => handlePauseIntercept(sub.id, sub.status)}
-                >
-                  {togglePauseMutation.isPending && (
-                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  )}
-                  {sub.status === "active" ? "⏸️ Pause Subscription" : "▶️ Resume Deliveries"}
-                </Button>
-
-                {/* B. Customer Day Recalibrator */}
+                {/* A. Customer Day Recalibrator (only) */}
                 {(isWeekly || isAlternate) && (
                   <div className="flex flex-col items-center sm:items-end gap-1.5 shrink-0">
                     <span className="text-[9px] text-muted-foreground uppercase font-bold">Your Delivery Days</span>
@@ -482,27 +497,43 @@ const AccountSubscriptions = () => {
         </div>
       )}
 
-      {/* D. Dark Pattern Cancellation */}
-      <div className="mt-16 pt-8 border-t border-border/20">
-        <details className="group opacity-40 hover:opacity-100 transition-opacity">
-          <summary className="text-[10px] cursor-pointer text-muted-foreground list-none select-none text-center">
-            Advanced Billing Details & Compliance
-          </summary>
-          <div className="mt-4 flex flex-col items-center gap-3">
-            {contracts.filter(c => c.status !== "cancelled").map(c => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => handleCancel(c.id)}
-                disabled={cancelMutation.isPending}
-                className="text-[10px] text-muted-foreground/60 hover:text-red-500 transition-colors"
+      {cancelModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-card border border-border rounded-3xl p-6 max-w-sm w-full shadow-card animate-scale-in text-center space-y-4">
+            <h4 className="font-display font-bold text-lg text-brown leading-tight">
+              Cancel Subscription
+            </h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Type 'cancel' below to confirm subscription termination. This will immediately halt all future deliveries.
+            </p>
+            <Input 
+              autoFocus
+              className="mt-2 text-center" 
+              placeholder="cancel" 
+              value={cancelText} 
+              onChange={e => setCancelText(e.target.value)} 
+            />
+            <div className="flex flex-col gap-3 pt-2">
+              <Button
+                variant="destructive"
+                className="w-full rounded-xl font-bold"
+                disabled={cancelText.trim().toLowerCase() !== "cancel" || cancelMutation.isPending}
+                onClick={() => handleCancel(cancelModal.subId)}
               >
-                Terminate agreement for {c.products?.name || c.product_slug}
-              </button>
-            ))}
+                {cancelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Confirm Cancellation
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full rounded-xl text-xs font-semibold text-muted-foreground hover:bg-secondary/40"
+                onClick={() => setCancelModal({ open: false, subId: "" })}
+              >
+                Go Back
+              </Button>
+            </div>
           </div>
-        </details>
-      </div>
+        </div>
+      )}
     </div>
   );
 };

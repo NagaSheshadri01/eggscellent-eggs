@@ -113,7 +113,7 @@ const CartDrawer = () => {
       const { data } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
       return data;
     },
-    enabled: !!user && hasSubscriptionInCart
+    enabled: !!user
   });
   const currentBalance = (walletData as any)?.balance || 0;
   // Only block if they can't afford a SINGLE delivery drop
@@ -435,7 +435,7 @@ const CartDrawer = () => {
                 </div>
                 <p className="font-display font-semibold text-brown">Your cart is empty</p>
                 <p className="text-sm text-muted-foreground mt-1">Add some farm-fresh eggs to get started.</p>
-                <Button variant="hero" className="mt-6" onClick={() => setOpen(false)}>Browse Products</Button>
+                <Button variant="hero" className="mt-6" onClick={() => { setOpen(false); nav("/"); }}>Browse Products</Button>
               </div>
             </div>
           ) : (
@@ -699,6 +699,7 @@ const CartDrawer = () => {
                             { v: "online", label: "Pay Online (Razorpay)", desc: "Cards, UPI, Net Banking" },
                             { v: "upi", label: "UPI", desc: "Google Pay, PhonePe, Paytm" },
                             { v: "cod", label: "Cash on Delivery", desc: "Pay when your eggs arrive", disabled: hasSubscriptionInCart },
+                            { v: "wallet", label: "Pay via Wallet Balance", desc: currentBalance < finalTotal ? `Insufficient wallet funds (Balance: ₹${currentBalance})` : `Deduct ₹${finalTotal} from your wallet`, disabled: currentBalance < finalTotal }
                           ].map(o => {
                             const isDisabled = o.disabled;
                             return (
