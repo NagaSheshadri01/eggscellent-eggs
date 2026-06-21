@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format, addDays, isSameDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Trash2 } from 'lucide-react';
 
 const HorizontalCalendarLedger = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -77,7 +78,9 @@ const HorizontalCalendarLedger = () => {
 
       if (data && data.length > 0) {
         // Filter out completely skipped/cancelled items from the active list if they exist in ledger
-        const activeRows = (data as any[]).filter(r => r.status !== 'skipped' && r.status !== 'cancelled');
+        const activeRows = (data as any[]).filter(
+          r => r.status !== 'skipped' && r.status !== 'cancelled' && r.quantity !== 0
+        );
         setDailyDeliveries(activeRows);
       } else {
         // FALLBACK: Query the subscriptions table to fill the generational break
@@ -230,6 +233,53 @@ const HorizontalCalendarLedger = () => {
     }
   };
 
+  // Dustbin exclusion delete/skip handler
+  const handleDeleteCalendarItem = async (item: any) => {
+    if (!userId) {
+      toast.error("User session missing.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const targetedDateString = `${year}-${month}-${day}`;
+
+      const isFallback = String(item.id).startsWith('sub-fallback-');
+
+      if (isFallback) {
+        // Scenario A: Virtual Fallback Item - insert ledger row with quantity 0 and status 'out_of_stock'
+        const { error } = await supabase.from('delivery_ledger').insert({
+          user_id: userId,
+          delivery_date: targetedDateString,
+          product_slug: item.product_slug,
+          subscription_id: item.subscription_id,
+          quantity: 0,
+          effective_price: item.effective_price,
+          status: 'out_of_stock'
+        } as any);
+
+        if (error) throw error;
+      } else {
+        // Scenario B: Physical Database Row - delete row
+        const { error } = await supabase
+          .from('delivery_ledger')
+          .delete()
+          .eq('id', item.id);
+
+        if (error) throw error;
+      }
+
+      toast.success("Item removed from today's schedule");
+      await fetchActiveLedgerForDate(selectedDate);
+    } catch (err: any) {
+      toast.error(`Delete failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // 4. OPERATIONAL ADDITION HANDLER: Inserts explicit user_id into ledger
   const handleAddOneTimeItem = async (slug: string) => {
     if (!userId) {
@@ -353,12 +403,14 @@ const HorizontalCalendarLedger = () => {
                 // By strictly checking the live globalProducts list, we guarantee that if an admin 
                 // deactivates a product (making it fail RLS and vanish), it instantly drops to "Out of Stock".
                 const liveProduct = globalProducts.find(p => p.slug === item.product_slug);
-                
-                const isItemInStock = !(liveProduct?.out_of_stock_subscriptions === true || item.status === 'out_of_stock');
-                
-                // Fallback to initial payload only for static visual data like name/image if it vanishes from live catalog
                 const productData = liveProduct || item.products;
 
+                // The Evaluation Rules: products.out_of_stock_subscriptions === true OR products.stock_subscriptions <= 0 OR item.status === 'out_of_stock'
+                const isOOS = productData?.out_of_stock_subscriptions === true || 
+                              (productData?.stock_subscriptions !== undefined && productData.stock_subscriptions <= 0) || 
+                              item.status === 'out_of_stock';
+                const isItemInStock = !isOOS;
+                
                 const displayPrice = item.effective_price && Number(item.effective_price) !== 0
                   ? Number(item.effective_price)
                   : Number(productData?.discounted_price || productData?.original_price || 0);
@@ -371,8 +423,6 @@ const HorizontalCalendarLedger = () => {
                   statusBadge = <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full">✅ Delivered</span>;
                 } else if (item.status === 'out_for_delivery') {
                   statusBadge = <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full animate-pulse">🚴 Out for Delivery</span>;
-                } else if (item.status === 'pending' || item.status === 'confirmed' || item.status === 'scheduled') {
-                  statusBadge = <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full border border-amber-100">⏳ Scheduled</span>;
                 } else {
                   statusBadge = <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full border border-amber-100">⏳ Scheduled</span>;
                 }
@@ -382,12 +432,12 @@ const HorizontalCalendarLedger = () => {
                     <div className="flex items-center space-x-4">
                       <div className="w-14 h-14 bg-stone-100 rounded-2xl overflow-hidden flex items-center justify-center font-bold text-stone-400 text-2xl shadow-inner border border-stone-200/50 min-w-[56px]">
                         <img 
-                          src={productData?.image_url || productData?.images?.[0] || ''} 
+                          src={productData?.image_url || 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80'} 
                           alt="Product" 
                           className="w-12 h-12 rounded-xl object-cover bg-stone-100"
                           onError={(e) => {
                             e.currentTarget.onerror = null; 
-                            e.currentTarget.src = '';
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80';
                           }}
                         />
                       </div>
@@ -405,26 +455,37 @@ const HorizontalCalendarLedger = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end space-y-2">
-                      {!isItemInStock ? (
-                        <span className="text-[10px] font-extrabold text-red-600 bg-red-50 p-2 rounded-xl border border-red-200 text-right max-w-[140px] leading-tight">
-                          ⚠️ Out of Stock - We are sorry, couldn't deliver.
-                        </span>
-                      ) : (
-                        <div className="flex items-center border border-stone-200 rounded-xl overflow-hidden h-9 bg-stone-50 shadow-sm">
-                          <button
-                            disabled={actionLoading}
-                            onClick={() => handleQuantityChange(item, -1)}
-                            className="px-3.5 hover:bg-stone-200 font-extrabold text-stone-600 transition-colors disabled:opacity-50"
-                          >-</button>
-                          <span className="px-1 min-w-[24px] text-center text-sm font-extrabold text-stone-800">{item.quantity}</span>
-                          <button
-                            disabled={actionLoading}
-                            onClick={() => handleQuantityChange(item, 1)}
-                            className="px-3.5 hover:bg-stone-200 font-extrabold text-stone-600 transition-colors disabled:opacity-50"
-                          >+</button>
-                        </div>
-                      )}
+                    <div className="flex items-center space-x-3">
+                      <div className="flex flex-col items-end space-y-2">
+                        {!isItemInStock ? (
+                          <span className="text-[10px] font-extrabold text-red-600 bg-red-50 p-2 rounded-xl border border-red-200 text-right max-w-[180px] leading-tight">
+                            ⚠️ Out of Stock - We are sorry, couldn't deliver right now. Will be fulfilled automatically if restocked before delivery.
+                          </span>
+                        ) : (
+                          <div className="flex items-center border border-stone-200 rounded-xl overflow-hidden h-9 bg-stone-50 shadow-sm">
+                            <button
+                              disabled={actionLoading}
+                              onClick={() => handleQuantityChange(item, -1)}
+                              className="px-3.5 hover:bg-stone-200 font-extrabold text-stone-600 transition-colors disabled:opacity-50"
+                            >-</button>
+                            <span className="px-1 min-w-[24px] text-center text-sm font-extrabold text-stone-800">{item.quantity}</span>
+                            <button
+                              disabled={actionLoading}
+                              onClick={() => handleQuantityChange(item, 1)}
+                              className="px-3.5 hover:bg-stone-200 font-extrabold text-stone-600 transition-colors disabled:opacity-50"
+                            >+</button>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <button
+                        disabled={actionLoading}
+                        onClick={() => handleDeleteCalendarItem(item)}
+                        className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
+                        title="Remove from schedule"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -440,41 +501,46 @@ const HorizontalCalendarLedger = () => {
               ✨ Add More Items to This Delivery
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              {availableAddons.map(product => (
-                <div key={product.id} className={`p-3 rounded-2xl border border-stone-200/80 shadow-sm flex flex-col justify-between transition-all ${product.out_of_stock_subscriptions ? 'opacity-60 bg-stone-50' : 'bg-white hover:shadow-md'}`}>
-                  <div className="w-full h-24 bg-stone-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden border border-stone-100">
-                    <img 
-                      src={product.image_url || product.images?.[0] || ''} 
-                      alt="Product" 
-                      className="w-12 h-12 rounded-xl object-cover bg-stone-100"
-                      onError={(e) => {
-                        e.currentTarget.onerror = null; 
-                        e.currentTarget.src = '';
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-[13px] font-bold text-stone-800 leading-tight mb-1">{product.name}</h4>
-                    <p className="text-xs font-bold text-stone-700 mt-1">
-                      ₹{product.discounted_price || product.original_price || 0}
-                    </p>
-                  </div>
-                  {product.out_of_stock_subscriptions ? (
-                    <div className="mt-3 w-full py-2 bg-stone-100 text-stone-500 font-extrabold text-xs rounded-xl border border-stone-200 flex items-center justify-center shadow-inner select-none">
-                      Temporarily Unavailable
+              {availableAddons.map(product => {
+                const isProductSubOOS = product.out_of_stock_subscriptions === true || 
+                                       (product.stock_subscriptions !== undefined && product.stock_subscriptions <= 0);
+                
+                return (
+                  <div key={product.id} className={`p-3 rounded-2xl border shadow-sm flex flex-col justify-between transition-all ${isProductSubOOS ? 'opacity-60 bg-stone-50 border-stone-200' : 'bg-white hover:shadow-md border-stone-200/80'}`}>
+                    <div className="w-full h-24 bg-stone-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden border border-stone-100">
+                      <img 
+                        src={product.image_url || 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80'} 
+                        alt="Product" 
+                        className="w-12 h-12 rounded-xl object-cover bg-stone-100"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null; 
+                          e.currentTarget.src = 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80';
+                        }}
+                      />
                     </div>
-                  ) : (
-                    <button
-                      disabled={actionLoading || product.stock_quantity <= 0}
-                      onClick={() => handleAddOneTimeItem(product.slug)}
-                      className="mt-3 w-full py-2 bg-stone-900 text-amber-400 font-bold text-xs rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center space-x-1 shadow-sm"
-                    >
-                      <span className="text-sm leading-none">+</span>
-                      <span>Add</span>
-                    </button>
-                  )}
-                </div>
-              ))}
+                    <div className="flex-1">
+                      <h4 className="text-[13px] font-bold text-stone-800 leading-tight mb-1">{product.name}</h4>
+                      <p className="text-xs font-bold text-stone-700 mt-1">
+                        ₹{product.discounted_price || product.original_price || 0}
+                      </p>
+                    </div>
+                    {isProductSubOOS ? (
+                      <div className="mt-3 w-full py-2 bg-stone-100 text-stone-500 font-bold text-xs rounded-xl border border-stone-200 flex items-center justify-center shadow-inner select-none">
+                        Temporarily Unavailable
+                      </div>
+                    ) : (
+                      <button
+                        disabled={actionLoading}
+                        onClick={() => handleAddOneTimeItem(product.slug)}
+                        className="mt-3 w-full py-2 bg-stone-900 text-amber-400 font-bold text-xs rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center space-x-1 shadow-sm"
+                      >
+                        <span className="text-sm leading-none">+</span>
+                        <span>Add</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
