@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -70,11 +70,39 @@ export const AdminLogistics = () => {
 
   const [activeTab, setActiveTab] = useState("tomorrow-dispatch");
 
-  // Filter Dates
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const getLocalDateString = (date: Date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getTomorrowString = () => {
+    const t = new Date();
+    t.setDate(t.getDate() + 1);
+    return getLocalDateString(t);
+  };
+
+  const [todayStr, setTodayStr] = useState(getLocalDateString());
+  const [tomorrowStr, setTomorrowStr] = useState(getTomorrowString());
+
+  useEffect(() => {
+    const handleVisibilitySync = () => {
+      if (document.visibilityState === 'visible') {
+        const trueToday = getLocalDateString();
+        const trueTomorrow = getTomorrowString();
+        if (trueToday !== todayStr) {
+          setTodayStr(trueToday);
+          setTomorrowStr(trueTomorrow);
+          queryClient.invalidateQueries({ queryKey: ["admin-logistics-manifest-today"] });
+          queryClient.invalidateQueries({ queryKey: ["tomorrow-dispatch-manifest"] });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilitySync);
+    return () => document.removeEventListener('visibilitychange', handleVisibilitySync);
+  }, [todayStr, queryClient]);
 
   const [adminManifestTab, setAdminManifestTab] = useState<'today' | 'tomorrow'>('today');
 
@@ -736,24 +764,24 @@ export const AdminLogistics = () => {
                                                       {item.status.replace(/_/g, " ")}
                                                     </span>
                                                   )}
-                                                  {item.status === 'scheduled' && (
+                                                  {(item.status === 'pending' || item.status === 'confirmed') && (
                                                     <button
                                                       onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'out_of_stock' })}
                                                       disabled={updateItemStatusMutation.isPending}
                                                       className="text-[10px] text-red-600 hover:text-red-800 font-bold ml-1.5 hover:underline shrink-0 flex items-center gap-0.5"
                                                       title="Mark Out of Stock"
                                                     >
-                                                      ❌ Out of Stock
+                                                      ❌ Mark Out of Stock
                                                     </button>
                                                   )}
-                                                  {(item.status === 'failed' || item.status === 'out_of_stock') && (
+                                                  {item.status === 'out_of_stock' && (
                                                     <button
-                                                      onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'scheduled' })}
+                                                      onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'pending' })}
                                                       disabled={updateItemStatusMutation.isPending}
                                                       className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold ml-1.5 hover:underline shrink-0 flex items-center gap-0.5 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded"
-                                                      title="Restore to Scheduled — stock is available again"
+                                                      title="Restore to Pending — stock is available again"
                                                     >
-                                                      ✅ Restore Stock
+                                                      🔄 Restore Stock
                                                     </button>
                                                   )}
                                                 </div>

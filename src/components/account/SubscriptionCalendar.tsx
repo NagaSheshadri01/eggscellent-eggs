@@ -6,12 +6,16 @@ import { Trash2 } from 'lucide-react';
 
 const HorizontalCalendarLedger = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [dailyDeliveries, setDailyDeliveries] = useState<any[]>([]);
+  const [cachedLedger, setCachedLedger] = useState<any[]>([]);
   const [globalProducts, setGlobalProducts] = useState<any[]>([]);
   const [horizonDates, setHorizonDates] = useState<Date[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Instantly compute the view target inside the UI thread (Zero Loading Spinners)
+  const targetDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+  const dailyDeliveries = cachedLedger.filter(item => item.delivery_date === targetDateStr);
 
   // 1. Generate a continuous 30-day horizontal timeline strip
   useEffect(() => {
@@ -35,95 +39,34 @@ const HorizontalCalendarLedger = () => {
     fetchCatalog();
   }, []);
 
-  // 3. Fetch active ledger entries OR fallback to active subscriptions
-  const fetchActiveLedgerForDate = async (
-    dateObject: Date,
-    currentUserId?: string | null,
-    currentProducts?: any[]
-  ) => {
-    let activeUserId = currentUserId !== undefined ? currentUserId : userId;
-    let activeProducts = currentProducts !== undefined ? currentProducts : globalProducts;
-
-    if (!activeUserId) {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        activeUserId = data.user.id;
-        setUserId(data.user.id);
-      }
-    }
-
-    if (!activeProducts || activeProducts.length === 0) {
-      const { data, error } = await supabase.from('products').select('*');
-      if (!error && data) {
-        activeProducts = data;
-        setGlobalProducts(data);
-      }
-    }
-
-    if (!activeUserId || !activeProducts || activeProducts.length === 0) return;
-
-    setLoading(true);
+  const fetchBulkLedger = async () => {
     try {
-      const year = dateObject.getFullYear();
-      const month = String(dateObject.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObject.getDate()).padStart(2, '0');
-      const formattedDateString = `${year}-${month}-${day}`;
+      const today = new Date();
+      const endDate = new Date();
+      endDate.setDate(today.getDate() + 30);
+      
+      const startStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
       const { data, error } = await supabase
         .from('delivery_ledger')
-        .select('id, quantity, delivery_date, subscription_id, product_slug, effective_price, status, products(*)')
-        .eq('delivery_date', formattedDateString);
+        .select('id, quantity, delivery_date, product_slug, status, products(*)')
+        .gte('delivery_date', startStr)
+        .lte('delivery_date', endStr);
 
       if (error) throw error;
-
-      if (data && data.length > 0) {
-        // Filter out completely skipped/cancelled items from the active list if they exist in ledger
-        const activeRows = (data as any[]).filter(
-          r => r.status !== 'skipped' && r.status !== 'cancelled' && r.quantity !== 0
-        );
-        setDailyDeliveries(activeRows);
-      } else {
-        // FALLBACK: Query the subscriptions table to fill the generational break
-        const { data: subData, error: subError } = await supabase
-          .from('subscriptions')
-          .select('id, product_slug, quantity, selected_days, status')
-          .eq('user_id', activeUserId)
-          .eq('status', 'active');
-
-        if (subError) throw subError;
-
-        const targetDayOfWeek = dateObject.getDay(); // 0 = Sunday, 1 = Monday, etc.
-
-        const activeToday = (subData || []).filter(sub =>
-          sub.selected_days && sub.selected_days.includes(targetDayOfWeek)
-        ).map(sub => {
-          // Manual left join using our global catalog
-          const product = activeProducts.find(p => p.slug === sub.product_slug);
-          return {
-            id: `sub-fallback-${sub.id}`,
-            quantity: sub.quantity,
-            delivery_date: formattedDateString,
-            subscription_id: sub.id,
-            product_slug: sub.product_slug,
-            effective_price: product?.price || 0,
-            status: 'scheduled',
-            products: product
-          };
-        });
-
-        setDailyDeliveries(activeToday);
-      }
-    } catch (err: any) {
-      console.error("Calendar load failure:", err);
-      toast.error(`Sync Error: ${err.message}`);
-    } finally {
-      setLoading(false);
+      const validItems = (data || []).filter(item => item.quantity > 0);
+      setCachedLedger(validItems);
+    } catch (err) {
+      console.error(err);
     }
   };
 
+  // IMPLEMENT 30-DAY BULK SEEDING ON MOUNT
   useEffect(() => {
-    fetchActiveLedgerForDate(selectedDate);
-  }, [selectedDate]);
+    setLoading(true);
+    fetchBulkLedger().finally(() => setLoading(false));
+  }, []);
 
   // 4. Set up realtime listener for inventory changes
   useEffect(() => {
@@ -142,7 +85,7 @@ const HorizontalCalendarLedger = () => {
             const { data } = await supabase.from('products').select('*');
             if (data) {
               setGlobalProducts(data);
-              fetchActiveLedgerForDate(selectedDate, userId, data);
+              fetchBulkLedger();
             }
           };
           fetchCatalog();
@@ -158,10 +101,9 @@ const HorizontalCalendarLedger = () => {
           event: '*',
           schema: 'public',
           table: 'delivery_ledger',
-          // Assuming user_id filter is not strictly needed client-side if we just re-fetch the local date state
         },
         (payload) => {
-          fetchActiveLedgerForDate(selectedDate);
+          fetchBulkLedger();
         }
       )
       .subscribe();
@@ -173,110 +115,109 @@ const HorizontalCalendarLedger = () => {
   }, []);
 
   // Handle Increments & Decrements (and deletions)
-  const handleQuantityChange = async (item: any, delta: number) => {
+  const handleQuantityChange = async (clickedItem: any, delta: number) => {
     if (!userId) return;
-    setActionLoading(true);
+
+    const targetSlug = clickedItem.product_slug;
+    const newOptimisticQuantity = clickedItem.quantity + delta;
+
+    // Backup current state for error fallback
+    const previousState = [...cachedLedger];
+
+    // Mutate Local State Instantly using compound match
+    setCachedLedger(prevItems => 
+      prevItems.map(item => {
+        // 🌟 THE CRITICAL ISOLATION GATEWAY:
+        if (item.product_slug === targetSlug && item.delivery_date === targetDateStr) {
+          return { 
+            ...item, 
+            quantity: newOptimisticQuantity,
+            // Ensure status drops do not bleed across different date entities
+            status: item.id.toString().startsWith('sub-fallback-') ? 'pending' : item.status 
+          };
+        }
+        return item;
+      })
+    );
 
     try {
-      // Enforce this string generator block at the start of ALL calendar mutation methods:
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const targetedDateString = `${year}-${month}-${day}`;
-
-      const newQuantity = item.quantity + delta;
-      const isFallback = String(item.id).startsWith('sub-fallback-');
+      const isFallback = String(clickedItem.id).startsWith('sub-fallback-');
 
       if (isFallback) {
         // Need to materialize the virtual subscription row into the ledger
-        // Need to materialize the virtual subscription row into the ledger
-        if (newQuantity <= 0) {
+        if (newOptimisticQuantity <= 0) {
           // Skip for the day
           await supabase.from('delivery_ledger').insert({
             user_id: userId,
-            delivery_date: targetedDateString,
-            product_slug: item.product_slug,
-            subscription_id: item.subscription_id,
+            delivery_date: targetDateStr,
+            product_slug: clickedItem.product_slug,
+            subscription_id: clickedItem.subscription_id,
             quantity: 0,
-            effective_price: item.effective_price,
+            effective_price: clickedItem.effective_price,
             status: 'skipped'
           } as any);
         } else {
           // Execute a clean database .insert() expanding an existing schedule
           await supabase.from('delivery_ledger').insert({
             user_id: userId,
-            delivery_date: targetedDateString,
-            product_slug: item.product_slug,
-            subscription_id: item.subscription_id,
-            quantity: newQuantity,
-            effective_price: item.effective_price,
+            delivery_date: targetDateStr,
+            product_slug: clickedItem.product_slug,
+            subscription_id: clickedItem.subscription_id,
+            quantity: newOptimisticQuantity,
+            effective_price: clickedItem.effective_price,
             status: 'scheduled'
           } as any);
         }
       } else {
         // Item already exists in ledger
-        if (newQuantity <= 0) {
+        if (newOptimisticQuantity <= 0) {
           // Completely remove item from this date profile
-          await supabase.from('delivery_ledger').delete().eq('id', item.id);
+          await supabase.from('delivery_ledger').delete().eq('id', clickedItem.id);
         } else {
           // Update quantity
-          await (supabase.from('delivery_ledger') as any).update({ quantity: newQuantity }).eq('id', item.id);
+          await (supabase.from('delivery_ledger') as any).update({ quantity: newOptimisticQuantity }).eq('id', clickedItem.id);
         }
       }
-
-      // Re-render
-      await fetchActiveLedgerForDate(selectedDate);
     } catch (err: any) {
       toast.error(`Update failed: ${err.message}`);
-    } finally {
-      setActionLoading(false);
+      setCachedLedger(previousState); // Revert on failure
     }
   };
 
   // Dustbin exclusion delete/skip handler
   const handleDeleteCalendarItem = async (item: any) => {
-    if (!userId) {
-      toast.error("User session missing.");
-      return;
-    }
-    setActionLoading(true);
+    // Backup current state for error fallback
+    const previousState = [...cachedLedger];
+
+    // Instantly purge item from current view state array without hitting a loading trigger
+    setCachedLedger(prev => prev.filter(i => !(i.product_slug === item.product_slug && i.delivery_date === targetDateStr)));
+    
     try {
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const targetedDateString = `${year}-${month}-${day}`;
-
-      const isFallback = String(item.id).startsWith('sub-fallback-');
-
-      if (isFallback) {
-        // Scenario A: Virtual Fallback Item - insert ledger row with quantity 0 and status 'out_of_stock'
-        const { error } = await supabase.from('delivery_ledger').insert({
-          user_id: userId,
-          delivery_date: targetedDateString,
-          product_slug: item.product_slug,
-          subscription_id: item.subscription_id,
-          quantity: 0,
-          effective_price: item.effective_price,
-          status: 'out_of_stock'
-        } as any);
-
+      if (item.id.toString().startsWith('sub-fallback-')) {
+        // Virtual entry: Insert an explicit exclusion row mapping quantity 0
+        const { error } = await supabase
+          .from('delivery_ledger')
+          .insert({
+            user_id: (await supabase.auth.getUser()).data.user?.id,
+            delivery_date: targetDateStr,
+            product_slug: item.product_slug,
+            quantity: 0,
+            status: 'out_of_stock'
+          } as any);
         if (error) throw error;
       } else {
-        // Scenario B: Physical Database Row - delete row
+        // Physical record: Execute target deletion
         const { error } = await supabase
           .from('delivery_ledger')
           .delete()
           .eq('id', item.id);
-
         if (error) throw error;
       }
-
-      toast.success("Item removed from today's schedule");
-      await fetchActiveLedgerForDate(selectedDate);
-    } catch (err: any) {
-      toast.error(`Delete failed: ${err.message}`);
-    } finally {
-      setActionLoading(false);
+      
+      toast.success("Item removed from this delivery date.");
+    } catch (err) {
+      toast.error("Failed to update item state.");
+      setCachedLedger(previousState); // Revert on failure
     }
   };
 
@@ -319,7 +260,7 @@ const HorizontalCalendarLedger = () => {
       }
 
       toast.success("Added to today's schedule!");
-      fetchActiveLedgerForDate(selectedDate); // Re-render items instantly
+      fetchBulkLedger(); // Re-render items
     } catch (err: any) {
       toast.error(`Could not add item: ${err.message}`);
     } finally {
