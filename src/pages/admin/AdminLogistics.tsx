@@ -107,7 +107,7 @@ export const AdminLogistics = () => {
   const [adminManifestTab, setAdminManifestTab] = useState<'today' | 'tomorrow'>('today');
 
   // Selection state for checkbox bulk matching
-  const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
+  const [selectedStopIds, setSelectedStopIds] = useState<string[]>([]);
   const [targetPartnerId, setTargetPartnerId] = useState<string>("");
 
   // Customer override state
@@ -257,25 +257,24 @@ export const AdminLogistics = () => {
 
   // --- MUTATION 1: Bulk Assign Driver ---
   const bulkAssignMutation = useMutation({
-    mutationFn: async ({ ledgerIds, partnerId }: { ledgerIds: string[]; partnerId: string }) => {
+    mutationFn: async ({ stopIds, partnerId }: { stopIds: string[]; partnerId: string }) => {
       const selectedDriverId = partnerId === "unassigned" ? null : partnerId;
-      const extractedLedgerIdsArray = ledgerIds;
       const { data, error } = await (supabase as any)
-        .from('delivery_ledger')
+        .from('master_orders')
         .update({ delivery_partner_id: selectedDriverId })
-        .in('id', extractedLedgerIdsArray)
+        .in('id', stopIds)
         .select('id');
 
       if (error) throw error;
       if (data && data.length === 0) throw new Error("Assignment failed: No rows updated (Permission denied?)");
-      return { ledgerIds, partnerId };
+      return { stopIds, partnerId };
     },
     onSuccess: (data) => {
-      toast.success(`Assigned ${data.ledgerIds.length} stops successfully!`);
+      toast.success(`Assigned ${data.stopIds.length} stops successfully!`);
       queryClient.invalidateQueries({ queryKey: ["admin-logistics-manifest-today"] });
       queryClient.invalidateQueries({ queryKey: ["tomorrow-dispatch-manifest"] });
       queryClient.invalidateQueries({ queryKey: ["admin-logistics-manifest"] });
-      setSelectedLedgerIds([]); // Reset selection
+      setSelectedStopIds([]); // Reset selection
       setTargetPartnerId(""); // Reset partner selection
     },
     onError: (err: any) => {
@@ -527,28 +526,24 @@ export const AdminLogistics = () => {
 
   // Checkbox toggle logic
   const handleToggleRow = (stop: DeliveryStop) => {
-    const stopLedgerIds = stop.items.map(i => i.ledgerId);
-    const isSelected = stopLedgerIds.every(id => selectedLedgerIds.includes(id));
+    const isSelected = selectedStopIds.includes(stop.id);
     
     if (isSelected) {
-      setSelectedLedgerIds(prev => prev.filter(id => !stopLedgerIds.includes(id)));
+      setSelectedStopIds(prev => prev.filter(id => id !== stop.id));
     } else {
-      setSelectedLedgerIds(prev => {
-        const unique = new Set([...prev, ...stopLedgerIds]);
-        return Array.from(unique);
-      });
+      setSelectedStopIds(prev => [...prev, stop.id]);
     }
   };
 
   const handleToggleCluster = (clusterStops: DeliveryStop[]) => {
-    const clusterLedgerIds = clusterStops.flatMap(s => s.items.map(i => i.ledgerId));
-    const allSelected = clusterLedgerIds.every(id => selectedLedgerIds.includes(id));
+    const clusterStopIds = clusterStops.map(s => s.id);
+    const allSelected = clusterStopIds.every(id => selectedStopIds.includes(id));
 
     if (allSelected) {
-      setSelectedLedgerIds(prev => prev.filter(id => !clusterLedgerIds.includes(id)));
+      setSelectedStopIds(prev => prev.filter(id => !clusterStopIds.includes(id)));
     } else {
-      setSelectedLedgerIds(prev => {
-        const unique = new Set([...prev, ...clusterLedgerIds]);
+      setSelectedStopIds(prev => {
+        const unique = new Set([...prev, ...clusterStopIds]);
         return Array.from(unique);
       });
     }
@@ -599,7 +594,7 @@ export const AdminLogistics = () => {
             <button
               onClick={() => {
                 setAdminManifestTab('today');
-                setSelectedLedgerIds([]); // Reset selection on switch
+                setSelectedStopIds([]); // Reset selection on switch
               }}
               className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
                 adminManifestTab === 'today' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
@@ -610,7 +605,7 @@ export const AdminLogistics = () => {
             <button
               onClick={() => {
                 setAdminManifestTab('tomorrow');
-                setSelectedLedgerIds([]); // Reset selection on switch
+                setSelectedStopIds([]); // Reset selection on switch
               }}
               className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
                 adminManifestTab === 'tomorrow' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
@@ -647,7 +642,7 @@ export const AdminLogistics = () => {
                   Select clusters or individual stops below to assign them to a delivery partner in bulk.
                 </div>
                 <div className="text-xs font-mono font-bold text-muted-foreground">
-                  {selectedLedgerIds.length} stops selected
+                  {selectedStopIds.length} stops selected
                 </div>
               </div>
 
@@ -663,8 +658,8 @@ export const AdminLogistics = () => {
                   <Accordion type="multiple" defaultValue={Object.keys(areas)} className="space-y-3 w-full">
                     {Object.entries(areas).map(([area, deliveries]) => {
                       const clusterIds = deliveries.map((d) => d.id);
-                      const isAllClusterSelected = clusterIds.every((id) => selectedLedgerIds.includes(id));
-                      const isSomeClusterSelected = clusterIds.some((id) => selectedLedgerIds.includes(id)) && !isAllClusterSelected;
+                      const isAllClusterSelected = clusterIds.every((id) => selectedStopIds.includes(id));
+                      const isSomeClusterSelected = clusterIds.some((id) => selectedStopIds.includes(id)) && !isAllClusterSelected;
 
                       return (
                         <AccordionItem
@@ -710,7 +705,7 @@ export const AdminLogistics = () => {
                                     const profile = stop.customerInfo;
                                     const addr = stop.address;
                                     const isAssigned = !!stop.assignedDriverId;
-                                    const isAllSelected = stop.items.every(item => selectedLedgerIds.includes(item.ledgerId));
+                                    const isAllSelected = selectedStopIds.includes(stop.id);
 
                                     return (
                                       <tr
@@ -1686,12 +1681,12 @@ export const AdminLogistics = () => {
       </Tabs>
 
       {/* FLOATING ACTION BAR FOR BULK ASSIGNMENT */}
-      {selectedLedgerIds.length > 0 && (
+      {selectedStopIds.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl animate-in fade-in slide-in-from-bottom-8 duration-300 z-50">
           <div className="bg-brown text-primary-foreground rounded-2xl shadow-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-white/10">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-display font-bold">
-                {selectedLedgerIds.length}
+                {selectedStopIds.length}
               </div>
               <div className="flex flex-col">
                 <span className="font-bold text-sm">Tomorrow's Stops Selected</span>
@@ -1720,7 +1715,7 @@ export const AdminLogistics = () => {
                 disabled={!targetPartnerId || bulkAssignMutation.isPending}
                 onClick={() => {
                   bulkAssignMutation.mutate({
-                    ledgerIds: selectedLedgerIds,
+                    stopIds: selectedStopIds,
                     partnerId: targetPartnerId
                   });
                 }}
