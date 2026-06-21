@@ -354,10 +354,7 @@ const HorizontalCalendarLedger = () => {
                 // deactivates a product (making it fail RLS and vanish), it instantly drops to "Out of Stock".
                 const liveProduct = globalProducts.find(p => p.slug === item.product_slug);
                 
-                // An item is out of stock if EITHER the global product catalog is empty, OR the admin specifically marked THIS ledger item as failed
-                const isLedgerFailed = item.status === 'failed';
-                const isGlobalProductInStock = liveProduct ? (liveProduct.stock_quantity > 0 && liveProduct.active !== false) : false;
-                const isItemInStock = !isLedgerFailed && isGlobalProductInStock;
+                const isItemInStock = !(liveProduct?.out_of_stock_subscriptions === true || item.status === 'out_of_stock');
                 
                 // Fallback to initial payload only for static visual data like name/image if it vanishes from live catalog
                 const productData = liveProduct || item.products;
@@ -374,6 +371,8 @@ const HorizontalCalendarLedger = () => {
                   statusBadge = <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full">✅ Delivered</span>;
                 } else if (item.status === 'out_for_delivery') {
                   statusBadge = <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full animate-pulse">🚴 Out for Delivery</span>;
+                } else if (item.status === 'pending' || item.status === 'confirmed' || item.status === 'scheduled') {
+                  statusBadge = <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full border border-amber-100">⏳ Scheduled</span>;
                 } else {
                   statusBadge = <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full border border-amber-100">⏳ Scheduled</span>;
                 }
@@ -383,12 +382,12 @@ const HorizontalCalendarLedger = () => {
                     <div className="flex items-center space-x-4">
                       <div className="w-14 h-14 bg-stone-100 rounded-2xl overflow-hidden flex items-center justify-center font-bold text-stone-400 text-2xl shadow-inner border border-stone-200/50 min-w-[56px]">
                         <img 
-                          src={productData?.image_url || productData?.images?.[0] || ''} 
-                          alt={productData?.name || 'Product'} 
-                          className="w-full h-full object-cover bg-stone-100 error-fallback"
+                          src={productData?.image_url || productData?.images?.[0] || 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80'} 
+                          alt="Product" 
+                          className="w-12 h-12 rounded-xl object-cover bg-stone-100"
                           onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = '';
+                            e.currentTarget.onerror = null; 
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80';
                           }}
                         />
                       </div>
@@ -442,15 +441,15 @@ const HorizontalCalendarLedger = () => {
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {availableAddons.map(product => (
-                <div key={product.id} className="bg-white p-3 rounded-2xl border border-stone-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
+                <div key={product.id} className={`p-3 rounded-2xl border border-stone-200/80 shadow-sm flex flex-col justify-between transition-all ${product.out_of_stock_subscriptions ? 'opacity-60 bg-stone-50' : 'bg-white hover:shadow-md'}`}>
                   <div className="w-full h-24 bg-stone-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden border border-stone-100">
                     <img 
-                      src={product.image_url || product.images?.[0] || ''} 
-                      alt={product.name} 
-                      className="w-full h-full object-cover error-fallback"
+                      src={product.image_url || product.images?.[0] || 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80'} 
+                      alt="Product" 
+                      className="w-12 h-12 rounded-xl object-cover bg-stone-100"
                       onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = '';
+                        e.currentTarget.onerror = null; 
+                        e.currentTarget.src = 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80';
                       }}
                     />
                   </div>
@@ -460,14 +459,20 @@ const HorizontalCalendarLedger = () => {
                       ₹{product.discounted_price || product.original_price || 0}
                     </p>
                   </div>
-                  <button
-                    disabled={actionLoading || product.stock_quantity <= 0}
-                    onClick={() => handleAddOneTimeItem(product.slug)}
-                    className="mt-3 w-full py-2 bg-stone-900 text-amber-400 font-bold text-xs rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center space-x-1 shadow-sm"
-                  >
-                    <span className="text-sm leading-none">+</span>
-                    <span>Add</span>
-                  </button>
+                  {product.out_of_stock_subscriptions ? (
+                    <div className="mt-3 w-full py-2 bg-stone-100 text-stone-500 font-extrabold text-xs rounded-xl border border-stone-200 flex items-center justify-center shadow-inner select-none">
+                      Temporarily Unavailable
+                    </div>
+                  ) : (
+                    <button
+                      disabled={actionLoading || product.stock_quantity <= 0}
+                      onClick={() => handleAddOneTimeItem(product.slug)}
+                      className="mt-3 w-full py-2 bg-stone-900 text-amber-400 font-bold text-xs rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-50 flex items-center justify-center space-x-1 shadow-sm"
+                    >
+                      <span className="text-sm leading-none">+</span>
+                      <span>Add</span>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
