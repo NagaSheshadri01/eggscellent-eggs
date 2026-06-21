@@ -717,7 +717,7 @@ export const AdminLogistics = () => {
                                           </div>
                                           <div className="space-y-2">
                                             {stop.items.map((item, idx) => {
-                                              const isCanceledOrFailed = item.status === 'failed' || item.status === 'skipped';
+                                              const isCanceledOrFailed = item.status === 'failed' || item.status === 'skipped' || item.status === 'out_of_stock';
                                               return (
                                                 <div key={idx} className="flex flex-col">
                                                   <div className="flex items-center gap-1.5 font-medium text-brown flex-wrap">
@@ -730,7 +730,7 @@ export const AdminLogistics = () => {
                                                       item.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-200' :
                                                       item.status === 'out_for_delivery' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                                       item.status === 'skipped' ? 'bg-stone-50 text-stone-600 border-stone-200' :
-                                                      item.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                      item.status === 'failed' || item.status === 'out_of_stock' ? 'bg-red-50 text-red-700 border-red-200' :
                                                       'bg-amber-50 text-amber-700 border-amber-200'
                                                     }`}>
                                                       {item.status.replace(/_/g, " ")}
@@ -738,7 +738,7 @@ export const AdminLogistics = () => {
                                                   )}
                                                   {item.status === 'scheduled' && (
                                                     <button
-                                                      onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'failed' })}
+                                                      onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'out_of_stock' })}
                                                       disabled={updateItemStatusMutation.isPending}
                                                       className="text-[10px] text-red-600 hover:text-red-800 font-bold ml-1.5 hover:underline shrink-0 flex items-center gap-0.5"
                                                       title="Mark Out of Stock"
@@ -746,7 +746,7 @@ export const AdminLogistics = () => {
                                                       ❌ Out of Stock
                                                     </button>
                                                   )}
-                                                  {item.status === 'failed' && (
+                                                  {(item.status === 'failed' || item.status === 'out_of_stock') && (
                                                     <button
                                                       onClick={() => updateItemStatusMutation.mutate({ ledgerId: item.ledgerId, newStatus: 'scheduled' })}
                                                       disabled={updateItemStatusMutation.isPending}

@@ -16,6 +16,8 @@ export type AdminProduct = {
   active: boolean;
   display_order: number;
   is_in_stock?: boolean;
+  out_of_stock_one_time?: boolean;
+  out_of_stock_subscriptions?: boolean;
 };
 
 export const useProducts = (opts?: { onlyActive?: boolean }) => {

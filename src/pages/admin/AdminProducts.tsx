@@ -14,6 +14,7 @@ import { AdminProduct, useProducts, useProductMutations } from "@/hooks/useProdu
 const empty: AdminProduct = {
   name: "", slug: "", benefit: "", unit: "", original_price: 0, discounted_price: 0,
   stock_quantity: 0, image_url: "", images: [], description: "", active: true, display_order: 0,
+  out_of_stock_one_time: false, out_of_stock_subscriptions: false,
 };
 
 const AdminProducts = () => {
@@ -40,11 +41,6 @@ const AdminProducts = () => {
   const del = async (id: string) => {
     if (!confirm("Delete this product?")) return;
     try { await remove.mutateAsync(id); toast.success("Deleted"); } catch (e: any) { toast.error(e.message); }
-  };
-
-  const toggleStock = async (p: AdminProduct) => {
-    try { await upsert.mutateAsync({ ...p, stock_quantity: p.stock_quantity > 0 ? 0 : 100 }); }
-    catch (e: any) { toast.error(e.message); }
   };
 
   const move = async (i: number, dir: -1 | 1) => {
@@ -106,7 +102,20 @@ const AdminProducts = () => {
                 </div>
                 <div><Label>Benefit tagline</Label><Input value={editing.benefit ?? ""} onChange={e => setEditing({...editing, benefit: e.target.value})} /></div>
                 <div><Label>Description</Label><Textarea value={editing.description ?? ""} onChange={e => setEditing({...editing, description: e.target.value})} /></div>
-                <div className="flex items-center gap-2"><Switch checked={editing.active} onCheckedChange={(v) => setEditing({...editing, active: v})} /> <Label>Active</Label></div>
+                <div className="flex items-center gap-4 flex-wrap py-1">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={editing.active} onCheckedChange={(v) => setEditing({...editing, active: v})} /> 
+                    <Label>Active</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={!!editing.out_of_stock_one_time} onCheckedChange={(v) => setEditing({...editing, out_of_stock_one_time: v})} /> 
+                    <Label>One-Time OOS</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={!!editing.out_of_stock_subscriptions} onCheckedChange={(v) => setEditing({...editing, out_of_stock_subscriptions: v})} /> 
+                    <Label>Subscription OOS</Label>
+                  </div>
+                </div>
                 <Button variant="hero" className="w-full" onClick={save} disabled={upsert.isPending}>
                   {upsert.isPending ? "Saving..." : "Save"}
                 </Button>
@@ -133,11 +142,38 @@ const AdminProducts = () => {
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-1 mt-3">
-              <button onClick={() => toggleStock(p)} className={`text-[11px] font-bold uppercase px-2 py-1 rounded-md ${p.stock_quantity > 0 ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
-                {p.stock_quantity > 0 ? "In stock" : "Out of stock"}
-              </button>
-              <div className="flex gap-1">
+            <div className="flex items-center justify-between gap-1 mt-3 pt-3 border-t border-border/40">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <div className="flex items-center justify-between text-xs pr-2">
+                  <span className="font-semibold text-brown/75">One-Time OOS</span>
+                  <Switch 
+                    checked={!!p.out_of_stock_one_time} 
+                    onCheckedChange={async (val) => {
+                      try {
+                        await upsert.mutateAsync({ ...p, out_of_stock_one_time: val });
+                        toast.success(`One-Time OOS for ${p.name} ${val ? 'enabled' : 'disabled'}`);
+                      } catch (err: any) {
+                        toast.error(err.message);
+                      }
+                    }} 
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs pr-2">
+                  <span className="font-semibold text-brown/75">Subscription OOS</span>
+                  <Switch 
+                    checked={!!p.out_of_stock_subscriptions} 
+                    onCheckedChange={async (val) => {
+                      try {
+                        await upsert.mutateAsync({ ...p, out_of_stock_subscriptions: val });
+                        toast.success(`Subscription OOS for ${p.name} ${val ? 'enabled' : 'disabled'}`);
+                      } catch (err: any) {
+                        toast.error(err.message);
+                      }
+                    }} 
+                  />
+                </div>
+              </div>
+              <div className="flex gap-1 shrink-0 items-center">
                 <Button size="sm" variant="ghost" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => move(i, 1)} disabled={i === (products.length - 1)}><ArrowDown className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => { setEditing(p); setOpen(true); }}><Pencil className="w-4 h-4" /></Button>
