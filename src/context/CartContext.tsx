@@ -15,6 +15,8 @@ export type Product = {
   unit?: string | null;
   slug?: string;
   stock_quantity?: number;
+  out_of_stock_one_time?: boolean;
+  out_of_stock_subscriptions?: boolean;
 };
 
 export type CartItem = Product & { 
@@ -91,6 +93,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     setItems(prev => {
       if (type === 'subscription') {
+        if (p.out_of_stock_subscriptions === true) {
+          toast.error("Item is out of stock for subscriptions");
+          return prev;
+        }
         // Discard all other items since subscription cannot co-exist with any other item
         return [{ ...p, qty: 1, purchase_type: 'subscription', subscription_days: days, frequency_type: p.frequency_type }];
       } else {
@@ -98,7 +104,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         // If there's an existing subscription in the cart, replace the entire cart
         const hasSub = prev.some(i => i.purchase_type === 'subscription');
         if (hasSub) {
-          if (p.stock_quantity !== undefined && p.stock_quantity <= 0) {
+          if ((p.stock_quantity !== undefined && p.stock_quantity <= 0) || p.out_of_stock_one_time === true) {
             toast.error("Item is out of stock");
             return prev;
           }
@@ -107,8 +113,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
         const exists = prev.find(i => i.id === p.id && (i.purchase_type || 'instant') === 'instant');
         if (exists) {
-          if (p.stock_quantity !== undefined && exists.qty >= p.stock_quantity) {
-            toast.error(`Only ${p.stock_quantity} available in stock`);
+          if ((p.stock_quantity !== undefined && exists.qty >= p.stock_quantity) || p.out_of_stock_one_time === true) {
+            toast.error("Item is out of stock");
             return prev;
           }
           return prev.map(i => (i.id === p.id && (i.purchase_type || 'instant') === 'instant') 
@@ -116,7 +122,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             : i
           );
         }
-        if (p.stock_quantity !== undefined && p.stock_quantity <= 0) {
+        if ((p.stock_quantity !== undefined && p.stock_quantity <= 0) || p.out_of_stock_one_time === true) {
           toast.error("Item is out of stock");
           return prev;
         }
@@ -132,6 +138,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const inc = (id: string, type: 'instant' | 'subscription' = 'instant') => 
     setItems(prev => prev.map(i => {
       if (i.id === id && (i.purchase_type || 'instant') === type) {
+        if (type === 'instant' && i.out_of_stock_one_time === true) {
+          toast.error("Item is out of stock");
+          return i;
+        }
+        if (type === 'subscription' && i.out_of_stock_subscriptions === true) {
+          toast.error("Item is out of stock for subscriptions");
+          return i;
+        }
         if (i.stock_quantity !== undefined && i.qty >= i.stock_quantity) {
           toast.error(`Only ${i.stock_quantity} available in stock`);
           return i;

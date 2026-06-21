@@ -166,7 +166,11 @@ const CartDrawer = () => {
         toast.error(`${i.name} is no longer available`);
         return null;
       }
-      if (p.stock_quantity <= 0) {
+      const isSub = i.purchase_type === 'subscription';
+      const isOOS = isSub 
+        ? (p.out_of_stock_subscriptions === true || p.stock_quantity <= 0)
+        : (p.out_of_stock_one_time === true || p.stock_quantity <= 0);
+      if (isOOS) {
         adjustments++;
         toast.error(`${i.name} just went out of stock`);
         return null;

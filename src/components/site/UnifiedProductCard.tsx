@@ -132,7 +132,13 @@ const UnifiedProductCard = ({ product, index }: Props) => {
   const perDelivery = Math.max(0, product.discountPrice - subPrice);
   const monthly = perDelivery * FREQUENCY_META[freq].perMonth;
   
-  const isSoldOut = (product.stock_quantity ?? 1) <= 0;
+  const isSoldOut = useMemo(() => {
+    if (mode === "once") {
+      return (product.stock_quantity ?? 1) <= 0 || product.out_of_stock_one_time === true;
+    } else {
+      return (product.stock_quantity ?? 1) <= 0 || product.out_of_stock_subscriptions === true;
+    }
+  }, [mode, product.stock_quantity, product.out_of_stock_one_time, product.out_of_stock_subscriptions]);
 
   const [selectedAltOption, setSelectedAltOption] = useState<'A' | 'B'>('A');
   const [selectedWeeklyDay, setSelectedWeeklyDay] = useState<number>(1); // Default to Monday [1]

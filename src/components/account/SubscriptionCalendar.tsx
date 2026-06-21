@@ -382,12 +382,12 @@ const HorizontalCalendarLedger = () => {
                     <div className="flex items-center space-x-4">
                       <div className="w-14 h-14 bg-stone-100 rounded-2xl overflow-hidden flex items-center justify-center font-bold text-stone-400 text-2xl shadow-inner border border-stone-200/50 min-w-[56px]">
                         <img 
-                          src={productData?.image_url || productData?.images?.[0] || 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80'} 
+                          src={productData?.image_url || productData?.images?.[0] || ''} 
                           alt="Product" 
                           className="w-12 h-12 rounded-xl object-cover bg-stone-100"
                           onError={(e) => {
                             e.currentTarget.onerror = null; 
-                            e.currentTarget.src = 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80';
+                            e.currentTarget.src = '';
                           }}
                         />
                       </div>
@@ -444,12 +444,12 @@ const HorizontalCalendarLedger = () => {
                 <div key={product.id} className={`p-3 rounded-2xl border border-stone-200/80 shadow-sm flex flex-col justify-between transition-all ${product.out_of_stock_subscriptions ? 'opacity-60 bg-stone-50' : 'bg-white hover:shadow-md'}`}>
                   <div className="w-full h-24 bg-stone-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden border border-stone-100">
                     <img 
-                      src={product.image_url || product.images?.[0] || 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80'} 
+                      src={product.image_url || product.images?.[0] || ''} 
                       alt="Product" 
                       className="w-12 h-12 rounded-xl object-cover bg-stone-100"
                       onError={(e) => {
                         e.currentTarget.onerror = null; 
-                        e.currentTarget.src = 'https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?w=120&q=80';
+                        e.currentTarget.src = '';
                       }}
                     />
                   </div>
