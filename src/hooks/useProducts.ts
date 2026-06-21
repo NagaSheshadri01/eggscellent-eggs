@@ -18,6 +18,8 @@ export type AdminProduct = {
   is_in_stock?: boolean;
   out_of_stock_one_time?: boolean;
   out_of_stock_subscriptions?: boolean;
+  stock_one_time?: number;
+  stock_subscriptions?: number;
 };
 
 export const useProducts = (opts?: { onlyActive?: boolean }) => {
@@ -49,6 +51,8 @@ export const useProductMutations = () => {
         discounted_price: Number(p.discounted_price),
         stock_quantity: Number(p.stock_quantity),
         display_order: Number(p.display_order ?? 0),
+        stock_one_time: p.stock_one_time !== undefined ? Number(p.stock_one_time) : undefined,
+        stock_subscriptions: p.stock_subscriptions !== undefined ? Number(p.stock_subscriptions) : undefined,
       };
       const { error } = p.id
         ? await (supabase as any).from("products").update(payload).eq("id", p.id)

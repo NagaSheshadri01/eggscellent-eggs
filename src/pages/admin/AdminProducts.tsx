@@ -15,6 +15,7 @@ const empty: AdminProduct = {
   name: "", slug: "", benefit: "", unit: "", original_price: 0, discounted_price: 0,
   stock_quantity: 0, image_url: "", images: [], description: "", active: true, display_order: 0,
   out_of_stock_one_time: false, out_of_stock_subscriptions: false,
+  stock_one_time: 100, stock_subscriptions: 100,
 };
 
 const AdminProducts = () => {
@@ -96,7 +97,8 @@ const AdminProducts = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Unit</Label><Input value={editing.unit ?? ""} onChange={e => setEditing({...editing, unit: e.target.value})} /></div>
-                  <div><Label>Stock</Label><Input type="number" value={editing.stock_quantity} onChange={e => setEditing({...editing, stock_quantity: +e.target.value})} /></div>
+                  <div><Label>One-Time Stock</Label><Input type="number" value={editing.stock_one_time ?? 100} onChange={e => setEditing({...editing, stock_one_time: +e.target.value})} /></div>
+                  <div><Label>Subscription Stock</Label><Input type="number" value={editing.stock_subscriptions ?? 100} onChange={e => setEditing({...editing, stock_subscriptions: +e.target.value})} /></div>
                   <div><Label>Compare price ₹</Label><Input type="number" value={editing.original_price} onChange={e => setEditing({...editing, original_price: +e.target.value})} /></div>
                   <div><Label>Price ₹</Label><Input type="number" value={editing.discounted_price} onChange={e => setEditing({...editing, discounted_price: +e.target.value})} /></div>
                 </div>
@@ -135,7 +137,9 @@ const AdminProducts = () => {
                 : <div className="w-16 h-16 rounded-lg bg-secondary grid place-items-center text-xs text-muted-foreground">No image</div>}
               <div className="flex-1 min-w-0">
                 <div className="font-display font-semibold text-brown truncate">{p.name}</div>
-                <div className="text-xs text-muted-foreground">{p.unit} · Stock {p.stock_quantity}</div>
+                <div className="text-xs text-muted-foreground">
+                  {p.unit} · One-Time Stock: {p.stock_one_time ?? 0} · Sub Stock: {p.stock_subscriptions ?? 0}
+                </div>
                 <div className="font-display font-bold text-brown mt-1 flex items-baseline gap-1.5">
                   <span className="text-xs text-muted-foreground line-through font-normal">₹{p.original_price}</span>
                   ₹{p.discounted_price}
