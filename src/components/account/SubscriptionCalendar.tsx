@@ -35,8 +35,32 @@ const HorizontalCalendarLedger = () => {
   }, []);
 
   // 3. Fetch active ledger entries OR fallback to active subscriptions
-  const fetchActiveLedgerForDate = async (dateObject: Date) => {
-    if (!userId || globalProducts.length === 0) return;
+  const fetchActiveLedgerForDate = async (
+    dateObject: Date,
+    currentUserId?: string | null,
+    currentProducts?: any[]
+  ) => {
+    let activeUserId = currentUserId !== undefined ? currentUserId : userId;
+    let activeProducts = currentProducts !== undefined ? currentProducts : globalProducts;
+
+    if (!activeUserId) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        activeUserId = data.user.id;
+        setUserId(data.user.id);
+      }
+    }
+
+    if (!activeProducts || activeProducts.length === 0) {
+      const { data, error } = await supabase.from('products').select('*');
+      if (!error && data) {
+        activeProducts = data;
+        setGlobalProducts(data);
+      }
+    }
+
+    if (!activeUserId || !activeProducts || activeProducts.length === 0) return;
+
     setLoading(true);
     try {
       const year = dateObject.getFullYear();
@@ -60,7 +84,7 @@ const HorizontalCalendarLedger = () => {
         const { data: subData, error: subError } = await supabase
           .from('subscriptions')
           .select('id, product_slug, quantity, selected_days, status')
-          .eq('user_id', userId)
+          .eq('user_id', activeUserId)
           .eq('status', 'active');
 
         if (subError) throw subError;
@@ -71,7 +95,7 @@ const HorizontalCalendarLedger = () => {
           sub.selected_days && sub.selected_days.includes(targetDayOfWeek)
         ).map(sub => {
           // Manual left join using our global catalog
-          const product = globalProducts.find(p => p.slug === sub.product_slug);
+          const product = activeProducts.find(p => p.slug === sub.product_slug);
           return {
             id: `sub-fallback-${sub.id}`,
             quantity: sub.quantity,
@@ -96,7 +120,7 @@ const HorizontalCalendarLedger = () => {
 
   useEffect(() => {
     fetchActiveLedgerForDate(selectedDate);
-  }, [selectedDate, globalProducts.length, userId]);
+  }, [selectedDate]);
 
   // 4. Set up realtime listener for inventory changes
   useEffect(() => {
@@ -113,10 +137,12 @@ const HorizontalCalendarLedger = () => {
           // Whenever inventory changes structurally, re-pull the data to guarantee sync across RLS boundaries
           const fetchCatalog = async () => {
             const { data } = await supabase.from('products').select('*');
-            if (data) setGlobalProducts(data);
+            if (data) {
+              setGlobalProducts(data);
+              fetchActiveLedgerForDate(selectedDate, userId, data);
+            }
           };
           fetchCatalog();
-          fetchActiveLedgerForDate(selectedDate);
         }
       )
       .subscribe();
@@ -357,13 +383,12 @@ const HorizontalCalendarLedger = () => {
                     <div className="flex items-center space-x-4">
                       <div className="w-14 h-14 bg-stone-100 rounded-2xl overflow-hidden flex items-center justify-center font-bold text-stone-400 text-2xl shadow-inner border border-stone-200/50 min-w-[56px]">
                         <img 
-                          src={productData?.image_url || productData?.images?.[0] || '/placeholder.png'} 
+                          src={productData?.image_url || productData?.images?.[0] || ''} 
                           alt={productData?.name || 'Product'} 
                           className="w-full h-full object-cover bg-stone-100 error-fallback"
                           onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.onerror = null;
-                            target.src = '/placeholder.png';
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = '';
                           }}
                         />
                       </div>
@@ -420,13 +445,12 @@ const HorizontalCalendarLedger = () => {
                 <div key={product.id} className="bg-white p-3 rounded-2xl border border-stone-200/80 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
                   <div className="w-full h-24 bg-stone-50 rounded-xl mb-3 flex items-center justify-center overflow-hidden border border-stone-100">
                     <img 
-                      src={product.image_url || product.images?.[0] || '/placeholder.png'} 
+                      src={product.image_url || product.images?.[0] || ''} 
                       alt={product.name} 
                       className="w-full h-full object-cover error-fallback"
                       onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null;
-                        target.src = '/placeholder.png';
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '';
                       }}
                     />
                   </div>
