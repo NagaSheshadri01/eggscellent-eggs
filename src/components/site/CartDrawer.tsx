@@ -348,7 +348,7 @@ const CartDrawer = () => {
         }
       }
 
-      const { error: subErr } = await (supabase as any).from("subscriptions").insert(
+      const { data: insertedSubs, error: subErr } = await (supabase as any).from("subscriptions").insert(
         subItems.map(i => {
           const product = allProducts?.find(p => p.slug === i.slug || p.name === i.slug || p.id === i.id);
           const resolvedSlug = product?.slug || i.slug;
@@ -360,8 +360,8 @@ const CartDrawer = () => {
           return {
             user_id: user.id,
             product_slug: resolvedSlug,
-            product_id: product?.id, // Assured to be valid UUID
-            plan_id: plan?.id || null, // Write correct subscription plan_id
+            product_id: product?.id,
+            plan_id: plan?.id || null,
             quantity: i.qty,
             selected_days: i.subscription_days || (isWeekly ? [selectedWeeklyDay] : (plan?.frequency_type === 'alternate' ? (
               (() => {
@@ -372,16 +372,21 @@ const CartDrawer = () => {
             ) : [0, 1, 2, 3, 4, 5, 6])),
             address_id: selectedAddressId,
             status: 'active',
-            next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"), // Tomorrow default
+            next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"),
             slot_id: selectedSlotId || 'subscription',
           };
         })
-      );
+      ).select('id');
 
       if (subErr) {
         toast.error("Subscriptions failed to save: " + subErr.message);
         setPlacing(false);
         return;
+      }
+
+      if (insertedSubs && insertedSubs.length > 0) {
+        const { handleSubscriptionResume } = await import('@/lib/subscriptionUtils');
+        await Promise.all(insertedSubs.map((sub: any) => handleSubscriptionResume(supabase, sub.id)));
       }
     }
 

@@ -147,7 +147,7 @@ const SubscriptionShop = () => {
 
       const isUserVipMember = (profile as any)?.is_vip || false;
 
-      const { error } = await (supabase as any)
+      const { data: insertedSub, error } = await (supabase as any)
         .from('subscriptions')
         .insert([{
           user_id: user.id,
@@ -161,11 +161,18 @@ const SubscriptionShop = () => {
           wallet_mode: true,
           next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"),
           slot_id: 'subscription'
-        }]);
+        }])
+        .select('id')
+        .single();
 
       if (error) {
         toast.error("Failed to initialize subscription schedule: " + error.message);
       } else {
+        if (insertedSub?.id) {
+          const { handleSubscriptionResume } = await import('@/lib/subscriptionUtils');
+          await handleSubscriptionResume(supabase, insertedSub.id);
+        }
+        
         toast.success("Subscription schedule activated! Check your delivery calendar.");
         queryClient.invalidateQueries({ queryKey: ['active-user-contracts'] });
         queryClient.invalidateQueries({ queryKey: ['user-active-subscriptions'] });

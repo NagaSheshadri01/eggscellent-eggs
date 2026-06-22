@@ -71,7 +71,7 @@ export async function handleSubscriptionResume(supabase: any, subId: string) {
         .eq("delivery_date", dateStr);
         
       if (!existing || existing.length === 0) {
-        await supabase
+        const { error: insertErr } = await supabase
           .from("delivery_ledger")
           .insert({
             user_id: subData.user_id,
@@ -82,6 +82,10 @@ export async function handleSubscriptionResume(supabase: any, subId: string) {
             effective_price: price,
             status: "pending"
           });
+        if (insertErr) {
+          console.error("Ledger insertion failed:", insertErr);
+          throw insertErr;
+        }
       }
     }
   }

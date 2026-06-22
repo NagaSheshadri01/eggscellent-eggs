@@ -259,10 +259,19 @@ const Checkout = () => {
         };
       });
       
-      const { error: subErr } = await (supabase as any).from('subscriptions').insert(subRows);
+      const { data: insertedSubs, error: subErr } = await (supabase as any)
+        .from('subscriptions')
+        .insert(subRows)
+        .select('id');
+        
       if (subErr) {
         setPlacing(false);
         return toast.error("Failed to setup subscriptions: " + subErr.message);
+      }
+
+      if (insertedSubs && insertedSubs.length > 0) {
+        const { handleSubscriptionResume } = await import('@/lib/subscriptionUtils');
+        await Promise.all(insertedSubs.map((sub: any) => handleSubscriptionResume(supabase, sub.id)));
       }
     }
 
