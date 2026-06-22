@@ -134,7 +134,8 @@ export const AdminLogistics = () => {
   const todayDispatchQ = useQuery({
     queryKey: ["admin-logistics-manifest-today", todayStr],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      // 1. Fetch Subscription Master Orders
+      const { data: masterData, error } = await (supabase as any)
         .from("master_orders")
         .select(`
           *,
@@ -153,7 +154,51 @@ export const AdminLogistics = () => {
         .in("delivery_ledger.status", ['pending', 'confirmed', 'out_for_delivery', 'delivered', 'out_of_stock']);
       
       if (error) throw error;
-      return data || [];
+
+      // 2. Fetch Instant Add-On Orders
+      const { data: instantOrders, error: orderErr } = await (supabase as any)
+        .from("orders")
+        .select(`
+          id, user_id, delivery_partner_id, scheduled_date, custom_order_id, order_status, address_snapshot,
+          profiles:user_id (id, full_name, phone, email),
+          order_items (*)
+        `)
+        .eq("scheduled_date", todayStr)
+        .in("order_status", ['placed', 'confirmed', 'out_for_delivery', 'delivered']);
+
+      if (orderErr) throw orderErr;
+
+      // 3. Unified Merging Engine (Group Add-Ons into Subscription Stops)
+      const mergedMap = new Map();
+      (masterData || []).forEach((mo: any) => mergedMap.set(mo.user_id, mo));
+
+      (instantOrders || []).forEach((o: any) => {
+        const address = o.address_snapshot;
+        const mappedLedger = (o.order_items || []).map((item: any) => ({
+          id: item.id,
+          product_slug: item.product_name,
+          quantity: item.quantity,
+          effective_price: item.price,
+          status: o.order_status === 'placed' ? 'pending' : o.order_status,
+          subscriptions: { addresses: address },
+          is_instant: true
+        }));
+
+        if (mergedMap.has(o.user_id)) {
+           mergedMap.get(o.user_id).delivery_ledger.push(...mappedLedger);
+        } else {
+           mergedMap.set(o.id, {
+             id: o.id,
+             custom_order_id: o.custom_order_id || `ORD-${o.id.split('-')[0].toUpperCase()}`,
+             user_id: o.user_id,
+             delivery_partner_id: o.delivery_partner_id,
+             profiles: o.profiles,
+             delivery_ledger: mappedLedger
+           });
+        }
+      });
+
+      return Array.from(mergedMap.values());
     }
   });
 
@@ -161,7 +206,8 @@ export const AdminLogistics = () => {
   const tomorrowDispatchQ = useQuery({
     queryKey: ["tomorrow-dispatch-manifest", tomorrowStr],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      // 1. Fetch Subscription Master Orders
+      const { data: masterData, error } = await (supabase as any)
         .from("master_orders")
         .select(`
           *,
@@ -178,9 +224,53 @@ export const AdminLogistics = () => {
         `)
         .eq("delivery_date", tomorrowStr)
         .in("delivery_ledger.status", ['pending', 'confirmed', 'out_for_delivery', 'delivered', 'out_of_stock']);
-
+      
       if (error) throw error;
-      return data || [];
+
+      // 2. Fetch Instant Add-On Orders
+      const { data: instantOrders, error: orderErr } = await (supabase as any)
+        .from("orders")
+        .select(`
+          id, user_id, delivery_partner_id, scheduled_date, custom_order_id, order_status, address_snapshot,
+          profiles:user_id (id, full_name, phone, email),
+          order_items (*)
+        `)
+        .eq("scheduled_date", tomorrowStr)
+        .in("order_status", ['placed', 'confirmed', 'out_for_delivery', 'delivered']);
+
+      if (orderErr) throw orderErr;
+
+      // 3. Unified Merging Engine (Group Add-Ons into Subscription Stops)
+      const mergedMap = new Map();
+      (masterData || []).forEach((mo: any) => mergedMap.set(mo.user_id, mo));
+
+      (instantOrders || []).forEach((o: any) => {
+        const address = o.address_snapshot;
+        const mappedLedger = (o.order_items || []).map((item: any) => ({
+          id: item.id,
+          product_slug: item.product_name,
+          quantity: item.quantity,
+          effective_price: item.price,
+          status: o.order_status === 'placed' ? 'pending' : o.order_status,
+          subscriptions: { addresses: address },
+          is_instant: true
+        }));
+
+        if (mergedMap.has(o.user_id)) {
+           mergedMap.get(o.user_id).delivery_ledger.push(...mappedLedger);
+        } else {
+           mergedMap.set(o.id, {
+             id: o.id,
+             custom_order_id: o.custom_order_id || `ORD-${o.id.split('-')[0].toUpperCase()}`,
+             user_id: o.user_id,
+             delivery_partner_id: o.delivery_partner_id,
+             profiles: o.profiles,
+             delivery_ledger: mappedLedger
+           });
+        }
+      });
+
+      return Array.from(mergedMap.values());
     }
   });
 
@@ -263,14 +353,26 @@ export const AdminLogistics = () => {
   const bulkAssignMutation = useMutation({
     mutationFn: async ({ stopIds, partnerId }: { stopIds: string[]; partnerId: string }) => {
       const selectedDriverId = partnerId === "unassigned" ? null : partnerId;
-      const { data, error } = await (supabase as any)
+      
+      const { data: mData, error: mErr } = await (supabase as any)
         .from('master_orders')
         .update({ delivery_partner_id: selectedDriverId })
         .in('id', stopIds)
         .select('id');
 
-      if (error) throw error;
-      if (data && data.length === 0) throw new Error("Assignment failed: No rows updated (Permission denied?)");
+      const { data: oData, error: oErr } = await (supabase as any)
+        .from('orders')
+        .update({ delivery_partner_id: selectedDriverId })
+        .in('id', stopIds)
+        .select('id');
+
+      if (mErr) throw mErr;
+      if (oErr) throw oErr;
+      
+      const totalUpdated = (mData?.length || 0) + (oData?.length || 0);
+      if (totalUpdated === 0) {
+         throw new Error("Assignment failed: No rows updated (Permission denied?)");
+      }
       return { stopIds, partnerId };
     },
     onSuccess: (data) => {

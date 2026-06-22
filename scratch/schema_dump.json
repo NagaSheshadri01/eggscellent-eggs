@@ -1,0 +1,2492 @@
+{
+  "columns": [
+    {
+      "table_name": "addresses",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "full_name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "phone",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "address_line_1",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "address_line_2",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "city",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "state",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "pincode",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "landmark",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "is_default",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "label",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "lat",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "lng",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "address_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "address_phone",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "area_locality",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "address_tag",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'Home'::text"
+    },
+    {
+      "table_name": "addresses",
+      "column_name": "is_deleted",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false"
+    },
+    {
+      "table_name": "app_settings",
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "app_settings",
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "app_settings",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "cms_content",
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "cms_content",
+      "column_name": "value",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "cms_content",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "subtitle",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "image_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "display_order",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "content_blocks",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "code",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "discount_type",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "discount_value",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "min_order_amount",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "expiry",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "usage_limit",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "500"
+    },
+    {
+      "table_name": "coupons",
+      "column_name": "used_count",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "table_name": "delivery_config",
+      "column_name": "id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "delivery_config",
+      "column_name": "store_latitude",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "17.5011000"
+    },
+    {
+      "table_name": "delivery_config",
+      "column_name": "store_longitude",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "78.5020000"
+    },
+    {
+      "table_name": "delivery_config",
+      "column_name": "min_order_value",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": "150.00"
+    },
+    {
+      "table_name": "delivery_config",
+      "column_name": "delivery_tiers",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": "'[{\"price\": 30, \"to_km\": 3, \"from_km\": 0}, {\"price\": 50, \"to_km\": 7, \"from_km\": 3}, {\"price\": 0, \"to_km\": 15, \"from_km\": 7}]'::jsonb"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "subscription_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "delivery_date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "product_slug",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "quantity",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "effective_price",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'scheduled'::text"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "delivery_partner_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "custom_order_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "master_order_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_ledger",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "full_name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "phone",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "vehicle_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "city",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "pincode",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "availability",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'pending'::text"
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "aadhaar_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "license_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "experience_years",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "assigned_areas",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]"
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "assigned_slot_ids",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::uuid[]"
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "delivery_partners",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "delivery_pricing_tiers",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "delivery_pricing_tiers",
+      "column_name": "max_distance_km",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_pricing_tiers",
+      "column_name": "delivery_fee",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_pricing_tiers",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "label",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "start_time",
+      "data_type": "time without time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "end_time",
+      "data_type": "time without time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "display_order",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "tag",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'one_time'::text"
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "slot_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "cutoff_time",
+      "data_type": "time without time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "delivery_slots",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "table_name": "faq",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "faq",
+      "column_name": "question",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "faq",
+      "column_name": "answer",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "faq",
+      "column_name": "category",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "faq",
+      "column_name": "display_order",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "faq",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "faq",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "faq",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "master_orders",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "master_orders",
+      "column_name": "custom_order_id",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "master_orders",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "master_orders",
+      "column_name": "delivery_date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "master_orders",
+      "column_name": "delivery_partner_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "master_orders",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'scheduled'::text"
+    },
+    {
+      "table_name": "master_orders",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "offers",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "offers",
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "offers",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "offers",
+      "column_name": "offer_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'product_discount'::text"
+    },
+    {
+      "table_name": "offers",
+      "column_name": "min_order_value",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": "0.00"
+    },
+    {
+      "table_name": "offers",
+      "column_name": "required_product_slugs",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "offers",
+      "column_name": "reward_product_slug",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "offers",
+      "column_name": "coupon_code_to_apply",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "offers",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "table_name": "offers",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "order_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "product_name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "product_image",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "unit",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "quantity",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "price",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "order_items",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "address_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "address_snapshot",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "subtotal",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "delivery_fee",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "discount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "payment_method",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO",
+      "column_default": "'cod'::payment_method"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "payment_status",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO",
+      "column_default": "'pending'::payment_status"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "order_status",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO",
+      "column_default": "'placed'::order_status"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "delivery_slot",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "coupon_code",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "orders",
+      "column_name": "slot_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "delivery_partner_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "picked_up_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "out_for_delivery_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "delivered_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "pincode",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "lat",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "lng",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "scheduled_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "orders",
+      "column_name": "custom_order_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "phone_otps",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "phone_otps",
+      "column_name": "phone",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "phone_otps",
+      "column_name": "code",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "phone_otps",
+      "column_name": "expires_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "phone_otps",
+      "column_name": "used",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "table_name": "phone_otps",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "products",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "products",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "slug",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "category",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "unit",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "benefit",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "image_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "images",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]"
+    },
+    {
+      "table_name": "products",
+      "column_name": "original_price",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "discounted_price",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "stock_quantity",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "products",
+      "column_name": "tags",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]"
+    },
+    {
+      "table_name": "products",
+      "column_name": "nutrition_info",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "products",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "products",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "products",
+      "column_name": "display_order",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "products",
+      "column_name": "parent_group_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "products",
+      "column_name": "out_of_stock_one_time",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false"
+    },
+    {
+      "table_name": "products",
+      "column_name": "out_of_stock_subscriptions",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false"
+    },
+    {
+      "table_name": "products",
+      "column_name": "stock_one_time",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "100"
+    },
+    {
+      "table_name": "products",
+      "column_name": "stock_subscriptions",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "100"
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "full_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "phone",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "avatar_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "profiles",
+      "column_name": "is_vip",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false"
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "column_name": "pincode",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "column_name": "area_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "column_name": "delivery_fee_override",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "site_settings",
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "site_settings",
+      "column_name": "value",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "site_settings",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "product_slug",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "quantity",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "frequency_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "custom_days",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "price_per_delivery",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "max_deliveries_per_week",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "subscription_plans",
+      "column_name": "is_vip_eligible",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "product_slug",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "quantity",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "selected_days",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "address_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'active'::text"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "frequency",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "start_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": "CURRENT_DATE"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "next_delivery_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "end_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "slot_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "payment_method",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'cod'::text"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "plan_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "is_vip",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false"
+    },
+    {
+      "table_name": "subscriptions",
+      "column_name": "wallet_mode",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "message",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "notification_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "is_read",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "user_notifications",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "user_roles",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "user_roles",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user_roles",
+      "column_name": "role",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user_roles",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "wallet_transactions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "wallet_transactions",
+      "column_name": "wallet_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "wallet_transactions",
+      "column_name": "amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "wallet_transactions",
+      "column_name": "transaction_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "wallet_transactions",
+      "column_name": "reference_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "wallet_transactions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "wallets",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "wallets",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "wallets",
+      "column_name": "balance",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0.00"
+    },
+    {
+      "table_name": "wallets",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "delivery_ledger_product_slug_fkey",
+      "definition": "FOREIGN KEY (product_slug) REFERENCES products(slug) ON UPDATE CASCADE ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "delivery_ledger_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "profiles",
+      "constraint_name": "profiles_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "profiles",
+      "constraint_name": "profiles_id_fkey",
+      "definition": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "user_roles",
+      "constraint_name": "user_roles_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "user_roles",
+      "constraint_name": "user_roles_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "addresses",
+      "constraint_name": "addresses_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "addresses",
+      "constraint_name": "addresses_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "products",
+      "constraint_name": "products_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "products",
+      "constraint_name": "products_slug_key",
+      "definition": "UNIQUE (slug)"
+    },
+    {
+      "table_name": "orders",
+      "constraint_name": "orders_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "orders",
+      "constraint_name": "orders_address_id_fkey",
+      "definition": "FOREIGN KEY (address_id) REFERENCES addresses(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "order_items",
+      "constraint_name": "order_items_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "order_items",
+      "constraint_name": "order_items_order_id_fkey",
+      "definition": "FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "order_items",
+      "constraint_name": "order_items_product_id_fkey",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "faq",
+      "constraint_name": "faq_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "content_blocks",
+      "constraint_name": "content_blocks_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "coupons",
+      "constraint_name": "coupons_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "coupons",
+      "constraint_name": "coupons_code_key",
+      "definition": "UNIQUE (code)"
+    },
+    {
+      "table_name": "phone_otps",
+      "constraint_name": "phone_otps_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "cms_content",
+      "constraint_name": "site_content_pkey",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "table_name": "site_settings",
+      "constraint_name": "app_settings_pkey",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "constraint_name": "serviceable_pincodes_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "serviceable_pincodes",
+      "constraint_name": "serviceable_pincodes_pincode_key",
+      "definition": "UNIQUE (pincode)"
+    },
+    {
+      "table_name": "delivery_slots",
+      "constraint_name": "delivery_slots_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "delivery_partners",
+      "constraint_name": "delivery_partners_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "delivery_partners",
+      "constraint_name": "delivery_partners_phone_key",
+      "definition": "UNIQUE (phone)"
+    },
+    {
+      "table_name": "delivery_partners",
+      "constraint_name": "delivery_partners_user_id_key",
+      "definition": "UNIQUE (user_id)"
+    },
+    {
+      "table_name": "delivery_partners",
+      "constraint_name": "unique_partner_user_id",
+      "definition": "UNIQUE (user_id)"
+    },
+    {
+      "table_name": "user_roles",
+      "constraint_name": "user_roles_user_id_key",
+      "definition": "UNIQUE (user_id)"
+    },
+    {
+      "table_name": "orders",
+      "constraint_name": "orders_final_logistics_fkey",
+      "definition": "FOREIGN KEY (delivery_partner_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "offers",
+      "constraint_name": "offers_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "delivery_slots",
+      "constraint_name": "delivery_slots_slot_key_key",
+      "definition": "UNIQUE (slot_key)"
+    },
+    {
+      "table_name": "subscriptions",
+      "constraint_name": "subscriptions_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "subscriptions",
+      "constraint_name": "subscriptions_address_id_fkey",
+      "definition": "FOREIGN KEY (address_id) REFERENCES addresses(id)"
+    },
+    {
+      "table_name": "orders",
+      "constraint_name": "orders_slot_id_fkey",
+      "definition": "FOREIGN KEY (slot_id) REFERENCES delivery_slots(slot_key)"
+    },
+    {
+      "table_name": "subscriptions",
+      "constraint_name": "subscriptions_product_id_fkey",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id)"
+    },
+    {
+      "table_name": "subscriptions",
+      "constraint_name": "subscriptions_slot_id_fkey",
+      "definition": "FOREIGN KEY (slot_id) REFERENCES delivery_slots(slot_key)"
+    },
+    {
+      "table_name": "subscriptions",
+      "constraint_name": "subscriptions_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "subscription_plans",
+      "constraint_name": "subscription_plans_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "subscriptions",
+      "constraint_name": "subscriptions_plan_id_fkey",
+      "definition": "FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "subscription_plans",
+      "constraint_name": "check_frequency_type",
+      "definition": "CHECK ((frequency_type = ANY (ARRAY['daily'::text, 'alternate'::text, 'weekly'::text, 'custom_days'::text])))"
+    },
+    {
+      "table_name": "wallets",
+      "constraint_name": "wallets_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "wallets",
+      "constraint_name": "wallets_user_id_key",
+      "definition": "UNIQUE (user_id)"
+    },
+    {
+      "table_name": "wallets",
+      "constraint_name": "wallets_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "delivery_ledger_master_order_id_fkey",
+      "definition": "FOREIGN KEY (master_order_id) REFERENCES master_orders(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "master_orders",
+      "constraint_name": "master_orders_delivery_partner_id_fkey",
+      "definition": "FOREIGN KEY (delivery_partner_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "delivery_config",
+      "constraint_name": "single_row_lock",
+      "definition": "CHECK ((id = 1))"
+    },
+    {
+      "table_name": "delivery_config",
+      "constraint_name": "delivery_config_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "delivery_pricing_tiers",
+      "constraint_name": "delivery_pricing_tiers_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "wallet_transactions",
+      "constraint_name": "wallet_transactions_transaction_type_check",
+      "definition": "CHECK ((transaction_type = ANY (ARRAY['recharge'::text, 'delivery_deduction'::text, 'refund'::text, 'admin_adjustment'::text, 'compensation'::text])))"
+    },
+    {
+      "table_name": "wallet_transactions",
+      "constraint_name": "wallet_transactions_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "wallet_transactions",
+      "constraint_name": "wallet_transactions_wallet_id_fkey",
+      "definition": "FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "delivery_ledger_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "delivery_ledger_subscription_id_fkey",
+      "definition": "FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "delivery_ledger_delivery_partner_id_fkey",
+      "definition": "FOREIGN KEY (delivery_partner_id) REFERENCES profiles(id)"
+    },
+    {
+      "table_name": "app_settings",
+      "constraint_name": "app_settings_pkey1",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "table_name": "user_notifications",
+      "constraint_name": "user_notifications_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "user_notifications",
+      "constraint_name": "user_notifications_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "unique_sub_date_product",
+      "definition": "UNIQUE (subscription_id, delivery_date, product_slug)"
+    },
+    {
+      "table_name": "wallets",
+      "constraint_name": "chk_wallet_balance_non_negative",
+      "definition": "CHECK ((balance >= '-500.00'::numeric))"
+    },
+    {
+      "table_name": "orders",
+      "constraint_name": "orders_custom_order_id_key",
+      "definition": "UNIQUE (custom_order_id)"
+    },
+    {
+      "table_name": "delivery_ledger",
+      "constraint_name": "check_delivery_ledger_status",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'out_for_delivery'::text, 'delivered'::text, 'out_of_stock'::text, 'on_hold'::text, 'scheduled'::text, 'failed'::text, 'skipped'::text, 'cancelled'::text, 'paused'::text, 'pending_payment'::text])))"
+    },
+    {
+      "table_name": "orders",
+      "constraint_name": "orders_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "master_orders",
+      "constraint_name": "master_orders_pkey",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "master_orders",
+      "constraint_name": "master_orders_custom_order_id_key",
+      "definition": "UNIQUE (custom_order_id)"
+    },
+    {
+      "table_name": "master_orders",
+      "constraint_name": "unique_customer_delivery_date",
+      "definition": "UNIQUE (user_id, delivery_date)"
+    },
+    {
+      "table_name": "master_orders",
+      "constraint_name": "master_orders_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "delivery_pricing_tiers",
+      "indexname": "delivery_pricing_tiers_pkey",
+      "indexdef": "CREATE UNIQUE INDEX delivery_pricing_tiers_pkey ON public.delivery_pricing_tiers USING btree (id)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_pkey",
+      "indexdef": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_phone_unique",
+      "indexdef": "CREATE UNIQUE INDEX profiles_phone_unique ON public.profiles USING btree (phone) WHERE (phone IS NOT NULL)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_email_unique",
+      "indexdef": "CREATE UNIQUE INDEX profiles_email_unique ON public.profiles USING btree (lower(email)) WHERE (email IS NOT NULL)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "idx_profiles_phone",
+      "indexdef": "CREATE INDEX idx_profiles_phone ON public.profiles USING btree (phone) WHERE (phone IS NOT NULL)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "idx_profiles_email",
+      "indexdef": "CREATE INDEX idx_profiles_email ON public.profiles USING btree (lower(email)) WHERE (email IS NOT NULL)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "products_pkey",
+      "indexdef": "CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "products_slug_key",
+      "indexdef": "CREATE UNIQUE INDEX products_slug_key ON public.products USING btree (slug)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "idx_products_active",
+      "indexdef": "CREATE INDEX idx_products_active ON public.products USING btree (active)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "idx_products_display_order",
+      "indexdef": "CREATE INDEX idx_products_display_order ON public.products USING btree (display_order)"
+    },
+    {
+      "tablename": "order_items",
+      "indexname": "order_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX order_items_pkey ON public.order_items USING btree (id)"
+    },
+    {
+      "tablename": "order_items",
+      "indexname": "idx_order_items_order",
+      "indexdef": "CREATE INDEX idx_order_items_order ON public.order_items USING btree (order_id)"
+    },
+    {
+      "tablename": "faq",
+      "indexname": "faq_pkey",
+      "indexdef": "CREATE UNIQUE INDEX faq_pkey ON public.faq USING btree (id)"
+    },
+    {
+      "tablename": "phone_otps",
+      "indexname": "phone_otps_pkey",
+      "indexdef": "CREATE UNIQUE INDEX phone_otps_pkey ON public.phone_otps USING btree (id)"
+    },
+    {
+      "tablename": "phone_otps",
+      "indexname": "phone_otps_phone_idx",
+      "indexdef": "CREATE INDEX phone_otps_phone_idx ON public.phone_otps USING btree (phone)"
+    },
+    {
+      "tablename": "content_blocks",
+      "indexname": "content_blocks_pkey",
+      "indexdef": "CREATE UNIQUE INDEX content_blocks_pkey ON public.content_blocks USING btree (id)"
+    },
+    {
+      "tablename": "content_blocks",
+      "indexname": "idx_content_type",
+      "indexdef": "CREATE INDEX idx_content_type ON public.content_blocks USING btree (type)"
+    },
+    {
+      "tablename": "serviceable_pincodes",
+      "indexname": "serviceable_pincodes_pkey",
+      "indexdef": "CREATE UNIQUE INDEX serviceable_pincodes_pkey ON public.serviceable_pincodes USING btree (id)"
+    },
+    {
+      "tablename": "serviceable_pincodes",
+      "indexname": "serviceable_pincodes_pincode_key",
+      "indexdef": "CREATE UNIQUE INDEX serviceable_pincodes_pincode_key ON public.serviceable_pincodes USING btree (pincode)"
+    },
+    {
+      "tablename": "serviceable_pincodes",
+      "indexname": "idx_serviceable_pincodes_pin",
+      "indexdef": "CREATE INDEX idx_serviceable_pincodes_pin ON public.serviceable_pincodes USING btree (pincode)"
+    },
+    {
+      "tablename": "delivery_slots",
+      "indexname": "delivery_slots_pkey",
+      "indexdef": "CREATE UNIQUE INDEX delivery_slots_pkey ON public.delivery_slots USING btree (id)"
+    },
+    {
+      "tablename": "delivery_slots",
+      "indexname": "delivery_slots_slot_key_key",
+      "indexdef": "CREATE UNIQUE INDEX delivery_slots_slot_key_key ON public.delivery_slots USING btree (slot_key)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_partner",
+      "indexdef": "CREATE INDEX idx_orders_partner ON public.orders USING btree (delivery_partner_id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "orders_pkey",
+      "indexdef": "CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_user",
+      "indexdef": "CREATE INDEX idx_orders_user ON public.orders USING btree (user_id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_status",
+      "indexdef": "CREATE INDEX idx_orders_status ON public.orders USING btree (order_status)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_user_created",
+      "indexdef": "CREATE INDEX idx_orders_user_created ON public.orders USING btree (user_id, created_at DESC)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_pincode",
+      "indexdef": "CREATE INDEX idx_orders_pincode ON public.orders USING btree (pincode)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_slot",
+      "indexdef": "CREATE INDEX idx_orders_slot ON public.orders USING btree (slot_id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "orders_custom_order_id_key",
+      "indexdef": "CREATE UNIQUE INDEX orders_custom_order_id_key ON public.orders USING btree (custom_order_id)"
+    },
+    {
+      "tablename": "delivery_partners",
+      "indexname": "delivery_partners_pkey",
+      "indexdef": "CREATE UNIQUE INDEX delivery_partners_pkey ON public.delivery_partners USING btree (id)"
+    },
+    {
+      "tablename": "delivery_partners",
+      "indexname": "delivery_partners_phone_key",
+      "indexdef": "CREATE UNIQUE INDEX delivery_partners_phone_key ON public.delivery_partners USING btree (phone)"
+    },
+    {
+      "tablename": "delivery_partners",
+      "indexname": "idx_partners_user",
+      "indexdef": "CREATE INDEX idx_partners_user ON public.delivery_partners USING btree (user_id)"
+    },
+    {
+      "tablename": "delivery_partners",
+      "indexname": "idx_partners_status",
+      "indexdef": "CREATE INDEX idx_partners_status ON public.delivery_partners USING btree (status)"
+    },
+    {
+      "tablename": "delivery_partners",
+      "indexname": "delivery_partners_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX delivery_partners_user_id_key ON public.delivery_partners USING btree (user_id)"
+    },
+    {
+      "tablename": "delivery_partners",
+      "indexname": "unique_partner_user_id",
+      "indexdef": "CREATE UNIQUE INDEX unique_partner_user_id ON public.delivery_partners USING btree (user_id)"
+    },
+    {
+      "tablename": "addresses",
+      "indexname": "idx_addresses_is_deleted",
+      "indexdef": "CREATE INDEX idx_addresses_is_deleted ON public.addresses USING btree (is_deleted)"
+    },
+    {
+      "tablename": "addresses",
+      "indexname": "addresses_pkey",
+      "indexdef": "CREATE UNIQUE INDEX addresses_pkey ON public.addresses USING btree (id)"
+    },
+    {
+      "tablename": "addresses",
+      "indexname": "idx_addresses_user",
+      "indexdef": "CREATE INDEX idx_addresses_user ON public.addresses USING btree (user_id)"
+    },
+    {
+      "tablename": "cms_content",
+      "indexname": "site_content_pkey",
+      "indexdef": "CREATE UNIQUE INDEX site_content_pkey ON public.cms_content USING btree (key)"
+    },
+    {
+      "tablename": "site_settings",
+      "indexname": "app_settings_pkey",
+      "indexdef": "CREATE UNIQUE INDEX app_settings_pkey ON public.site_settings USING btree (key)"
+    },
+    {
+      "tablename": "coupons",
+      "indexname": "coupons_pkey",
+      "indexdef": "CREATE UNIQUE INDEX coupons_pkey ON public.coupons USING btree (id)"
+    },
+    {
+      "tablename": "coupons",
+      "indexname": "coupons_code_key",
+      "indexdef": "CREATE UNIQUE INDEX coupons_code_key ON public.coupons USING btree (code)"
+    },
+    {
+      "tablename": "offers",
+      "indexname": "offers_pkey",
+      "indexdef": "CREATE UNIQUE INDEX offers_pkey ON public.offers USING btree (id)"
+    },
+    {
+      "tablename": "delivery_config",
+      "indexname": "delivery_config_pkey",
+      "indexdef": "CREATE UNIQUE INDEX delivery_config_pkey ON public.delivery_config USING btree (id)"
+    },
+    {
+      "tablename": "user_roles",
+      "indexname": "user_roles_pkey",
+      "indexdef": "CREATE UNIQUE INDEX user_roles_pkey ON public.user_roles USING btree (id)"
+    },
+    {
+      "tablename": "user_roles",
+      "indexname": "user_roles_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX user_roles_user_id_key ON public.user_roles USING btree (user_id)"
+    },
+    {
+      "tablename": "subscriptions",
+      "indexname": "subscriptions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX subscriptions_pkey ON public.subscriptions USING btree (id)"
+    },
+    {
+      "tablename": "subscriptions",
+      "indexname": "idx_unique_active_user_sub_slug",
+      "indexdef": "CREATE UNIQUE INDEX idx_unique_active_user_sub_slug ON public.subscriptions USING btree (user_id, product_slug) WHERE (status = ANY (ARRAY['active'::text, 'paused'::text]))"
+    },
+    {
+      "tablename": "subscription_plans",
+      "indexname": "subscription_plans_pkey",
+      "indexdef": "CREATE UNIQUE INDEX subscription_plans_pkey ON public.subscription_plans USING btree (id)"
+    },
+    {
+      "tablename": "wallet_transactions",
+      "indexname": "wallet_transactions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX wallet_transactions_pkey ON public.wallet_transactions USING btree (id)"
+    },
+    {
+      "tablename": "delivery_ledger",
+      "indexname": "delivery_ledger_pkey",
+      "indexdef": "CREATE UNIQUE INDEX delivery_ledger_pkey ON public.delivery_ledger USING btree (id)"
+    },
+    {
+      "tablename": "delivery_ledger",
+      "indexname": "unique_sub_date_product",
+      "indexdef": "CREATE UNIQUE INDEX unique_sub_date_product ON public.delivery_ledger USING btree (subscription_id, delivery_date, product_slug)"
+    },
+    {
+      "tablename": "delivery_ledger",
+      "indexname": "idx_delivery_ledger_shared_box_id",
+      "indexdef": "CREATE INDEX idx_delivery_ledger_shared_box_id ON public.delivery_ledger USING btree (custom_order_id)"
+    },
+    {
+      "tablename": "app_settings",
+      "indexname": "app_settings_pkey1",
+      "indexdef": "CREATE UNIQUE INDEX app_settings_pkey1 ON public.app_settings USING btree (key)"
+    },
+    {
+      "tablename": "user_notifications",
+      "indexname": "user_notifications_pkey",
+      "indexdef": "CREATE UNIQUE INDEX user_notifications_pkey ON public.user_notifications USING btree (id)"
+    },
+    {
+      "tablename": "wallets",
+      "indexname": "wallets_pkey",
+      "indexdef": "CREATE UNIQUE INDEX wallets_pkey ON public.wallets USING btree (id)"
+    },
+    {
+      "tablename": "wallets",
+      "indexname": "wallets_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX wallets_user_id_key ON public.wallets USING btree (user_id)"
+    },
+    {
+      "tablename": "master_orders",
+      "indexname": "master_orders_pkey",
+      "indexdef": "CREATE UNIQUE INDEX master_orders_pkey ON public.master_orders USING btree (id)"
+    },
+    {
+      "tablename": "master_orders",
+      "indexname": "master_orders_custom_order_id_key",
+      "indexdef": "CREATE UNIQUE INDEX master_orders_custom_order_id_key ON public.master_orders USING btree (custom_order_id)"
+    },
+    {
+      "tablename": "master_orders",
+      "indexname": "unique_customer_delivery_date",
+      "indexdef": "CREATE UNIQUE INDEX unique_customer_delivery_date ON public.master_orders USING btree (user_id, delivery_date)"
+    },
+    {
+      "tablename": "master_orders",
+      "indexname": "idx_master_orders_lookup",
+      "indexdef": "CREATE INDEX idx_master_orders_lookup ON public.master_orders USING btree (delivery_date, delivery_partner_id)"
+    }
+  ]
+}
