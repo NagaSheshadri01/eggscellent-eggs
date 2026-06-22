@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Repeat, Truck, Calendar, User, Package, MapPin, CheckCircle2, Plus } from "lucide-react";
+import { handleSubscriptionPause, handleSubscriptionResume } from "@/lib/subscriptionUtils";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -43,7 +44,7 @@ const AdminSubscriptions = () => {
   });
 
   // Fetch Active Products for Plan Binding
-  const { data: products = [] } = useQuery({
+  const { data: products = [] } = useQuery<any[]>({
     queryKey: ["admin-products-active"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -111,8 +112,14 @@ const AdminSubscriptions = () => {
   // Mutations
   const updateSubStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await (supabase as any).from("subscriptions").update({ status }).eq("id", id);
-      if (error) throw error;
+      if (status === "paused") {
+        await handleSubscriptionPause(supabase, id);
+      } else if (status === "active") {
+        await handleSubscriptionResume(supabase, id);
+      } else {
+        const { error } = await (supabase as any).from("subscriptions").update({ status }).eq("id", id);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       toast.success("Subscription status updated");

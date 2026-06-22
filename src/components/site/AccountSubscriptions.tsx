@@ -9,7 +9,7 @@ import { useState } from "react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Settings, PauseCircle, PlayCircle, XCircle } from "lucide-react";
-
+import { handleSubscriptionPause, handleSubscriptionResume } from "@/lib/subscriptionUtils";
 type SubscriptionContract = {
   id: string;
   user_id: string;
@@ -74,15 +74,15 @@ const AccountSubscriptions = () => {
     enabled: !!user
   });
 
+
   const togglePauseMutation = useMutation({
     mutationFn: async ({ subId, currentStatus }: { subId: string; currentStatus: string }) => {
       const nextStatus = currentStatus === "active" ? "paused" : "active";
-      const { error } = await (supabase as any)
-        .from("subscriptions")
-        .update({ status: nextStatus })
-        .eq("id", subId);
-
-      if (error) throw error;
+      if (nextStatus === "paused") {
+        await handleSubscriptionPause(supabase, subId);
+      } else {
+        await handleSubscriptionResume(supabase, subId);
+      }
       return { subId, nextStatus };
     },
     onSuccess: (res) => {

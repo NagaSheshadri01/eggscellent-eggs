@@ -55,7 +55,7 @@ const HorizontalCalendarLedger = () => {
         .lte('delivery_date', endStr);
 
       if (error) throw error;
-      const validItems = (data || []).filter(item => item.quantity > 0);
+      const validItems = ((data as any[]) || []).filter((item: any) => item.quantity > 0);
       setCachedLedger(validItems);
     } catch (err) {
       console.error(err);

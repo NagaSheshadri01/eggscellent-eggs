@@ -29,6 +29,8 @@ import {
   TrendingUp,
   Plus
 } from "lucide-react";
+import { PackageX, RefreshCcw, HandCoins, ArrowRight, UserCog, Car, Copy } from "lucide-react";
+import { handleSubscriptionPause, handleSubscriptionResume } from "@/lib/subscriptionUtils";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -137,7 +139,7 @@ export const AdminLogistics = () => {
         .select(`
           *,
           profiles:user_id (id, full_name, phone, email),
-          delivery_ledger (
+          delivery_ledger!inner (
             *,
             subscriptions:subscription_id (
               id,
@@ -147,7 +149,8 @@ export const AdminLogistics = () => {
             )
           )
         `)
-        .eq("delivery_date", todayStr);
+        .eq("delivery_date", todayStr)
+        .in("delivery_ledger.status", ['pending', 'confirmed', 'out_for_delivery', 'delivered', 'out_of_stock']);
       
       if (error) throw error;
       return data || [];
@@ -163,7 +166,7 @@ export const AdminLogistics = () => {
         .select(`
           *,
           profiles:user_id (id, full_name, phone, email),
-          delivery_ledger (
+          delivery_ledger!inner (
             *,
             subscriptions:subscription_id (
               id,
@@ -173,7 +176,8 @@ export const AdminLogistics = () => {
             )
           )
         `)
-        .eq("delivery_date", tomorrowStr);
+        .eq("delivery_date", tomorrowStr)
+        .in("delivery_ledger.status", ['pending', 'confirmed', 'out_for_delivery', 'delivered', 'out_of_stock']);
 
       if (error) throw error;
       return data || [];
@@ -310,12 +314,11 @@ export const AdminLogistics = () => {
   // --- MUTATION 3: Subscription Contract Override Toggle (Active/Paused) ---
   const toggleSubStatusMutation = useMutation({
     mutationFn: async ({ subId, newStatus }: { subId: string; newStatus: "active" | "paused" }) => {
-      const { error } = await (supabase as any)
-        .from("subscriptions")
-        .update({ status: newStatus })
-        .eq("id", subId);
-
-      if (error) throw error;
+      if (newStatus === "paused") {
+        await handleSubscriptionPause(supabase, subId);
+      } else {
+        await handleSubscriptionResume(supabase, subId);
+      }
     },
     onSuccess: () => {
       toast.success("Subscription contract status updated successfully!");
