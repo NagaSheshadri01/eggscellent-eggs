@@ -77,18 +77,68 @@ const PartnerAccountHistory = () => {
     queryKey: ["partner_history", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
+      // 1. Fetch One Time Orders
+      const { data: oneTimeData, error: otError } = await supabase
+        .from("one_time_orders")
         .select(`
           *,
-          addresses(*),
-          delivery_slots(*)
+          addresses:delivery_address_id(*),
+          delivery_slots:delivery_slot_key(*)
         ` as any)
         .eq("delivery_partner_id", user!.id)
-        .eq("order_status", "delivered")
+        .eq("status", "delivered")
         .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      if (otError) throw otError;
+
+      // 2. Fetch Subscription Deliveries
+      const { data: subData, error: subError } = await (supabase as any)
+        .from("subscription_calendar_ledger")
+        .select(`
+          *,
+          subscription_items (
+            product_slug,
+            quantity,
+            subscriptions (
+              user_id,
+              profiles:user_id (full_name, phone),
+              addresses:address_id (*)
+            )
+          )
+        `)
+        .eq("delivery_partner_id", user!.id)
+        .eq("status", "delivered")
+        .order("created_at", { ascending: false });
+      if (subError) throw subError;
+
+      // Merge and standardize
+      const merged = [
+        ...(oneTimeData || []).map(o => ({
+          ...o,
+          isSubscription: false,
+          created_at: o.created_at,
+          slot_id: o.delivery_slot_key || "unassigned"
+        })),
+        ...(subData || []).map((s: any) => {
+          let addr = {};
+          let profile = {};
+          if (s.subscription_items?.subscriptions) {
+            addr = s.subscription_items.subscriptions.addresses || {};
+            profile = s.subscription_items.subscriptions.profiles || {};
+          }
+          return {
+            id: s.id,
+            status: s.status,
+            address_snapshot: { full_name: (profile as any).full_name },
+            addresses: addr,
+            delivery_slots: { label: "Subscription Delivery" },
+            isSubscription: true,
+            created_at: s.created_at || new Date(s.delivery_date).toISOString(),
+            slot_id: "subscription"
+          };
+        })
+      ];
+
+      return merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     },
   });
 

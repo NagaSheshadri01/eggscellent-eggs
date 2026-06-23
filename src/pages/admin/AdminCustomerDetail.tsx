@@ -15,8 +15,29 @@ const AdminCustomerDetail = () => {
     Promise.all([
       supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
       supabase.from("addresses").select("*").eq("user_id", id),
-      supabase.from("orders").select("id,total,order_status,created_at").eq("user_id", id).order("created_at", { ascending: false }),
-    ]).then(([p, a, o]) => { setProfile(p.data); setAddresses(a.data ?? []); setOrders(o.data ?? []); });
+      supabase.from("one_time_orders").select("id,total_amount,status,created_at").eq("user_id", id),
+      supabase.from("subscription_deliveries").select("id,status,created_at,delivery_date,subscription_delivery_items(effective_price)").eq("user_id", id)
+    ]).then(([p, a, o1, o2]) => { 
+      setProfile(p.data); 
+      setAddresses(a.data ?? []); 
+      const mergedOrders = [
+        ...(o1.data ?? []).map(o => ({
+          id: o.id,
+          total: Number(o.total_amount || 0),
+          order_status: o.status,
+          created_at: o.created_at,
+          type: 'One-Time'
+        })),
+        ...(o2.data ?? []).map((o: any) => ({
+          id: o.id,
+          total: (o.subscription_delivery_items || []).reduce((sum: number, item: any) => sum + Number(item.effective_price || 0), 0),
+          order_status: o.status,
+          created_at: o.created_at || new Date(o.delivery_date).toISOString(),
+          type: 'Subscription'
+        }))
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setOrders(mergedOrders); 
+    });
   }, [id]);
 
   if (!profile) return <Skeleton className="h-80 rounded-2xl" />;
@@ -50,9 +71,9 @@ const AdminCustomerDetail = () => {
         {orders.length === 0 ? <p className="text-sm text-muted-foreground">No orders.</p> : (
           <div className="space-y-2">
             {orders.map(o => (
-              <Link key={o.id} to={`/admin/orders/${o.id}`} className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-primary/40 transition-smooth text-sm">
+              <Link key={o.id} to={o.type === 'Subscription' ? `/admin/logistics` : `/admin/orders/${o.id}`} className="flex items-center justify-between p-3 rounded-xl border border-border hover:border-primary/40 transition-smooth text-sm">
                 <div>
-                  <div className="font-mono text-xs text-brown">#{o.id.slice(0,8).toUpperCase()}</div>
+                  <div className="font-mono text-xs text-brown flex items-center gap-2">#{o.id.slice(0,8).toUpperCase()} <span className="px-1.5 py-0.5 bg-secondary text-brown rounded text-[10px]">{o.type}</span></div>
                   <div className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString()} · {o.order_status}</div>
                 </div>
                 <div className="font-display font-bold text-brown">₹{o.total}</div>

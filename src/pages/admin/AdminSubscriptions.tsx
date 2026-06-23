@@ -65,7 +65,8 @@ const AdminSubscriptions = () => {
         .from("subscriptions")
         .select(`
           *,
-          profiles:user_id (full_name, email, phone)
+          profiles:user_id (full_name, email, phone),
+          subscription_items(id, product_slug, quantity, selected_days)
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -79,15 +80,17 @@ const AdminSubscriptions = () => {
     queryKey: ["admin-subscription-dispatch", today],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("delivery_ledger")
+        .from("subscription_calendar_ledger")
         .select(`
           *,
-          subscriptions:subscription_id (
+          subscription_items (
             product_slug,
-            product_id,
             quantity,
-            profiles:user_id (full_name, phone),
-            addresses:address_id (*)
+            subscriptions (
+              user_id,
+              profiles:user_id (full_name, phone),
+              addresses:address_id (*)
+            )
           )
         `)
         .eq("delivery_date", today);
@@ -130,7 +133,7 @@ const AdminSubscriptions = () => {
   const assignPartner = useMutation({
     mutationFn: async ({ deliveryId, partnerId }: { deliveryId: string; partnerId: string }) => {
       const { data, error } = await (supabase as any)
-        .from("delivery_ledger")
+        .from("subscription_calendar_ledger")
         .update({ delivery_partner_id: partnerId === "unassigned" ? null : partnerId })
         .eq("id", deliveryId)
         .select("id");
@@ -312,7 +315,8 @@ const AdminSubscriptions = () => {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {sortedDispatch.map((d: any) => {
-                const sub = d.subscriptions || {};
+                const subItem = d.subscription_items || {};
+                const sub = subItem.subscriptions || {};
                 const profile = sub.profiles || {};
                 const addr = sub.addresses || {};
                 const isAssigned = !!d.delivery_partner_id;
@@ -332,18 +336,18 @@ const AdminSubscriptions = () => {
                         {profile.full_name || "Guest Customer"}
                       </div>
                       <span className="text-[9px] font-mono font-bold bg-white/60 px-1.5 py-0.5 rounded border border-black/5">
-                        #{d.bill_id}
+                        #{d.id.slice(0,8)}
                       </span>
                     </div>
 
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center gap-2 text-xs text-brown font-medium">
                         <Package className="w-3 h-3" />
-                        {sub.quantity}x {products.find((p: any) => p.slug === sub.product_slug || p.id === sub.product_id)?.name || sub.product_slug}
+                        {subItem.quantity || d.quantity}x {products.find((p: any) => p.slug === subItem.product_slug || p.slug === d.product_slug)?.name || subItem.product_slug || d.product_slug}
                       </div>
                       <div className="flex items-start gap-2 text-[10px] text-muted-foreground leading-relaxed">
                         <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
-                        {addr.address_line_1}, {addr.pincode}
+                        {addr.address_line_1 || "No Address"}, {addr.pincode || ""}
                       </div>
                     </div>
 
@@ -404,25 +408,35 @@ const AdminSubscriptions = () => {
                         <div className="text-[10px] text-muted-foreground">{s.profiles?.phone}</div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-1.5 font-medium text-brown">
-                          <Package className="w-3.5 h-3.5 text-primary" />
-                          {s.quantity}x {products.find((p: any) => p.slug === s.product_slug || p.id === s.product_id)?.name || s.product_slug}
+                        <div className="space-y-2">
+                        {s.subscription_items?.map((item: any) => (
+                          <div key={item.id} className="flex items-center gap-1.5 font-medium text-brown">
+                            <Package className="w-3.5 h-3.5 text-primary" />
+                            {item.quantity}x {products.find((p: any) => p.slug === item.product_slug)?.name || item.product_slug}
+                          </div>
+                        ))}
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex gap-1">
-                          {DAYS.map((day, idx) => (
-                            <span 
-                              key={day} 
-                              className={`text-[9px] font-bold w-6 h-6 rounded-full flex items-center justify-center border ${
-                                s.selected_days?.includes(idx) 
-                                  ? "bg-primary/20 border-primary text-brown" 
-                                  : "bg-secondary/40 border-border text-muted-foreground"
-                              }`}
-                            >
-                              {day[0]}
-                            </span>
-                          ))}
+                        <div className="space-y-2">
+                        {s.subscription_items?.map((item: any) => {
+                          const days = typeof item.selected_days === "string" ? JSON.parse(item.selected_days) : (item.selected_days || []);
+                          return (
+                          <div key={item.id} className="flex gap-1">
+                            {DAYS.map((day, idx) => (
+                              <span 
+                                key={day} 
+                                className={`text-[9px] font-bold w-6 h-6 rounded-full flex items-center justify-center border ${
+                                  days.includes(idx) || days.includes(String(idx))
+                                    ? "bg-primary/20 border-primary text-brown" 
+                                    : "bg-secondary/40 border-border text-muted-foreground"
+                                }`}
+                              >
+                                {day[0]}
+                              </span>
+                            ))}
+                          </div>
+                        )})}
                         </div>
                       </td>
                       <td className="px-5 py-4 font-mono text-xs text-brown">

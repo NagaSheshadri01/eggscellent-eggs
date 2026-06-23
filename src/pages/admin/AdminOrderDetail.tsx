@@ -25,8 +25,8 @@ const AdminOrderDetail = () => {
   const load = async () => {
     if (!id) return;
     const [{ data: o }, { data: it }] = await Promise.all([
-      (supabase as any).from("orders").select("*").eq("id", id).maybeSingle(),
-      (supabase as any).from("order_items").select("*").eq("order_id", id),
+      (supabase as any).from("one_time_orders").select("*,addresses:delivery_address_id(*)").eq("id", id).maybeSingle(),
+      (supabase as any).from("one_time_order_items").select("*").eq("order_id", id),
     ]);
     setOrder(o); setItems(it ?? []);
     if (o && (o as any).user_id) {
@@ -37,7 +37,7 @@ const AdminOrderDetail = () => {
   useEffect(() => { load(); }, [id]);
 
   const updateStatus = async (s: string) => {
-    const { error } = await (supabase as any).from("orders").update({ order_status: s as any }).eq("id", id!);
+    const { error } = await (supabase as any).from("one_time_orders").update({ status: s as any }).eq("id", id!);
     if (error) toast.error(error.message); else { toast.success("Status updated"); load(); }
   };
 
@@ -80,7 +80,7 @@ const AdminOrderDetail = () => {
           <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Order #{order.custom_order_id || order.id.slice(0,8).toUpperCase()}</h1>
           <p className="text-sm text-muted-foreground">{new Date(order.created_at).toLocaleString()}</p>
         </div>
-        <Select value={order.order_status} onValueChange={updateStatus}>
+        <Select value={order.status} onValueChange={updateStatus}>
           <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
           <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
         </Select>
@@ -128,10 +128,10 @@ const AdminOrderDetail = () => {
           ))}
         </div>
         <div className="border-t border-border mt-5 pt-4 space-y-1.5 text-sm">
-          <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{order.subtotal}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span>{order.delivery_fee === 0 ? "FREE" : `₹${order.delivery_fee}`}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>₹{order.subtotal || order.total_amount}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span>{order.delivery_fee === 0 ? "FREE" : `₹${order.delivery_fee || 0}`}</span></div>
           {Number(order.discount) > 0 && <div className="flex justify-between text-success"><span>Discount</span><span>− ₹{order.discount}</span></div>}
-          <div className="flex justify-between font-display font-bold text-brown pt-2 border-t border-border mt-2"><span>Total</span><span>₹{order.total}</span></div>
+          <div className="flex justify-between font-display font-bold text-brown pt-2 border-t border-border mt-2"><span>Total</span><span>₹{order.total_amount}</span></div>
           <div className="flex justify-between text-xs text-muted-foreground"><span>Payment</span><span>{order.payment_method} · {order.payment_status}</span></div>
         </div>
       </div>
@@ -163,10 +163,10 @@ const AdminOrderDetail = () => {
           <Button 
             variant="destructive" 
             onClick={handleInitiateRefund} 
-            disabled={isRefunding || order.order_status === 'refunded'}
+            disabled={isRefunding || order.status === 'refunded'}
             className="w-full font-bold"
           >
-            {isRefunding ? "Processing..." : (order.order_status === 'refunded' ? "Order Fully Refunded" : "Initiate Refund")}
+            {isRefunding ? "Processing..." : (order.status === 'refunded' ? "Order Fully Refunded" : "Initiate Refund")}
           </Button>
         </div>
       </div>

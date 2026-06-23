@@ -21,20 +21,29 @@ const Dashboard = () => {
 
   useEffect(() => {
     (async () => {
-      const [orders, profiles, items] = await Promise.all([
-        supabase.from("orders").select("total,created_at,order_status"),
+      const [oneTimeOrders, subDeliveries, profiles, oneTimeItems, subItems] = await Promise.all([
+        supabase.from("one_time_orders").select("total_amount,created_at,status"),
+        supabase.from("subscription_deliveries").select("created_at,status,subscription_delivery_items(effective_price)"),
         supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase.from("order_items").select("product_name,quantity,price"),
+        supabase.from("one_time_order_items").select("product_name,product_slug,quantity,price"),
+        supabase.from("subscription_delivery_items").select("product_slug,quantity"),
       ]);
-      const list = orders.data ?? [];
+      const list = [
+        ...(oneTimeOrders.data ?? []).map((o: any) => ({ total: Number(o.total_amount || 0), created_at: o.created_at, status: o.status })),
+        ...(subDeliveries.data ?? []).map((d: any) => {
+          const total = (d.subscription_delivery_items || []).reduce((sum: number, item: any) => sum + Number(item.effective_price || 0), 0);
+          return { total, created_at: d.created_at, status: d.status };
+        })
+      ];
+      
       const todayKey = new Date().toISOString().slice(0,10);
       const today = list.filter(o => o.created_at.slice(0,10) === todayKey);
       const todayRevenue = today.reduce((s,o) => s + Number(o.total), 0);
       const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 6);
       const weekRevenue = list.filter(o => new Date(o.created_at) >= weekStart).reduce((s,o) => s + Number(o.total), 0);
-      const pending = list.filter(o => PENDING.includes(o.order_status)).length;
-      const delivered = list.filter(o => o.order_status === "delivered").length;
-      const cancelled = list.filter(o => o.order_status === "cancelled").length;
+      const pending = list.filter(o => PENDING.includes(o.status)).length;
+      const delivered = list.filter(o => o.status === "delivered").length;
+      const cancelled = list.filter(o => o.status === "cancelled").length;
 
       const days: { date: string; revenue: number }[] = [];
       for (let i = 6; i >= 0; i--) {
@@ -45,7 +54,14 @@ const Dashboard = () => {
       }
 
       const agg = new Map<string, number>();
-      (items.data ?? []).forEach((it: any) => agg.set(it.product_name, (agg.get(it.product_name) || 0) + Number(it.quantity)));
+      (oneTimeItems.data ?? []).forEach((it: any) => {
+        const name = it.product_name || it.product_slug;
+        agg.set(name, (agg.get(name) || 0) + Number(it.quantity));
+      });
+      (subItems.data ?? []).forEach((it: any) => {
+        const name = it.product_slug;
+        agg.set(name, (agg.get(name) || 0) + Number(it.quantity));
+      });
       const best = Array.from(agg.entries()).sort((a,b) => b[1]-a[1]).slice(0,5);
 
       setStats({ todayRevenue, todayCount: today.length, weekRevenue, pending, delivered, cancelled, users: profiles.count ?? 0, days, best });

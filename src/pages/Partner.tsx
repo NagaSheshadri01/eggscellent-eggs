@@ -641,7 +641,7 @@ const Partner = () => {
                                   // Atomically confirm all scheduled items in this stop card
                                   for (const item of stop.items) {
                                     setCompletedStops(prev => ({ ...prev, [item.id]: true }));
-                                    await updateStopStatus.mutateAsync({ stopId: item.id, status: 'delivered' });
+                                    await updateStopStatus.mutateAsync({ stopId: item.id, type: 'subscription', status: 'delivered' });
                                   }
                                   toast.success("All products in this stop confirmed and wallet deducted successfully!");
                                 }}
@@ -666,7 +666,7 @@ const Partner = () => {
                   if (!selectedIssueStopId) return;
                   const stopId = selectedIssueStopId;
                   setCompletedStops(prev => ({ ...prev, [stopId]: true }));
-                  await updateStopStatus.mutateAsync({ stopId, status });
+                  await updateStopStatus.mutateAsync({ stopId, type: 'subscription', status });
                   toast.success(`Delivery logged as ${status} (No wallet charges deducted)`);
                 }}
               />
