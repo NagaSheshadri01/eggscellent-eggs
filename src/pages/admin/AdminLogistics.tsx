@@ -136,27 +136,41 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const targetDate = todayStr;
       
-      const { data: subDeliveries, error: subErr } = await (supabase as any)
-        .from("subscription_deliveries")
-        .select(`
-          *,
-          profiles:user_id (id, full_name, phone, email),
-          subscription_delivery_items (*),
-          addresses:delivery_address_id (*)
-        `)
-        .eq("delivery_date", targetDate);
-      if (subErr) throw subErr;
+      let subDeliveries = [];
+      try {
+        const { data: subData, error: subErr } = await (supabase as any)
+          .from("subscription_deliveries")
+          .select(`
+            *,
+            profiles:user_id (id, full_name, phone, email),
+            subscription_delivery_items (*),
+            addresses:delivery_address_id (*)
+          `)
+          .eq("delivery_date", targetDate);
+        if (subErr) throw subErr;
+        subDeliveries = subData || [];
+      } catch (err: any) {
+        console.error("Subscription Pipeline Error:", err);
+        toast.error("Failed to fetch subscription items: " + err.message);
+      }
 
-      const { data: retailDeliveries, error: retailErr } = await (supabase as any)
-        .from("one_time_orders")
-        .select(`
-          *,
-          profiles:user_id (id, full_name, phone, email),
-          one_time_order_items (*),
-          addresses:delivery_address_id (*)
-        `)
-        .eq("delivery_date", targetDate);
-      if (retailErr) throw retailErr;
+      let retailDeliveries = [];
+      try {
+        const { data: retailData, error: retailErr } = await (supabase as any)
+          .from("one_time_orders")
+          .select(`
+            *,
+            profiles:user_id (id, full_name, phone, email),
+            one_time_order_items (*),
+            addresses:delivery_address_id (*)
+          `)
+          .eq("delivery_date", targetDate);
+        if (retailErr) throw retailErr;
+        retailDeliveries = retailData || [];
+      } catch (err: any) {
+        console.error("Retail Pipeline Error:", err);
+        toast.error("Failed to fetch retail items: " + err.message);
+      }
 
       const mergedMap = new Map();
       const processAddress = (o: any) => o.addresses || { city: '', address_line_1: '', pincode: o.pincode || '' };
@@ -218,27 +232,41 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const targetDate = tomorrowStr;
       
-      const { data: subDeliveries, error: subErr } = await (supabase as any)
-        .from("subscription_deliveries")
-        .select(`
-          *,
-          profiles:user_id (id, full_name, phone, email),
-          subscription_delivery_items (*),
-          addresses:delivery_address_id (*)
-        `)
-        .eq("delivery_date", targetDate);
-      if (subErr) throw subErr;
+      let subDeliveries = [];
+      try {
+        const { data: subData, error: subErr } = await (supabase as any)
+          .from("subscription_deliveries")
+          .select(`
+            *,
+            profiles:user_id (id, full_name, phone, email),
+            subscription_delivery_items (*),
+            addresses:delivery_address_id (*)
+          `)
+          .eq("delivery_date", targetDate);
+        if (subErr) throw subErr;
+        subDeliveries = subData || [];
+      } catch (err: any) {
+        console.error("Subscription Pipeline Error (Tomorrow):", err);
+        toast.error("Failed to fetch subscription items: " + err.message);
+      }
 
-      const { data: retailDeliveries, error: retailErr } = await (supabase as any)
-        .from("one_time_orders")
-        .select(`
-          *,
-          profiles:user_id (id, full_name, phone, email),
-          one_time_order_items (*),
-          addresses:delivery_address_id (*)
-        `)
-        .eq("delivery_date", targetDate);
-      if (retailErr) throw retailErr;
+      let retailDeliveries = [];
+      try {
+        const { data: retailData, error: retailErr } = await (supabase as any)
+          .from("one_time_orders")
+          .select(`
+            *,
+            profiles:user_id (id, full_name, phone, email),
+            one_time_order_items (*),
+            addresses:delivery_address_id (*)
+          `)
+          .eq("delivery_date", targetDate);
+        if (retailErr) throw retailErr;
+        retailDeliveries = retailData || [];
+      } catch (err: any) {
+        console.error("Retail Pipeline Error (Tomorrow):", err);
+        toast.error("Failed to fetch retail items: " + err.message);
+      }
 
       const mergedMap = new Map();
       const processAddress = (o: any) => o.addresses || { city: '', address_line_1: '', pincode: o.pincode || '' };
@@ -654,54 +682,66 @@ export const AdminLogistics = () => {
             </button>
           </div>
 
-          {Object.entries(geographicalClusters).map(([pincode, areas]) => (
-            <div key={pincode} className="space-y-3">
-              <span className="font-display font-bold text-brown text-lg">📮 Pincode: {pincode}</span>
-              <Accordion type="multiple" defaultValue={Object.keys(areas)} className="space-y-3">
-                {Object.entries(areas).map(([area, deliveries]) => {
-                  const clusterIds = deliveries.map((d) => d.userId);
-                  const isAllSelected = clusterIds.every(id => selectedStopIds.includes(id));
-                  return (
-                    <AccordionItem key={area} value={area} className="bg-card border rounded-2xl px-4 py-2">
-                      <div className="flex items-center gap-4">
-                        <Checkbox checked={isAllSelected} onCheckedChange={() => handleToggleCluster(deliveries)} />
-                        <AccordionTrigger className="flex-1">{area}</AccordionTrigger>
-                      </div>
-                      <AccordionContent>
-                        {deliveries.map((stop: DeliveryStop) => (
-                          <div key={stop.userId} className="p-4 border-b flex items-start gap-4">
-                            <Checkbox checked={selectedStopIds.includes(stop.userId)} onCheckedChange={() => handleToggleRow(stop)} />
-                            <div className="flex-1 space-y-2">
-                              <p className="font-bold">{stop.customerInfo?.full_name}</p>
-                              {stop.items.map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-center text-sm p-3 bg-secondary/10 rounded-xl">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-bold">{item.quantity}x {item.product_slug}</span>
-                                    {item.sourceType === 'one_time' ? (
-                                      <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full inline-block w-fit flex items-center gap-1"><Package className="w-3 h-3" /> One-Time</span>
-                                    ) : (
-                                      <span className="text-[10px] uppercase font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full inline-block w-fit flex items-center gap-1"><Repeat className="w-3 h-3" /> Subscription</span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {item.status === 'out_of_stock' ? (
-                                      <Button variant="outline" size="sm" onClick={() => updateItemStatusMutation.mutate({ itemId: item.id, sourceType: item.sourceType, newStatus: 'pending' })}><RefreshCcw className="w-3 h-3 mr-1" /> Restore</Button>
-                                    ) : (
-                                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => updateItemStatusMutation.mutate({ itemId: item.id, sourceType: item.sourceType, newStatus: 'out_of_stock' })}><PackageX className="w-3 h-3 mr-1" /> Out of Stock</Button>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
+          {Object.keys(geographicalClusters).length === 0 ? (
+            <div className="bg-card border-2 border-dashed border-border/50 rounded-2xl flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 bg-secondary/30 rounded-full flex items-center justify-center mb-4">
+                <Truck className="w-8 h-8 text-primary/50" />
+              </div>
+              <h3 className="font-display font-bold text-brown text-xl">No Deliveries Dispatched for This Date</h3>
+              <p className="text-sm text-muted-foreground mt-2 max-w-sm">
+                There are currently zero active subscription deliveries or one-time retail orders scheduled for this dispatch window.
+              </p>
             </div>
-          ))}
+          ) : (
+            Object.entries(geographicalClusters).map(([pincode, areas]) => (
+              <div key={pincode} className="space-y-3">
+                <span className="font-display font-bold text-brown text-lg">📮 Pincode: {pincode}</span>
+                <Accordion type="multiple" defaultValue={Object.keys(areas)} className="space-y-3">
+                  {Object.entries(areas).map(([area, deliveries]) => {
+                    const clusterIds = deliveries.map((d) => d.userId);
+                    const isAllSelected = clusterIds.every(id => selectedStopIds.includes(id));
+                    return (
+                      <AccordionItem key={area} value={area} className="bg-card border rounded-2xl px-4 py-2">
+                        <div className="flex items-center gap-4">
+                          <Checkbox checked={isAllSelected} onCheckedChange={() => handleToggleCluster(deliveries)} />
+                          <AccordionTrigger className="flex-1">{area}</AccordionTrigger>
+                        </div>
+                        <AccordionContent>
+                          {deliveries.map((stop: DeliveryStop) => (
+                            <div key={stop.userId} className="p-4 border-b flex items-start gap-4">
+                              <Checkbox checked={selectedStopIds.includes(stop.userId)} onCheckedChange={() => handleToggleRow(stop)} />
+                              <div className="flex-1 space-y-2">
+                                <p className="font-bold">{stop.customerInfo?.full_name}</p>
+                                {stop.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between items-center text-sm p-3 bg-secondary/10 rounded-xl">
+                                    <div className="flex flex-col gap-1">
+                                      <span className="font-bold">{item.quantity}x {item.product_slug}</span>
+                                      {item.sourceType === 'one_time' ? (
+                                        <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full inline-block w-fit flex items-center gap-1"><Package className="w-3 h-3" /> One-Time</span>
+                                      ) : (
+                                        <span className="text-[10px] uppercase font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full inline-block w-fit flex items-center gap-1"><Repeat className="w-3 h-3" /> Subscription</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {item.status === 'out_of_stock' ? (
+                                        <Button variant="outline" size="sm" onClick={() => updateItemStatusMutation.mutate({ itemId: item.id, sourceType: item.sourceType, newStatus: 'pending' })}><RefreshCcw className="w-3 h-3 mr-1" /> Restore</Button>
+                                      ) : (
+                                        <Button variant="outline" size="sm" className="text-destructive" onClick={() => updateItemStatusMutation.mutate({ itemId: item.id, sourceType: item.sourceType, newStatus: 'out_of_stock' })}><PackageX className="w-3 h-3 mr-1" /> Out of Stock</Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              </div>
+            ))
+          )}
         </TabsContent>
 
         <TabsContent value="driver-registry" className="grid grid-cols-1 md:grid-cols-2 gap-4">

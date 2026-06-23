@@ -12,12 +12,9 @@ import { Settings, PauseCircle, PlayCircle, XCircle } from "lucide-react";
 import { handleSubscriptionPause, handleSubscriptionResume } from "@/lib/subscriptionUtils";
 type SubscriptionContract = {
   id: string;
-  display_id?: string;
   user_id: string;
   status: string;
-  payment_method?: string;
-  wallet_mode?: string;
-  address_id: string | null;
+  delivery_address_id: string | null;
   created_at: string;
   subscription_items: Array<{
     id: string;
@@ -58,13 +55,7 @@ const AccountSubscriptions = () => {
       const { data, error } = await supabase
         .from("subscriptions")
         .select(`
-          id,
-          display_id,
-          status,
-          created_at,
-          address_id,
-          payment_method,
-          wallet_mode,
+          *,
           subscription_items (
             id,
             product_slug,
@@ -73,7 +64,7 @@ const AccountSubscriptions = () => {
             selected_days,
             products:product_slug (name, discounted_price, image_url)
           ),
-          addresses:address_id (address_line_1, address_line_2, landmark, city, state, pincode)
+          addresses:delivery_address_id (address_line_1, address_line_2, landmark, city, state, pincode)
         `)
         .eq("user_id", user.id)
         .in("status", ["active", "paused"])

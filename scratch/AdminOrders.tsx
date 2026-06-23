@@ -23,21 +23,11 @@ const AdminOrders = () => {
     queryKey: ["orders"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("one_time_orders")
+        .from("orders")
         .select(`
-          id,
-          display_id,
-          delivery_date,
-          total_amount,
-          status,
-          created_at,
-          delivery_partner_id,
-          delivery_slots:delivery_slot_key,
-          user_id,
-          payment_method,
-          payment_status,
-          addresses:delivery_address_id(pincode, lat, lng),
-          one_time_order_items(*)
+          *,
+          addresses(pincode, lat, lng),
+          order_items(product_name, product_id)
         ` as any)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -102,10 +92,10 @@ const AdminOrders = () => {
     });
 
     const { data, error } = await (supabase as any)
-      .from("one_time_orders")
+      .from("orders")
       .update({
         delivery_partner_id: targetPartner,
-        status: "confirmed" as any
+        order_status: "confirmed" as any
       })
       .in("id", selectedIds)
       .select("id");
@@ -273,7 +263,7 @@ const AdminOrders = () => {
                             </div>
                             <div className="mt-1">
                               <span className="text-xs text-stone-500 font-medium truncate w-64 block">
-                                {o.one_time_order_items?.map((item: any) => `${item.product_slug || item.product_name || 'Product'} - ${item.quantity || 1}N`).join(', ') || 'No products found'}
+                                {o.one_time_order_items?.map((item: any) => `${(item.product_name || item.product_slug) || item.product?.name || 'Product'} - ${item.quantity || 1}N`).join(', ') || 'No products found'}
                               </span>
                             </div>
                           </div>
@@ -317,13 +307,7 @@ const AdminOrders = () => {
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
                           <span className="font-bold text-brown">₹{o.total_amount}</span>
-                          <span className={`inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-bold w-fit ${
-                            o.payment_status?.toLowerCase() === 'completed' || o.payment_status?.toLowerCase() === 'paid' 
-                              ? 'bg-success/10 text-success' 
-                              : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {o.payment_status || 'Pending'} {o.payment_method ? `• ${o.payment_method}` : ''}
-                          </span>
+                          <span className="text-[10px] text-muted-foreground capitalize">{o.payment_status}</span>
                         </div>
                       </td>
                       <td className="px-4 py-4">
