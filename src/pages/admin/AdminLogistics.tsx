@@ -370,15 +370,45 @@ export const AdminLogistics = () => {
     queryKey: ["admin-subscriptions-all"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("subscriptions")
+        .from('subscriptions')
         .select(`
-          *,
-          profiles:user_id (full_name, email, phone)
-        `)
-        .order("created_at", { ascending: false });
+          id,
+          display_id,
+          status,
+          payment_method,
+          wallet_mode,
+          profiles:user_id (full_name, phone, email),
+          addresses:address_id (address_line_1, city, pincode),
+          subscription_items (
+            id,
+            product_slug,
+            quantity,
+            frequency,
+            selected_days
+          )
+        `);
       if (error) throw error;
       return data;
     },
+  });
+
+  const ledgerQ = useQuery({
+    queryKey: ['admin-logistics-ledger'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('subscription_calendar_ledger')
+        .select(`
+          id,
+          delivery_date,
+          product_slug,
+          action_type,
+          override_quantity,
+          profiles:user_id (full_name, phone)
+        `)
+        .order('delivery_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
   });
 
   const plansQ = useQuery({
@@ -759,15 +789,105 @@ export const AdminLogistics = () => {
         </TabsContent>
 
         <TabsContent value="active-subscriptions">
-            {/* Implementation for Subscription List ... */}
+          {(!subscriptionsQ.data || subscriptionsQ.data.length === 0) ? (
+            <div className="flex flex-col items-center justify-center p-12 bg-stone-50 rounded-2xl border border-stone-200/60 text-center my-4">
+              <span className="text-2xl mb-2">📋</span>
+              <h4 className="text-md font-bold text-stone-700">No data records found for this section.</h4>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {subscriptionsQ.data.map((sub: any) => (
+                <div key={sub.id} className="bg-card border rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-all">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-brown text-lg font-mono tracking-tight uppercase">{sub.display_id || `#${sub.id.slice(0,8)}`}</h4>
+                      <p className="text-sm font-medium mt-1">{sub.profiles?.full_name} • {sub.profiles?.phone}</p>
+                      <p className="text-xs text-muted-foreground">{sub.addresses?.address_line_1}, {sub.addresses?.city} - {sub.addresses?.pincode}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        sub.status === "active" ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {sub.status}
+                      </span>
+                      <span className="text-[10px] font-bold text-primary capitalize bg-primary/10 px-2 py-0.5 rounded-full">{sub.payment_method || 'prepaid'} {sub.wallet_mode ? `(${sub.wallet_mode})` : ''}</span>
+                    </div>
+                  </div>
+                  <div className="bg-secondary/20 rounded-xl p-3 space-y-2 border border-border/50">
+                    <h5 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-1"><Package className="w-3 h-3"/> Line Items</h5>
+                    {sub.subscription_items?.map((item: any) => (
+                      <div key={item.id} className="flex justify-between items-center text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                        <div className="flex items-center gap-2 font-bold text-brown">
+                          {item.quantity}x {item.product_slug}
+                        </div>
+                        <div className="text-[10px] font-bold text-muted-foreground uppercase bg-white px-2 py-0.5 rounded border">
+                          {item.frequency} 
+                          {item.frequency === 'custom_days' && item.selected_days ? ` (${item.selected_days.join(', ')})` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="manage-plans">
-            {/* Implementation for Plan Creator ... */}
+          {(!plansQ.data || plansQ.data.length === 0) ? (
+            <div className="flex flex-col items-center justify-center p-12 bg-stone-50 rounded-2xl border border-stone-200/60 text-center my-4">
+              <span className="text-2xl mb-2">📋</span>
+              <h4 className="text-md font-bold text-stone-700">No data records found for this section.</h4>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {plansQ.data.map((plan: any) => (
+                <div key={plan.id} className="bg-card border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-brown text-lg">{plan.name}</h4>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${plan.is_active ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                      {plan.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-4 tracking-wider">{plan.frequency_type}</p>
+                  <div className="flex justify-between items-center mt-auto pt-4 border-t border-border/50">
+                    <span className="font-bold text-primary">₹{plan.price_per_delivery}<span className="text-xs text-muted-foreground font-normal">/delivery</span></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="wallet-overrides">
-            {/* Implementation for Wallet Overrides ... */}
+          {(!ledgerQ.data || ledgerQ.data.length === 0) ? (
+            <div className="flex flex-col items-center justify-center p-12 bg-stone-50 rounded-2xl border border-stone-200/60 text-center my-4">
+              <span className="text-2xl mb-2">📋</span>
+              <h4 className="text-md font-bold text-stone-700">No data records found for this section.</h4>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {ledgerQ.data.map((log: any) => (
+                <div key={log.id} className="bg-card border rounded-2xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-all">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        log.action_type === 'skip' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {log.action_type}
+                      </span>
+                      <span className="font-bold text-brown text-sm uppercase">{log.product_slug}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium">{log.profiles?.full_name} • {log.profiles?.phone}</p>
+                  </div>
+                  <div className="text-right flex flex-col gap-1">
+                    <p className="text-sm font-bold text-brown">{new Date(log.delivery_date).toLocaleDateString()}</p>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Qty Override: <span className="text-primary text-xs ml-1">{log.override_quantity}</span></p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
