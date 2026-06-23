@@ -416,8 +416,8 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("subscription_plans")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select('id, title, description, product_slug, quantity, frequency_type, custom_days, price_per_delivery, is_active')
+        .order("id", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -795,45 +795,156 @@ export const AdminLogistics = () => {
               <h4 className="text-md font-bold text-stone-700">No data records found for this section.</h4>
             </div>
           ) : (
-            <div className="space-y-4">
-              {subscriptionsQ.data.map((sub: any) => (
-                <div key={sub.id} className="bg-card border rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-all">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-bold text-brown text-lg font-mono tracking-tight uppercase">{sub.display_id || `#${sub.id.slice(0,8)}`}</h4>
-                      <p className="text-sm font-medium mt-1">{sub.profiles?.full_name} • {sub.profiles?.phone}</p>
-                      <p className="text-xs text-muted-foreground">{sub.addresses?.address_line_1}, {sub.addresses?.city} - {sub.addresses?.pincode}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        sub.status === "active" ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"
-                      }`}>
-                        {sub.status}
-                      </span>
-                      <span className="text-[10px] font-bold text-primary capitalize bg-primary/10 px-2 py-0.5 rounded-full">{sub.payment_method || 'prepaid'} {sub.wallet_mode ? `(${sub.wallet_mode})` : ''}</span>
-                    </div>
-                  </div>
-                  <div className="bg-secondary/20 rounded-xl p-3 space-y-2 border border-border/50">
-                    <h5 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-1"><Package className="w-3 h-3"/> Line Items</h5>
-                    {sub.subscription_items?.map((item: any) => (
-                      <div key={item.id} className="flex justify-between items-center text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                        <div className="flex items-center gap-2 font-bold text-brown">
-                          {item.quantity}x {item.product_slug}
+            <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-secondary/40 text-brown font-display border-b">
+                  <tr>
+                    <th className="px-4 py-3 font-bold">CUSTOMER</th>
+                    <th className="px-4 py-3 font-bold">SUBSCRIPTION PLAN</th>
+                    <th className="px-4 py-3 font-bold">DAYS</th>
+                    <th className="px-4 py-3 font-bold">NEXT DELIVERY</th>
+                    <th className="px-4 py-3 font-bold">STATUS</th>
+                    <th className="px-4 py-3 font-bold">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {subscriptionsQ.data.map((sub: any) => (
+                    <tr key={sub.id} className="hover:bg-secondary/10 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-brown">{sub.profiles?.full_name}</span>
+                          <span className="text-xs text-muted-foreground">{sub.profiles?.phone}</span>
                         </div>
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase bg-white px-2 py-0.5 rounded border">
-                          {item.frequency} 
-                          {item.frequency === 'custom_days' && item.selected_days ? ` (${item.selected_days.join(', ')})` : ''}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          {sub.subscription_items?.map((item: any) => (
+                            <span key={item.id} className="inline-flex items-center gap-1 bg-secondary/30 px-2 py-0.5 rounded-full text-[10px] font-bold text-brown w-fit">
+                              {item.quantity}x {item.product_slug}
+                            </span>
+                          ))}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          {sub.subscription_items?.map((item: any) => (
+                            <span key={item.id} className="text-[10px] font-bold text-muted-foreground uppercase">
+                              {item.frequency}
+                              {item.frequency === 'custom_days' && item.selected_days ? ` (${item.selected_days.join(',')})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs font-medium text-muted-foreground">N/A</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1 w-fit">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase w-fit ${
+                            sub.status === "active" ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {sub.status}
+                          </span>
+                          <span className="text-[10px] font-bold text-primary capitalize">{sub.payment_method || 'prepaid'} {sub.wallet_mode ? `(${sub.wallet_mode})` : ''}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                         {sub.status === 'active' ? (
+                            <Button size="sm" variant="outline" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 h-7 text-xs" onClick={() => updateSubStatus.mutate({ id: sub.id, status: 'paused' })}>Pause</Button>
+                         ) : (
+                            <Button size="sm" variant="outline" className="text-green-600 hover:text-green-700 hover:bg-green-50 h-7 text-xs" onClick={() => updateSubStatus.mutate({ id: sub.id, status: 'active' })}>Resume</Button>
+                         )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="manage-plans">
+        <TabsContent value="manage-plans" className="space-y-6">
+          <div className="bg-card border rounded-2xl p-6 shadow-sm">
+            <h3 className="font-display font-bold text-brown text-xl mb-4">{editingPlanId ? "Edit Plan" : "Create & Publish Plan"}</h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const payload = {
+                title,
+                description,
+                product_slug: productSlug,
+                quantity,
+                frequency_type: frequencyType,
+                custom_days: frequencyType === 'custom_days' ? selectedDays : [],
+                price_per_delivery: pricePerDelivery,
+                is_active: true
+              };
+              if (editingPlanId) {
+                updatePlan.mutate({ id: editingPlanId, ...payload });
+                setEditingPlanId(null);
+              } else {
+                createPlan.mutate(payload);
+              }
+              setTitle("");
+              setDescription("");
+              setProductSlug("");
+              setQuantity(1);
+              setFrequencyType("daily");
+              setPricePerDelivery(0);
+            }} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Plan Title</Label>
+                  <Input required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Daily Double Brown" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Product Slug</Label>
+                  <Input required value={productSlug} onChange={e => setProductSlug(e.target.value)} placeholder="e.g. classic-brown-6" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Quantity per Delivery</Label>
+                  <Input required type="number" min="1" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Price per Delivery (₹)</Label>
+                  <Input required type="number" min="0" value={pricePerDelivery} onChange={e => setPricePerDelivery(parseInt(e.target.value))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Frequency Type</Label>
+                  <Select value={frequencyType} onValueChange={(v: any) => setFrequencyType(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="alternate">Alternate Days</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="custom_days">Custom Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Description</Label>
+                  <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Short description of the plan" />
+                </div>
+              </div>
+              <div className="flex justify-end pt-2">
+                 <Button type="submit" disabled={createPlan.isPending || updatePlan.isPending}>
+                   {editingPlanId ? "Update Plan" : "Publish Plan"}
+                 </Button>
+                 {editingPlanId && (
+                   <Button type="button" variant="ghost" className="ml-2" onClick={() => {
+                     setEditingPlanId(null);
+                     setTitle("");
+                     setDescription("");
+                     setProductSlug("");
+                     setQuantity(1);
+                     setFrequencyType("daily");
+                     setPricePerDelivery(0);
+                   }}>Cancel</Button>
+                 )}
+              </div>
+            </form>
+          </div>
+
+          <h3 className="font-display font-bold text-brown text-xl mb-2 mt-8">Active Published Plans</h3>
           {(!plansQ.data || plansQ.data.length === 0) ? (
             <div className="flex flex-col items-center justify-center p-12 bg-stone-50 rounded-2xl border border-stone-200/60 text-center my-4">
               <span className="text-2xl mb-2">📋</span>
@@ -842,16 +953,46 @@ export const AdminLogistics = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {plansQ.data.map((plan: any) => (
-                <div key={plan.id} className="bg-card border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all">
+                <div key={plan.id} className="bg-card border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col">
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-bold text-brown text-lg">{plan.name}</h4>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${plan.is_active ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                    <div>
+                      <h4 className="font-bold text-brown text-lg">{plan.title}</h4>
+                      <p className="text-xs text-muted-foreground">{plan.description}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 ${plan.is_active ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
                       {plan.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-4 tracking-wider">{plan.frequency_type}</p>
-                  <div className="flex justify-between items-center mt-auto pt-4 border-t border-border/50">
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="inline-flex items-center gap-1 bg-secondary/30 px-2 py-0.5 rounded-full text-[10px] font-bold text-brown w-fit">
+                      {plan.quantity}x {plan.product_slug}
+                    </span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{plan.frequency_type}</span>
+                  </div>
+                  <div className="flex justify-between items-center mt-auto pt-3 border-t border-stone-100 mt-4">
                     <span className="font-bold text-primary">₹{plan.price_per_delivery}<span className="text-xs text-muted-foreground font-normal">/delivery</span></span>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingPlanId(plan.id);
+                          setTitle(plan.title || "");
+                          setDescription(plan.description || "");
+                          setProductSlug(plan.product_slug || "");
+                          setQuantity(plan.quantity || 1);
+                          setFrequencyType((plan.frequency_type as any) || "daily");
+                          setPricePerDelivery(plan.price_per_delivery || 0);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-stone-800 text-xs font-medium rounded-lg transition-colors duration-150 border border-stone-200"
+                      >
+                        ✏️ Edit Plan
+                      </button>
+                      <button
+                        onClick={() => deletePlan.mutate(plan.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 text-xs font-medium rounded-lg transition-colors duration-150 border border-red-200"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -860,34 +1001,63 @@ export const AdminLogistics = () => {
         </TabsContent>
 
         <TabsContent value="wallet-overrides">
-          {(!ledgerQ.data || ledgerQ.data.length === 0) ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-stone-50 rounded-2xl border border-stone-200/60 text-center my-4">
-              <span className="text-2xl mb-2">📋</span>
-              <h4 className="text-md font-bold text-stone-700">No data records found for this section.</h4>
+          <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+            <div className="p-4 bg-secondary/20 border-b">
+              <h3 className="font-display font-bold text-brown text-lg">Customer Ledger Overrides</h3>
+              <p className="text-xs text-muted-foreground">Day-to-day administrative exceptions and temporary skips.</p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {ledgerQ.data.map((log: any) => (
-                <div key={log.id} className="bg-card border rounded-2xl p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-all">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        log.action_type === 'skip' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-                      }`}>
-                        {log.action_type}
-                      </span>
-                      <span className="font-bold text-brown text-sm uppercase">{log.product_slug}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground font-medium">{log.profiles?.full_name} • {log.profiles?.phone}</p>
-                  </div>
-                  <div className="text-right flex flex-col gap-1">
-                    <p className="text-sm font-bold text-brown">{new Date(log.delivery_date).toLocaleDateString()}</p>
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Qty Override: <span className="text-primary text-xs ml-1">{log.override_quantity}</span></p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            {(!ledgerQ.data || ledgerQ.data.length === 0) ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <span className="text-2xl mb-2">📋</span>
+                <h4 className="text-md font-bold text-stone-700">No data records found for this section.</h4>
+              </div>
+            ) : (
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-secondary/40 text-brown font-display border-b">
+                  <tr>
+                    <th className="px-4 py-3 font-bold">CUSTOMER NAME</th>
+                    <th className="px-4 py-3 font-bold">TARGET DELIVERY DATE</th>
+                    <th className="px-4 py-3 font-bold">AFFECTED PRODUCT</th>
+                    <th className="px-4 py-3 font-bold">OVERRIDE ACTION TYPE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {ledgerQ.data.map((log: any) => (
+                    <tr key={log.id} className="hover:bg-secondary/10 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-brown">{log.profiles?.full_name}</span>
+                          <span className="text-xs text-muted-foreground">{log.profiles?.phone}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-bold text-brown">{new Date(log.delivery_date).toLocaleDateString()}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 bg-secondary/30 px-2 py-0.5 rounded-full text-[10px] font-bold text-brown uppercase">
+                           {log.product_slug}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            log.action_type === 'skip' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {log.action_type}
+                          </span>
+                          {log.override_quantity !== null && (
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                              Qty Override: <span className="text-primary">{log.override_quantity}</span>
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 
