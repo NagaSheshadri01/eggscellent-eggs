@@ -116,7 +116,7 @@ const HorizontalCalendarLedger = () => {
     if (!userSubscription) return;
     setActionLoading(true);
     try {
-      await handleSubscriptionResume(supabase, userSubscription.id);
+      await handleSubscriptionResume(userSubscription.id);
       await fetchBulkLedger(userId);
       toast.success("Subscription resumed!");
     } catch (err: any) {
@@ -179,18 +179,18 @@ const HorizontalCalendarLedger = () => {
               <button
                 key={idx}
                 onClick={() => setSelectedDate(date)}
-                className={`flex flex-col items-center justify-center min-w-[64px] h-[86px] rounded-2xl transition-all duration-300 ease-out snap-center border ${isSelected
+                className={\`flex flex-col items-center justify-center min-w-[64px] h-[86px] rounded-2xl transition-all duration-300 ease-out snap-center border \${isSelected
                   ? 'bg-gradient-to-b from-amber-500 to-orange-500 border-amber-500 text-white shadow-lg shadow-amber-500/30 scale-105'
                   : 'bg-white border-stone-200/80 text-stone-700 hover:border-amber-300 hover:shadow-md'
-                  }`}
+                  }\`}
               >
-                <span className={`text-[11px] font-bold uppercase tracking-widest ${isSelected ? 'text-amber-100' : 'text-stone-400'}`}>
+                <span className={\`text-[11px] font-bold uppercase tracking-widest \${isSelected ? 'text-amber-100' : 'text-stone-400'}\`}>
                   {format(date, 'EEE')}
                 </span>
                 <span className="text-2xl font-extrabold mt-1">
                   {format(date, 'd')}
                 </span>
-                <div className={`w-1.5 h-1.5 rounded-full mt-2 transition-colors ${isSelected ? 'bg-white' : hasDelivery ? 'bg-amber-500' : 'bg-transparent'}`} />
+                <div className={\`w-1.5 h-1.5 rounded-full mt-2 transition-colors \${isSelected ? 'bg-white' : hasDelivery ? 'bg-amber-500' : 'bg-transparent'}\`} />
               </button>
             );
           })}
@@ -265,7 +265,7 @@ const HorizontalCalendarLedger = () => {
                   }
 
                   return (
-                    <div key={item.id} className={`bg-white p-4 rounded-3xl border flex items-center justify-between shadow-sm transition-all ${!isItemInStock ? 'opacity-60 bg-stone-50 border-stone-200' : 'border-stone-200 hover:shadow-md'}`}>
+                    <div key={item.id} className={\`bg-white p-4 rounded-3xl border flex items-center justify-between shadow-sm transition-all \${!isItemInStock ? 'opacity-60 bg-stone-50 border-stone-200' : 'border-stone-200 hover:shadow-md'}\`}>
                       <div className="flex items-center space-x-4">
                         <div className="w-14 h-14 bg-stone-100 rounded-2xl overflow-hidden flex items-center justify-center font-bold text-stone-400 text-2xl shadow-inner border border-stone-200/50 min-w-[56px]">
                           <img 
