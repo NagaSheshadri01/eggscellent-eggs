@@ -33,19 +33,30 @@ const UnifiedProductCard = ({ product, index }: Props) => {
       // Fetch subscriptions
       const { data: subsData, error: subsError } = await (supabase as any)
         .from('subscriptions')
-        .select('id, product_slug, status, quantity, selected_days')
+        .select('id, status, subscription_items(product_slug, quantity, frequency, selected_days)')
         .in('status', ['active', 'paused'])
         .eq('user_id', user.id);
 
       if (subsError) throw subsError;
       if (!subsData || subsData.length === 0) return [];
 
+      const flatItems = subsData.flatMap((sub: any) => 
+        (sub.subscription_items || []).map((item: any) => ({
+          subscription_id: sub.id,
+          status: sub.status,
+          product_slug: item.product_slug,
+          quantity: item.quantity,
+          selected_days: item.selected_days,
+          frequency: item.frequency
+        }))
+      );
+
       // Fetch products to map parent_group_id
       const { data: prodsData } = await (supabase as any)
         .from('products')
         .select('slug, parent_group_id, name');
 
-      return subsData.map((sub: any) => {
+      return flatItems.map((sub: any) => {
         const matchingProduct = prodsData?.find((p: any) => p.slug === sub.product_slug);
         return {
           ...sub,

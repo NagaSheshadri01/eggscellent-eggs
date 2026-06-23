@@ -15,10 +15,10 @@ export default function OrderSuccess() {
     if (!id) return;
 
     // Initial fetch
-    (supabase as any).from("orders").select("order_status, custom_order_id").eq("id", id).maybeSingle().then(({ data }: any) => {
+    (supabase as any).from("one_time_orders").select("status, display_id").eq("id", id).maybeSingle().then(({ data }: any) => {
       if (data) {
-        setStatus(data.order_status);
-        setCustomOrderId(data.custom_order_id);
+        setStatus(data.status);
+        setCustomOrderId(data.display_id);
       }
       setLoaded(true);
     });
@@ -27,9 +27,9 @@ export default function OrderSuccess() {
     const channel = supabase.channel(`order-${id}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${id}` },
+        { event: "UPDATE", schema: "public", table: "one_time_orders", filter: `id=eq.${id}` },
         (payload) => {
-          setStatus(payload.new.order_status);
+          setStatus(payload.new.status);
         }
       )
       .subscribe();

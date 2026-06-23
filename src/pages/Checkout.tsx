@@ -234,108 +234,81 @@ const Checkout = () => {
     let orderIdToNavigate = "sub-success";
 
     if (subItems.length > 0) {
-      const { data: profile } = await (supabase as any).from('profiles').select('is_vip').eq('id', user.id).maybeSingle();
-      const subRows = subItems.map(i => {
-        // id was set as `${product.id}-sub-${freq}`
-        const actualProductId = i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id;
-        const plan = activePlans?.find(p => 
-          p.product_slug === i.slug && p.frequency_type === i.frequency_type
-        );
+      const displayId = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const { data: subContract, error: contractErr } = await (supabase as any).from("subscriptions").insert({
+        user_id: user.id,
+        address_id: selectedAddr,
+        status: 'active',
+        payment_method: 'wallet',
+        wallet_mode: 'prepaid',
+        display_id: displayId,
+      }).select().single();
+
+      if (contractErr || !subContract) {
+        setPlacing(false);
+        return toast.error("Failed to setup subscriptions: " + contractErr.message);
+      }
+
+      const itemsRows = subItems.map(i => {
+        const plan = activePlans?.find(p => p.product_slug === i.slug && p.frequency_type === i.frequency_type);
         const isWeekly = i.frequency_type === 'weekly';
         const isAlternate = i.frequency_type === 'alternate';
         return {
-          user_id: user.id,
+          subscription_id: subContract.id,
           product_slug: i.slug || '',
-          product_id: actualProductId,
-          plan_id: plan?.id || null,
           quantity: i.qty,
+          frequency: i.frequency_type,
           selected_days: i.subscription_days || (isWeekly ? [3] : (isAlternate ? [0,2,4] : [0,1,2,3,4,5,6])),
-          status: 'active',
-          is_vip: profile?.is_vip || false,
-          wallet_mode: true,
-          address_id: selectedAddr,
-          next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"),
-          slot_id: 'subscription'
         };
       });
-      
-      const { data: insertedSubs, error: subErr } = await (supabase as any)
-        .from('subscriptions')
-        .insert(subRows)
-        .select('id');
+
+      const { error: subErr } = await (supabase as any).from("subscription_items").insert(itemsRows);
         
       if (subErr) {
         setPlacing(false);
-        return toast.error("Failed to setup subscriptions: " + subErr.message);
-      }
-
-      if (insertedSubs && insertedSubs.length > 0) {
-        const { handleSubscriptionResume } = await import('@/lib/subscriptionUtils');
-        await Promise.all(insertedSubs.map((sub: any) => handleSubscriptionResume(supabase, sub.id)));
+        return toast.error("Failed to setup subscription items: " + subErr.message);
       }
     }
 
     if (instantItems.length > 0 || (subItems.length === 0 && items.length === 0)) {
       if (payment === "wallet") {
-        const { data: orderId, error } = await (supabase as any).rpc('process_wallet_checkout', {
-          p_user_id: user.id,
-          p_grand_total: grand,
-          p_address_id: selectedAddr,
-          p_items: instantItems.map(item => ({ 
-            product_id: item.id, 
-            product_name: item.name, 
-            product_image: item.image, 
-            unit: item.unit, 
-            quantity: item.qty, 
-            price: item.discountPrice 
-          }))
-        });
+        const { error } = await (supabase as any).rpc('deduct_wallet', { uid: user.id, amount: grand });
+        if (error) { setPlacing(false); toast.error("Wallet deduction failed"); return; }
+        onlinePaid = true;
+      }
+      
+      const matchedSlot = dbSlots?.find(s => s.label === slot);
+      const resolvedSlotLabel = matchedSlot?.label || slot;
 
-        if (error || !orderId) { setPlacing(false); return toast.error(error?.message || "Could not place order via wallet"); }
-        orderIdToNavigate = orderId;
-      } else {
-        const matchedSlot = dbSlots?.find(s => s.label === slot);
-        const resolvedSlotId = matchedSlot?.id || null;
+      const { data: order, error } = await (supabase as any).from("one_time_orders").insert({
+        user_id: user.id,
+        delivery_address_id: selectedAddr,
+        total_amount: grand,
+        status: payment === "online" || payment === "wallet" ? "confirmed" : "pending",
+        payment_method: (payment === "online" ? "upi" : payment) as any,
+        payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
+        delivery_slot_key: resolvedSlotLabel,
+        display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
+        delivery_date: format(new Date(), "yyyy-MM-dd") // Just using today for checkout
+      }).select().single();
+      
+      if (error || !order) { setPlacing(false); return toast.error(error?.message || "Could not place order"); }
+      orderIdToNavigate = order.id;
 
-        const { data: order, error } = await (supabase as any).from("orders").insert({
-          user_id: user.id,
-          address_id: selectedAddr,
-          address_snapshot: addr as any,
-          subtotal: total,
-          delivery_fee: deliveryFee,
-          discount: calculatedDiscount,
-          total: grand,
-          payment_method: (payment === "online" ? "upi" : payment) as any,
-          payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
-          order_status: "placed",
-          delivery_slot: slot,
-          slot_id: resolvedSlotId,
-          coupon_code: appliedCoupon?.code,
-          lat, lng,
-          pincode: (addr as any)?.pincode ?? null,
-        } as any).select().single();
-        
-        if (error || !order) { setPlacing(false); return toast.error(error?.message || "Could not place order"); }
-        orderIdToNavigate = order.id;
-
-        if (instantItems.length > 0) {
-          const itemsRows = instantItems.map(i => ({
-            order_id: order.id,
-            product_id: i.id,
-            product_name: i.name,
-            product_image: i.image,
-            unit: i.unit,
-            quantity: i.qty,
-            price: i.discountPrice,
-          }));
-          const { error: e2 } = await (supabase as any).from("order_items").insert(itemsRows);
-          if (e2) {
-            setPlacing(false);
-            if (e2.message.includes("INSUFFICIENT_STOCK")) {
-              return toast.error("Sorry, one or more items in your cart just went out of stock. Please update your cart");
-            }
-            return toast.error(e2.message);
+      if (instantItems.length > 0) {
+        const itemsRows = instantItems.map(i => ({
+          order_id: order.id,
+          product_slug: i.slug || i.id,
+          quantity: i.qty,
+          price: i.discountPrice,
+        }));
+        const { error: e2 } = await (supabase as any).from("one_time_order_items").insert(itemsRows);
+        if (e2) {
+          setPlacing(false);
+          if (e2.message.includes("INSUFFICIENT_STOCK")) {
+            return toast.error("Sorry, one or more items in your cart just went out of stock. Please update your cart");
           }
+          return toast.error(e2.message);
         }
       }
     }

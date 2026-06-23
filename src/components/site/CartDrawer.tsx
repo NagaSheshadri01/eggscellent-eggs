@@ -307,31 +307,23 @@ const CartDrawer = () => {
       const chosenSlot = dbSlots?.find(s => s.id === selectedSlotId);
       const chosenSlotLabel = chosenSlot?.label || "Standard Delivery";
 
-      const { data: order, error } = await (supabase as any).from("orders").insert({
+      const { data: order, error } = await (supabase as any).from("one_time_orders").insert({
         user_id: user.id,
-        address_id: selectedAddressId,
-        address_snapshot: addr as any,
-        subtotal: instantItems.reduce((s, i) => s + i.discountPrice * i.qty, 0),
-        delivery_fee: deliveryFee,
-        discount: discount, // Full discount applied to main order for simplicity
-        total: finalTotal,
+        delivery_address_id: selectedAddressId,
+        total_amount: finalTotal,
+        status: payment === "online" ? "confirmed" : "pending",
+        delivery_slot_key: chosenSlotLabel,
+        delivery_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : null,
         payment_method: (payment === "online" ? "upi" : payment) as any,
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
-        order_status: "placed",
-        coupon_code: appliedCoupon?.code,
-        slot_id: selectedSlotId,
-        delivery_slot: chosenSlotLabel,
-        scheduled_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : null,
-        lat: (addr as any)?.lat ?? null,
-        lng: (addr as any)?.lng ?? null,
-        pincode: (addr as any)?.pincode ?? null,
+        display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
       }).select().single();
 
       if (error || !order) { setPlacing(false); toast.error(error?.message || "Could not place order"); return; }
       mainOrderId = order.id;
 
-      const { error: e2 } = await (supabase as any).from("order_items").insert(
-        instantItems.map(i => ({ order_id: order.id, product_id: i.id, product_name: i.name, product_image: i.image, unit: i.unit, quantity: i.qty, price: i.discountPrice }))
+      const { error: e2 } = await (supabase as any).from("one_time_order_items").insert(
+        instantItems.map(i => ({ order_id: order.id, product_slug: i.slug || i.id, quantity: i.qty, price: i.discountPrice }))
       );
       if (e2) { setPlacing(false); toast.error(e2.message.includes("INSUFFICIENT_STOCK") ? "An item went out of stock" : e2.message); return; }
     }
@@ -348,7 +340,23 @@ const CartDrawer = () => {
         }
       }
 
-      const { data: insertedSubs, error: subErr } = await (supabase as any).from("subscriptions").insert(
+      const displayId = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const { data: subContract, error: contractErr } = await (supabase as any).from("subscriptions").insert({
+        user_id: user.id,
+        address_id: selectedAddressId,
+        status: 'active',
+        payment_method: 'wallet',
+        wallet_mode: 'prepaid',
+        display_id: displayId,
+      }).select().single();
+
+      if (contractErr || !subContract) {
+        toast.error("Subscriptions contract failed to save: " + contractErr?.message);
+        setPlacing(false);
+        return;
+      }
+
+      const { error: itemsErr } = await (supabase as any).from("subscription_items").insert(
         subItems.map(i => {
           const product = allProducts?.find(p => p.slug === i.slug || p.name === i.slug || p.id === i.id);
           const resolvedSlug = product?.slug || i.slug;
@@ -358,11 +366,10 @@ const CartDrawer = () => {
           );
           const isWeekly = i.frequency_type === 'weekly';
           return {
-            user_id: user.id,
+            subscription_id: subContract.id,
             product_slug: resolvedSlug,
-            product_id: product?.id,
-            plan_id: plan?.id || null,
             quantity: i.qty,
+            frequency: i.frequency_type,
             selected_days: i.subscription_days || (isWeekly ? [selectedWeeklyDay] : (plan?.frequency_type === 'alternate' ? (
               (() => {
                 const cDays = plan?.custom_days || [];
@@ -370,23 +377,14 @@ const CartDrawer = () => {
                 return dividerIndex === -1 ? (cDays.length > 0 ? cDays : [0, 2, 4]) : cDays.slice(0, dividerIndex);
               })()
             ) : [0, 1, 2, 3, 4, 5, 6])),
-            address_id: selectedAddressId,
-            status: 'active',
-            next_delivery_date: format(new Date(Date.now() + 86400000), "yyyy-MM-dd"),
-            slot_id: selectedSlotId || 'subscription',
           };
         })
-      ).select('id');
+      );
 
-      if (subErr) {
-        toast.error("Subscriptions failed to save: " + subErr.message);
+      if (itemsErr) {
+        toast.error("Subscription items failed to save: " + itemsErr.message);
         setPlacing(false);
         return;
-      }
-
-      if (insertedSubs && insertedSubs.length > 0) {
-        const { handleSubscriptionResume } = await import('@/lib/subscriptionUtils');
-        await Promise.all(insertedSubs.map((sub: any) => handleSubscriptionResume(supabase, sub.id)));
       }
     }
 

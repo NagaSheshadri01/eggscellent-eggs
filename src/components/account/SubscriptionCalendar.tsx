@@ -48,14 +48,12 @@ const HorizontalCalendarLedger = () => {
       const startStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-      // 1. Fetch Subscription Master Profile
+      // 1. Fetch Subscription Master Profiles (just to check existence if needed, but we rely on deliveries)
       const { data: subData } = await (supabase as any)
         .from('subscriptions')
         .select('*')
-        .eq('user_id', uid)
-        .limit(1)
-        .single();
-      setUserSubscription(subData);
+        .eq('user_id', uid);
+      setUserSubscription(subData && subData.length > 0 ? subData[0] : null);
 
       // 2. Fetch Subscription Deliveries (Base)
       const { data: baseDeliveries } = await (supabase as any)
@@ -198,24 +196,6 @@ const HorizontalCalendarLedger = () => {
       </div>
 
       <div className="flex-1 p-5 space-y-8 overflow-y-auto pb-24">
-        {userSubscription?.status === 'paused' ? (
-          <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200/60 flex flex-col items-center justify-center text-center space-y-4 shadow-sm animate-in fade-in zoom-in duration-300">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-3xl shadow-sm">
-              ⏸️
-            </div>
-            <h4 className="text-lg font-bold text-amber-900 tracking-tight">Subscription Paused</h4>
-            <p className="text-sm text-amber-800 font-medium">
-              Your deliveries are currently paused. Resume your subscription now to instantly reactivate your automated schedule and continue receiving deliveries.
-            </p>
-            <button
-              onClick={handleResumeSubscription}
-              disabled={actionLoading}
-              className="mt-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold py-3 px-6 rounded-2xl shadow-lg shadow-orange-500/20 hover:scale-105 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
-            >
-              ▶️ Resume Subscription
-            </button>
-          </div>
-        ) : (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-stone-800 tracking-tight">
@@ -318,7 +298,6 @@ const HorizontalCalendarLedger = () => {
               </div>
             )}
           </section>
-        )}
       </div>
     </div>
   );
