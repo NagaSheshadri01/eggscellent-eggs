@@ -1158,10 +1158,7 @@ export type Database = {
         Args: { uid: string; amount: number }
         Returns: { success: boolean; new_balance: number }
       }
-      partner_update_status: {
-        Args: { _order_id: string; _status: string; _delivery_partner_id: string; _order_type: string }
-        Returns: void
-      }
+      partner_update_order_status: { Args: { _new_status: string; _order_id: string }; Returns: undefined }
 
       calculate_order_delivery_fee: {
         Args: { p_address_id: string }

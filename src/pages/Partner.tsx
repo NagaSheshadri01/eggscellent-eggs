@@ -100,9 +100,7 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
 
   const advance = async () => {
     if (!flow) return;
-    const { error } = await supabase.rpc("partner_update_status", {
-      _order_id: order.id, _status: flow.next, _delivery_partner_id: order.delivery_partner_id || "", _order_type: order.isSubscription ? "subscription" : "one_time",
-    });
+    const { error } = await supabase.rpc("partner_update_order_status", { _order_id: order.id, _new_status: flow.next });
     if (error) toast.error(error.message);
     else { toast.success(flow.label.replace("Mark ", "")); onUpdate(); }
   };
