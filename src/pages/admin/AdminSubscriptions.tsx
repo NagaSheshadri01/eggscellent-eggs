@@ -61,7 +61,7 @@ const AdminSubscriptions = () => {
   const subscriptionsQ = useQuery({
     queryKey: ["admin-subscriptions-all"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscriptions")
         .select(`
           *,
@@ -79,7 +79,7 @@ const AdminSubscriptions = () => {
   const dispatchQ = useQuery({
     queryKey: ["admin-subscription-dispatch", today],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscription_calendar_ledger")
         .select(`
           *,
@@ -103,7 +103,7 @@ const AdminSubscriptions = () => {
   const plansQ = useQuery({
     queryKey: ["admin-subscription-plans"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscription_plans")
         .select("*")
         .order("created_at", { ascending: false });
@@ -120,7 +120,7 @@ const AdminSubscriptions = () => {
       } else if (status === "active") {
         await handleSubscriptionResume(supabase, id);
       } else {
-        const { error } = await (supabase as any).from("subscriptions").update({ status }).eq("id", id);
+        const { error } = await supabase.from("subscriptions").update({ status }).eq("id", id);
         if (error) throw error;
       }
     },
@@ -132,7 +132,7 @@ const AdminSubscriptions = () => {
 
   const assignPartner = useMutation({
     mutationFn: async ({ deliveryId, partnerId }: { deliveryId: string; partnerId: string }) => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscription_calendar_ledger")
         .update({ delivery_partner_id: partnerId === "unassigned" ? null : partnerId })
         .eq("id", deliveryId)
@@ -157,7 +157,7 @@ const AdminSubscriptions = () => {
       price_per_delivery: number;
       is_active: boolean;
     }) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("subscription_plans")
         .insert(plan);
       if (error) throw error;
@@ -183,7 +183,7 @@ const AdminSubscriptions = () => {
       price_per_delivery: number;
       is_active: boolean;
     }) => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscription_plans")
         .update({
           title: plan.title,
@@ -214,7 +214,7 @@ const AdminSubscriptions = () => {
 
   const deletePlan = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscription_plans")
         .delete()
         .eq("id", id)
@@ -236,7 +236,7 @@ const AdminSubscriptions = () => {
 
   const togglePlanActive = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("subscription_plans")
         .update({ is_active })
         .eq("id", id);
@@ -305,7 +305,7 @@ const AdminSubscriptions = () => {
           ) : dispatchQ.error ? (
             <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-2xl mb-6 text-sm">
               <p className="font-bold">Error loading dispatch queue:</p>
-              <p>{(dispatchQ.error as any).message || "Unknown error"}</p>
+              <p>{(dispatchQ.error ).message || "Unknown error"}</p>
             </div>
           ) : sortedDispatch.length === 0 ? (
             <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border flex flex-col items-center">
@@ -398,7 +398,7 @@ const AdminSubscriptions = () => {
                   ) : subscriptionsQ.error ? (
                     <tr>
                       <td colSpan={6} className="p-5 text-center text-destructive bg-destructive/10">
-                        Error loading subscriptions: {(subscriptionsQ.error as any).message}
+                        Error loading subscriptions: {(subscriptionsQ.error ).message}
                       </td>
                     </tr>
                   ) : (subscriptionsQ.data || []).map((s: any) => (
@@ -800,7 +800,7 @@ const AdminSubscriptions = () => {
                 </div>
               ) : plansQ.error ? (
                 <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-2xl text-sm">
-                  Error loading subscription plans: {(plansQ.error as any).message}
+                  Error loading subscription plans: {(plansQ.error ).message}
                 </div>
               ) : (plansQ.data ?? []).length === 0 ? (
                 <div className="text-center py-16 bg-card rounded-2xl border border-dashed border-border flex flex-col items-center">

@@ -14,327 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      one_time_orders: {
-        Row: {
-          id: string
-          display_id: string
-          user_id: string
-          delivery_address_id: string | null
-          total_amount: number
-          status: string
-          payment_method: string
-          payment_status: string
-          delivery_partner_id: string | null
-          delivery_slot_key: string | null
-          delivery_date: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          display_id: string
-          user_id: string
-          delivery_address_id?: string | null
-          total_amount: number
-          status?: string
-          payment_method?: string
-          payment_status?: string
-          delivery_partner_id?: string | null
-          delivery_slot_key?: string | null
-          delivery_date?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          display_id?: string
-          user_id?: string
-          delivery_address_id?: string | null
-          total_amount?: number
-          status?: string
-          payment_method?: string
-          payment_status?: string
-          delivery_partner_id?: string | null
-          delivery_slot_key?: string | null
-          delivery_date?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "one_time_orders_delivery_address_id_fkey"
-            columns: ["delivery_address_id"]
-            isOneToOne: false
-            referencedRelation: "addresses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "one_time_orders_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          }
-        ]
-      },
-      one_time_order_items: {
-        Row: {
-          id: string
-          order_id: string
-          product_slug: string
-          quantity: number
-          price: number
-          status: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          order_id: string
-          product_slug: string
-          quantity: number
-          price: number
-          status?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          order_id?: string
-          product_slug?: string
-          quantity?: number
-          price?: number
-          status?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "one_time_order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "one_time_orders"
-            referencedColumns: ["id"]
-          }
-        ]
-      },
-      subscription_items: {
-        Row: {
-          id: string
-          subscription_id: string
-          product_slug: string
-          quantity: number
-          frequency: string
-          selected_days: Json | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          subscription_id: string
-          product_slug: string
-          quantity: number
-          frequency?: string
-          selected_days?: Json | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          subscription_id?: string
-          product_slug?: string
-          quantity?: number
-          frequency?: string
-          selected_days?: Json | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subscription_items_subscription_id_fkey"
-            columns: ["subscription_id"]
-            isOneToOne: false
-            referencedRelation: "subscriptions"
-            referencedColumns: ["id"]
-          }
-        ]
-      },
-      subscription_calendar_ledger: {
-        Row: {
-          id: string
-          subscription_item_id: string
-          delivery_date: string
-          product_slug: string
-          quantity: number
-          effective_price: number
-          status: string
-          delivery_partner_id: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          subscription_item_id: string
-          delivery_date: string
-          product_slug: string
-          quantity: number
-          effective_price: number
-          status?: string
-          delivery_partner_id?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          subscription_item_id?: string
-          delivery_date?: string
-          product_slug?: string
-          quantity?: number
-          effective_price?: number
-          status?: string
-          delivery_partner_id?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subscription_calendar_ledger_subscription_item_id_fkey"
-            columns: ["subscription_item_id"]
-            isOneToOne: false
-            referencedRelation: "subscription_items"
-            referencedColumns: ["id"]
-          }
-        ]
-      },
-      subscription_deliveries: {
-        Row: {
-          id: string
-          user_id: string
-          delivery_address_id: string | null
-          delivery_partner_id: string | null
-          delivery_date: string
-          status: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          delivery_address_id?: string | null
-          delivery_partner_id?: string | null
-          delivery_date: string
-          status?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          delivery_address_id?: string | null
-          delivery_partner_id?: string | null
-          delivery_date?: string
-          status?: string
-          created_at?: string
-        }
-        Relationships: []
-      },
-      subscription_delivery_items: {
-        Row: {
-          id: string
-          delivery_id: string
-          product_slug: string
-          quantity: number
-          effective_price: number
-          status: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          delivery_id: string
-          product_slug: string
-          quantity: number
-          effective_price: number
-          status?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          delivery_id?: string
-          product_slug?: string
-          quantity?: number
-          effective_price?: number
-          status?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subscription_delivery_items_delivery_id_fkey"
-            columns: ["delivery_id"]
-            isOneToOne: false
-            referencedRelation: "subscription_deliveries"
-            referencedColumns: ["id"]
-          }
-        ]
-      },
-      wallets: {
-        Row: {
-          id: string
-          user_id: string
-          balance: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          balance?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          balance?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "wallets_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          }
-        ]
-      },
-      wallet_transactions: {
-        Row: {
-          id: string
-          wallet_id: string
-          amount: number
-          transaction_type: string
-          reference_id: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          wallet_id: string
-          amount: number
-          transaction_type: string
-          reference_id?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          wallet_id?: string
-          amount?: number
-          transaction_type?: string
-          reference_id?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "wallet_transactions_wallet_id_fkey"
-            columns: ["wallet_id"]
-            isOneToOne: false
-            referencedRelation: "wallets"
-            referencedColumns: ["id"]
-          }
-        ]
-      },
       addresses: {
         Row: {
           address_name: string | null
@@ -1075,41 +754,61 @@ export type Database = {
           is_active?: boolean
           created_at?: string
         }
-        Relationships: []
       }
       subscriptions: {
         Row: {
-          id: string
-          user_id: string
           address_id: string | null
-          display_id: string
-          status: string
-          payment_method: string
-          wallet_mode: string
           created_at: string
+          end_date: string | null
+          frequency: string
+          id: string
+          next_delivery_date: string
+          payment_method: string
+          plan_id: string | null
+          product_id: string
+          product_slug: string
+          quantity: number
+          slot_id: string | null
+          start_date: string
+          status: string
           updated_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
           address_id?: string | null
-          display_id: string
-          status?: string
-          payment_method?: string
-          wallet_mode?: string
           created_at?: string
+          end_date?: string | null
+          frequency: string
+          id?: string
+          next_delivery_date: string
+          payment_method?: string
+          plan_id?: string | null
+          product_id: string
+          product_slug?: string
+          quantity?: number
+          slot_id?: string | null
+          start_date: string
+          status?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
           address_id?: string | null
-          display_id?: string
-          status?: string
-          payment_method?: string
-          wallet_mode?: string
           created_at?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          next_delivery_date?: string
+          payment_method?: string
+          plan_id?: string | null
+          product_id?: string
+          product_slug?: string
+          quantity?: number
+          slot_id?: string | null
+          start_date?: string
+          status?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -1120,12 +819,26 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "subscriptions_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "subscription_plans"
             referencedColumns: ["id"]
-          }
+          },
+          {
+            foreignKeyName: "subscriptions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_slots"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
@@ -1154,15 +867,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      deduct_wallet: {
-        Args: { uid: string; amount: number }
-        Returns: { success: boolean; new_balance: number }
-      }
-      partner_update_status: {
-        Args: { _order_id: string; _status: string; _delivery_partner_id: string; _order_type: string }
-        Returns: void
-      }
-
       calculate_order_delivery_fee: {
         Args: { p_address_id: string }
         Returns: number

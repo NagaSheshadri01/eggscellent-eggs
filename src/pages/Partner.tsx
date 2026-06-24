@@ -81,7 +81,7 @@ const optimizeStopSequence = (store: { lat: number; lng: number }, stops: any[])
 const generateMapLink = (store: { lat: number; lng: number }, sortedStops: any[]) => {
   const origin = `${store.lat},${store.lng}`;
   const waypointCoordinates = sortedStops
-    .filter(stop => stop.order_status !== "delivered")
+    .filter(stop => stop.status !== "delivered")
     .map(stop => {
       const addr = stop.addresses || stop.address;
       return addr?.lat && addr?.lng ? `${addr.lat},${addr.lng}` : null;
@@ -96,12 +96,12 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
   const snap: AddrSnap = order.address_snapshot || {};
   const dbAddr = order.addresses || {};
   
-  const flow = STATUS_FLOW[order.order_status];
+  const flow = STATUS_FLOW[order.status];
 
   const advance = async () => {
     if (!flow) return;
-    const { error } = await (supabase as any).rpc("partner_update_order_status", {
-      _order_id: order.id, _new_status: flow.next,
+    const { error } = await supabase.rpc("partner_update_status", {
+      _order_id: order.id, _status: flow.next, _delivery_partner_id: order.delivery_partner_id || "", _order_type: order.isSubscription ? "subscription" : "one_time",
     });
     if (error) toast.error(error.message);
     else { toast.success(flow.label.replace("Mark ", "")); onUpdate(); }
@@ -140,7 +140,7 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
           <div className="font-display font-bold text-brown text-lg leading-tight">{snap.full_name || "Customer"}</div>
         </div>
         <Badge className="bg-primary/10 text-brown border-none text-[10px] uppercase tracking-tighter shrink-0">
-          {order.order_status.replace(/_/g, " ")}
+          {order.status.replace(/_/g, " ")}
         </Badge>
       </div>
 
@@ -176,7 +176,7 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
       <div className="flex items-center justify-between text-xs px-1">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Package className="w-3.5 h-3.5" /> 
-          <span className="font-semibold">{(order as any).delivery_slots?.tag || order.delivery_slot || "Early Morning"}</span>
+          <span className="font-semibold">{(order ).delivery_slots?.tag || order.delivery_slot || "Early Morning"}</span>
         </div>
         <div className="font-bold text-brown text-base">₹{order.total}</div>
       </div>
@@ -210,7 +210,7 @@ const Partner = () => {
   const { data: status, isLoading: statusLoading } = usePartnerStatus();
   const qc = useQueryClient();
 
-  const partnerId = (status as any)?.partner?.id;
+  const partnerId = (status )?.partner?.id;
   const [activeFeed, setActiveFeed] = useState<'instant' | 'subscription'>('instant');
   const [loc, setLoc] = useState<{lat: number, lng: number} | null>(null);
   const [warehouse, setWarehouse] = useState(WAREHOUSE_DEFAULT);
@@ -223,7 +223,7 @@ const Partner = () => {
 
   useEffect(() => {
     const fetchWarehouse = async () => {
-      const { data, error } = await (supabase.from("delivery_config") as any).select("store_latitude, store_longitude").eq("id", 1).maybeSingle();
+      const { data, error } = await (supabase.from("delivery_config") ).select("store_latitude, store_longitude").eq("id", 1).maybeSingle();
       if (data?.store_latitude && data?.store_longitude) {
         setWarehouse({ lat: data.store_latitude, lng: data.store_longitude });
       }
@@ -245,14 +245,14 @@ const Partner = () => {
     enabled: !!user?.id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("orders")
+        .from("one_time_orders")
         .select(`
           *,
           addresses(*),
           delivery_slots(*)
-        ` as any)
+        ` )
         .eq("delivery_partner_id", user!.id)
-        .in("order_status", ["confirmed", "out_for_delivery"])
+        .in("status", ["confirmed", "out_for_delivery"])
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -294,17 +294,16 @@ const Partner = () => {
     queryKey: ["driver-active-shift", todayStr, tomorrowStr],
     enabled: !!user?.id && activeFeed === 'subscription',
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('master_orders')
+      const { data, error } = await supabase
+        .from('subscription_calendar_ledger')
         .select(`
           *,
-          profiles:user_id (id, full_name, phone),
-          delivery_ledger!inner (
-            *,
-            subscriptions:subscription_id (
-              id,
-              product_slug,
-              quantity,
+          subscription_items (
+            product_slug,
+            quantity,
+            subscriptions (
+              user_id,
+              profiles:user_id (id, full_name, phone),
               addresses:address_id (*)
             )
           )
@@ -312,7 +311,7 @@ const Partner = () => {
         .eq('delivery_partner_id', user!.id)
         .in('delivery_date', [todayStr, tomorrowStr]);
       if (error) throw error;
-      return (data ?? []) as any[];
+      return (data ?? []) ;
     },
   });
 
@@ -322,14 +321,14 @@ const Partner = () => {
       .channel(`partner_orders_${user.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "orders", filter: `delivery_partner_id=eq.${user.id}` },
+        { event: "*", schema: "public", table: "one_time_orders", filter: `delivery_partner_id=eq.${user.id}` },
         () => qc.invalidateQueries({ queryKey: ["partner_orders", user.id] }),
       )
       // Live sync: when admin changes a ledger row status (Out of Stock / Restore Stock),
       // instantly update the partner's tomorrow shift view without a manual refresh.
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "delivery_ledger" },
+        { event: "UPDATE", schema: "public", table: "subscription_calendar_ledger" },
         () => qc.invalidateQueries({ queryKey: ["driver-active-shift"] }),
       )
       .on('broadcast', { event: 'direct_assignment' }, ({ payload }) => {
@@ -349,7 +348,7 @@ const Partner = () => {
 
   // ⚠️ ALL hooks MUST be before any conditional returns (Rules of Hooks)
   const processedShifts = useMemo((): any[] => {
-    const activeOrders = ((orders.data || []) as any[]).filter(o => o.order_status !== "delivered" && o.order_status !== "cancelled");
+    const activeOrders = ((orders.data || [])).filter(o => o.status !== "delivered" && o.status !== "cancelled");
     
     const groups: Record<string, any[]> = {};
     activeOrders.forEach((o: any) => {
@@ -368,7 +367,7 @@ const Partner = () => {
           start_time: slotObj.start_time ? `1970-01-01T${slotObj.start_time}Z` : new Date().toISOString(),
           shift_name: slotName,
           orders: shiftOrders,
-          isOut: shiftOrders.some((o: any) => ["out_for_delivery", "delivered"].includes(o.order_status))
+          isOut: shiftOrders.some((o: any) => ["out_for_delivery", "delivered"].includes(o.status))
        };
     });
 
@@ -421,13 +420,13 @@ const Partner = () => {
   // Route link generated dynamically via generateMapLink
 
   const bulkMarkOutForDelivery = async (shiftOrders: any[]) => {
-    const ids = shiftOrders.filter(o => o.order_status === "confirmed").map(o => o.id);
+    const ids = shiftOrders.filter(o => o.status === "confirmed").map(o => o.id);
     if (ids.length === 0) {
       toast.info("No orders to dispatch in this shift.");
       return;
     }
     
-    const { error } = await (supabase as any).from("orders").update({ order_status: "out_for_delivery" }).in("id", ids);
+    const { error } = await supabase.from("one_time_orders").update({ status: "out_for_delivery" }).in("id", ids);
     if (error) {
       toast.error("Failed to dispatch: " + error.message);
     } else {
@@ -562,7 +561,7 @@ const Partner = () => {
               </div>
 
               {subDeliveries.isLoading && <div className="space-y-3"><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div>}
-              {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error as any).message}</div>}
+              {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error ).message}</div>}
 
               {!subDeliveries.isLoading && groupedStops.length === 0 && (
                 <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border animate-in fade-in duration-300">
@@ -608,7 +607,7 @@ const Partner = () => {
                             className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-12 px-6 shadow-lg shadow-amber-500/20"
                             onClick={async () => {
                               const pendingIds = activeStops.filter((s: any) => s.status === 'scheduled').map((s: any) => s.id);
-                              const { error } = await (supabase as any).from('delivery_ledger').update({ status: 'out_for_delivery' }).in('id', pendingIds);
+                              const { error } = await supabase.from('subscription_calendar_ledger').update({ status: 'out_for_delivery' }).in('id', pendingIds);
                               if (error) toast.error(error.message);
                               else { subDeliveries.refetch(); toast.success(`${pendingIds.length} subscription stops dispatched!`); }
                             }}

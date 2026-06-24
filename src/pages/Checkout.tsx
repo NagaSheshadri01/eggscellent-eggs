@@ -47,7 +47,7 @@ const Checkout = () => {
     queryKey: ['delivery-fee', selectedAddr, deliveryConfig],
     queryFn: async () => {
       if (!selectedAddr || !deliveryConfig) return null;
-      const { data: addr, error } = await (supabase as any).from("addresses").select("lat, lng").eq("id", selectedAddr).maybeSingle();
+      const { data: addr, error } = await supabase.from("addresses").select("lat, lng").eq("id", selectedAddr).maybeSingle();
       if (error || !addr || !addr.lat) return 30; // fallback
 
       return evaluateTieredDeliveryFee(
@@ -78,12 +78,12 @@ const Checkout = () => {
     queryKey: ['user-wallet-balance', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const { data } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
       return data;
     },
     enabled: !!user
   });
-  const currentBalance = (walletData as any)?.balance || 0;
+  const currentBalance = (walletData )?.balance || 0;
   // Only block if they can't afford a SINGLE delivery drop
   const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
@@ -127,9 +127,9 @@ const Checkout = () => {
     if (!selectedAddr) return;
     const check = async () => {
       setCheckingAddr(true);
-      const { data: addr } = await (supabase as any).from("addresses").select("pincode").eq("id", selectedAddr).maybeSingle();
+      const { data: addr } = await supabase.from("addresses").select("pincode").eq("id", selectedAddr).maybeSingle();
       if (addr?.pincode) {
-        const { data: serv } = await (supabase as any).from("serviceable_pincodes").select("pincode").eq("pincode", addr.pincode).eq("active", true).maybeSingle();
+        const { data: serv } = await supabase.from("serviceable_pincodes").select("pincode").eq("pincode", addr.pincode).eq("active", true).maybeSingle();
         setAddrServiceable(!!serv);
         if (!serv) toast.error("📍 This saved address is outside our current delivery zone. Please choose another.", { duration: 5000 });
       }
@@ -148,7 +148,7 @@ const Checkout = () => {
   useEffect(() => {
     if (!items.length) return;
     const ids = items.map((i) => i.id.includes('-sub-') ? i.id.split('-sub-')[0] : i.id);
-    (supabase as any)
+    supabase
       .from("products")
       .select("id, discounted_price, active")
       .in("id", ids)
@@ -183,7 +183,7 @@ const Checkout = () => {
     const codeToTry = manualCode || coupon.trim().toUpperCase();
     if (!codeToTry) return;
     
-    const { data, error } = await (supabase as any).from("coupons").select("*").eq("code", codeToTry).eq("active", true).maybeSingle();
+    const { data, error } = await supabase.from("coupons").select("*").eq("code", codeToTry).eq("active", true).maybeSingle();
     if (error || !data) return toast.error("Invalid coupon");
     if (data.expiry && new Date(data.expiry) < new Date()) return toast.error("Coupon expired");
     
@@ -206,8 +206,8 @@ const Checkout = () => {
 
     if (subItems.length > 0) {
       const singleDeliveryCost = subItems.reduce((s, i) => s + i.discountPrice * i.qty, 0);
-      const { data: wallet } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
-      const currentWalletBalance = (wallet as any)?.balance || 0;
+      const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
+      const currentWalletBalance = wallet?.balance || 0;
 
       if (currentWalletBalance < singleDeliveryCost) {
         setPlacing(false);
@@ -228,14 +228,14 @@ const Checkout = () => {
     }
 
     const { data: addr } = await supabase.from("addresses").select("*").eq("id", selectedAddr).maybeSingle();
-    const lat = (addr as any)?.lat ?? null;
-    const lng = (addr as any)?.lng ?? null;
+    const lat = addr?.lat ?? null;
+    const lng = addr?.lng ?? null;
 
     let orderIdToNavigate = "sub-success";
 
     if (subItems.length > 0) {
       const displayId = Math.random().toString(36).substring(2, 10).toUpperCase();
-      const { data: subContract, error: contractErr } = await (supabase as any).from("subscriptions").insert({
+      const { data: subContract, error: contractErr } = await supabase.from("subscriptions").insert({
         user_id: user.id,
         address_id: selectedAddr,
         status: 'active',
@@ -262,7 +262,7 @@ const Checkout = () => {
         };
       });
 
-      const { error: subErr } = await (supabase as any).from("subscription_items").insert(itemsRows);
+      const { error: subErr } = await supabase.from("subscription_items").insert(itemsRows);
         
       if (subErr) {
         setPlacing(false);
@@ -272,7 +272,7 @@ const Checkout = () => {
 
     if (instantItems.length > 0 || (subItems.length === 0 && items.length === 0)) {
       if (payment === "wallet") {
-        const { error } = await (supabase as any).rpc('deduct_wallet', { uid: user.id, amount: grand });
+        const { error } = await supabase.rpc('deduct_wallet', { uid: user.id, amount: grand });
         if (error) { setPlacing(false); toast.error("Wallet deduction failed"); return; }
         onlinePaid = true;
       }
@@ -280,12 +280,12 @@ const Checkout = () => {
       const matchedSlot = dbSlots?.find(s => s.label === slot);
       const resolvedSlotLabel = matchedSlot?.label || slot;
 
-      const { data: order, error } = await (supabase as any).from("one_time_orders").insert({
+      const { data: order, error } = await supabase.from("one_time_orders").insert({
         user_id: user.id,
         delivery_address_id: selectedAddr,
         total_amount: grand,
         status: payment === "online" || payment === "wallet" ? "confirmed" : "pending",
-        payment_method: (payment === "online" ? "upi" : payment) as any,
+        payment_method: (payment === "online" ? "upi" : payment),
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
         delivery_slot_key: resolvedSlotLabel,
         display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
@@ -302,7 +302,7 @@ const Checkout = () => {
           quantity: i.qty,
           price: i.discountPrice,
         }));
-        const { error: e2 } = await (supabase as any).from("one_time_order_items").insert(itemsRows);
+        const { error: e2 } = await supabase.from("one_time_order_items").insert(itemsRows);
         if (e2) {
           setPlacing(false);
           if (e2.message.includes("INSUFFICIENT_STOCK")) {
@@ -411,7 +411,7 @@ const Checkout = () => {
         ) : (
           <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4">
             <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><CreditCard className="w-5 h-5 text-primary" /> Payment method</h2>
-            <RadioGroup value={payment} onValueChange={(v) => setPayment(v as any)} className="space-y-2">
+            <RadioGroup value={payment} onValueChange={(v) => setPayment(v as "upi" | "cod" | "online" | "wallet")} className="space-y-2">
               {[
                 { v: "online", label: "Pay online (Razorpay demo)", desc: "Simulated payment — completes instantly" },
                 { v: "upi", label: "UPI", desc: "Pay via Google Pay, PhonePe, Paytm" },

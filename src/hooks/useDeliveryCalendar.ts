@@ -20,12 +20,11 @@ export const useDeliveryCalendar = () => {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data: subs, error: subsError } = await (supabase as any)
+      const { data: subs, error: subsError } = await supabase
         .from("subscriptions")
         .select(`
           id, 
           status,
-          subscription_plans:plan_id ( price_per_delivery ),
           subscription_items ( id, product_slug, quantity, selected_days )
         `)
         .eq("user_id", user.id)
@@ -34,10 +33,10 @@ export const useDeliveryCalendar = () => {
       if (subsError) throw subsError;
       if (!subs || subs.length === 0) return [];
 
-      const itemIds = subs.flatMap((s: any) => s.subscription_items.map((si: any) => si.id));
+      const itemIds = subs.flatMap((s) => s.subscription_items.map((si) => si.id));
       if (itemIds.length === 0) return [];
 
-      const { data: ledger, error: ledgerError } = await (supabase as any)
+      const { data: ledger, error: ledgerError } = await supabase
         .from("subscription_calendar_ledger")
         .select("*, products(name, image_url, price, is_in_stock)")
         .in("subscription_item_id", itemIds)
@@ -47,24 +46,24 @@ export const useDeliveryCalendar = () => {
       if (ledgerError) throw ledgerError;
 
       const today = new Date();
-      const missingEntries: any[] = [];
+      const missingEntries = [];
       const existingLedger = ledger || [];
 
-      const { data: products } = await (supabase as any)
+      const { data: products } = await supabase
         .from("products")
         .select("slug, discounted_price");
 
       for (const sub of subs) {
         for (const item of sub.subscription_items) {
-          const days = (item.selected_days || []).map((d: any) => Number(d));
+          const days = (item.selected_days as number[] || []).map((d) => Number(d));
           const existingDates = new Set(
             existingLedger
-              .filter((l: any) => l.subscription_item_id === item.id)
-              .map((l: any) => l.delivery_date)
+              .filter((l) => l.subscription_item_id === item.id)
+              .map((l) => l.delivery_date)
           );
 
-          const matchingProduct = products?.find((p: any) => p.slug === item.product_slug);
-          const rate = sub.subscription_plans?.price_per_delivery || matchingProduct?.discounted_price || 0;
+          const matchingProduct = products?.find((p) => p.slug === item.product_slug);
+          const rate = matchingProduct?.discounted_price || 0;
 
           for (let i = 0; i <= 14; i++) {
             const futureDate = new Date();
@@ -91,14 +90,14 @@ export const useDeliveryCalendar = () => {
       }
 
       if (missingEntries.length > 0) {
-        const { error: seedError } = await (supabase as any)
+        const { error: seedError } = await supabase
           .from("subscription_calendar_ledger")
           .upsert(missingEntries, { onConflict: "subscription_item_id, delivery_date, product_slug" });
 
         if (seedError) {
           console.error("Error seeding calendar:", seedError);
         } else {
-          const { data: seededLedger } = await (supabase as any)
+          const { data: seededLedger } = await supabase
             .from("subscription_calendar_ledger")
             .select("*, products(name, image_url, price, is_in_stock)")
             .in("subscription_item_id", itemIds)
@@ -138,7 +137,7 @@ export const useDeliveryCalendar = () => {
 
   const toggleSkip = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "scheduled" | "skipped" }) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("subscription_calendar_ledger")
         .update({ status })
         .eq("id", id);
@@ -149,23 +148,23 @@ export const useDeliveryCalendar = () => {
       query.refetch();
       toast.success("Delivery preference updated successfully!");
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast.error("Failed to update delivery preference: " + err.message);
     },
   });
 
   const updateVolume = useMutation({
-    mutationFn: async ({ id, quantity, subscription_item_id, delivery_date, product_slug, effective_price }: any) => {
+    mutationFn: async ({ id, quantity, subscription_item_id, delivery_date, product_slug, effective_price }: {id?: string; quantity: number; subscription_item_id?: string; delivery_date?: string; product_slug?: string; effective_price?: number}) => {
       const status = quantity <= 0 ? "skipped" : "scheduled";
       
       if (id) {
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from("subscription_calendar_ledger")
           .update({ quantity, status })
           .eq("id", id);
         if (error) throw error;
       } else {
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from("subscription_calendar_ledger")
           .upsert([{
             subscription_item_id,
@@ -182,7 +181,7 @@ export const useDeliveryCalendar = () => {
       queryClient.invalidateQueries({ queryKey: ["delivery-ledger"] });
       query.refetch();
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast.error("Failed to update volume: " + err.message);
     }
   });
@@ -191,7 +190,7 @@ export const useDeliveryCalendar = () => {
     mutationFn: async ({ date, product_slug, price }: { date: string, product_slug: string, price: number }) => {
       if (!user) throw new Error("No user");
       
-      const { data: subs } = await (supabase as any)
+      const { data: subs } = await supabase
         .from("subscriptions")
         .select("id, subscription_items(id)")
         .eq("user_id", user.id)
@@ -203,7 +202,7 @@ export const useDeliveryCalendar = () => {
         throw new Error("Need an active subscription to add standalone items");
       }
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("subscription_calendar_ledger")
         .upsert([{
           subscription_item_id: subs.subscription_items[0].id,
@@ -220,7 +219,7 @@ export const useDeliveryCalendar = () => {
       queryClient.invalidateQueries({ queryKey: ["delivery-ledger"] });
       query.refetch();
     },
-    onError: (err: any) => toast.error(err.message)
+    onError: (err: Error) => toast.error(err.message)
   });
 
   return {

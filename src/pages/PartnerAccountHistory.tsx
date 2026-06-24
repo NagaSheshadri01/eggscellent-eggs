@@ -1,3 +1,4 @@
+import { Database } from '@/integrations/supabase/types';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -70,6 +71,8 @@ const HistoryShiftCard = ({ date, slotId, orders }: { date: string, slotId: stri
   );
 };
 
+type OneTimeOrderRow = Database['public']['Tables']['one_time_orders']['Row'];
+
 const PartnerAccountHistory = () => {
   const { user } = useAuth();
 
@@ -112,7 +115,7 @@ const PartnerAccountHistory = () => {
 
       // Merge and standardize
       const merged = [
-        ...(oneTimeData || []).map(o => ({
+        ...((oneTimeData as unknown as OneTimeOrderRow[]) || []).map(o => ({
           ...o,
           isSubscription: false,
           created_at: o.created_at,

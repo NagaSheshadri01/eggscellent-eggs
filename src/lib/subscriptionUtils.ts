@@ -1,4 +1,7 @@
-export async function handleSubscriptionPause(supabase: any, subId: string) {
+import { SupabaseClient } from "@supabase/supabase-js";
+import { Database } from "@/integrations/supabase/types";
+
+export async function handleSubscriptionPause(supabase: SupabaseClient<Database>, subId: string) {
   // Action A: Set status to 'paused'
   const { error: updateErr } = await supabase
     .from("subscriptions")
@@ -11,7 +14,7 @@ export async function handleSubscriptionPause(supabase: any, subId: string) {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
 
   const { data: items } = await supabase.from('subscription_items').select('id').eq('subscription_id', subId);
-  const itemIds = items?.map((i: any) => i.id) || [];
+  const itemIds = items?.map((i) => i.id) || [];
   if (itemIds.length > 0) {
     const { error: ledgerErr } = await supabase
       .from("subscription_calendar_ledger")
@@ -24,7 +27,7 @@ export async function handleSubscriptionPause(supabase: any, subId: string) {
   }
 }
 
-export async function handleSubscriptionResume(supabase: any, subId: string) {
+export async function handleSubscriptionResume(supabase: SupabaseClient<Database>, subId: string) {
   // Action A: Set status to 'active'
   const { error: updateErr } = await supabase
     .from("subscriptions")
@@ -35,7 +38,7 @@ export async function handleSubscriptionResume(supabase: any, subId: string) {
   // Action B: Immediate 2-Week Backfill Loop
   const { data: subData, error: fetchErr } = await supabase
     .from("subscriptions")
-    .select("*, subscription_plans(price_per_delivery), subscription_items(*)")
+    .select("*, subscription_items(*)")
     .eq("id", subId)
     .single();
   
@@ -49,7 +52,7 @@ export async function handleSubscriptionResume(supabase: any, subId: string) {
       try { allowedDays = JSON.parse(allowedDays); } catch(e) {}
     }
     
-    const price = subData.subscription_plans?.price_per_delivery || 0;
+    const price = 0; // TODO: Fetch from products if needed, or item level
 
     for (let i = 1; i <= 14; i++) {
       const d = new Date(today);
@@ -62,7 +65,7 @@ export async function handleSubscriptionResume(supabase: any, subId: string) {
       
       const dayOfWeek = d.getDay();
       
-      if (allowedDays.includes(dayOfWeek) || allowedDays.includes(String(dayOfWeek))) {
+      if ((allowedDays as any[]).includes(dayOfWeek) || (allowedDays as any[]).includes(String(dayOfWeek))) {
         const { data: existing } = await supabase
           .from("subscription_calendar_ledger")
           .select("id")
