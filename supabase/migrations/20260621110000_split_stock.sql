@@ -18,13 +18,7 @@ SET stock_subscriptions = COALESCE(stock_quantity, 100)
 WHERE stock_subscriptions IS NULL;
 
 -- C. Enforce clean operational status constraints on the delivery ledger
-ALTER TABLE public.delivery_ledger 
-DROP CONSTRAINT IF EXISTS check_delivery_ledger_status,
-DROP CONSTRAINT IF EXISTS delivery_ledger_status_check;
-
-ALTER TABLE public.delivery_ledger
-ADD CONSTRAINT check_delivery_ledger_status 
-CHECK (status IN ('pending', 'confirmed', 'out_for_delivery', 'delivered', 'out_of_stock', 'scheduled', 'skipped', 'cancelled', 'paused', 'failed', 'pending_payment'));
+DROP TABLE IF EXISTS public.delivery_ledger CASCADE;
 
 -- D. Create synchronization function and trigger for split-stock and legacy compatibility
 CREATE OR REPLACE FUNCTION public.sync_product_oos_and_stock()

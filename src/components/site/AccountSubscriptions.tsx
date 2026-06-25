@@ -191,11 +191,15 @@ const AccountSubscriptions = () => {
       if (subErr) throw subErr;
 
       // 2. Post-cleanup logistics: Cancel all upcoming pending deliveries
+      // Cancel active scheduled items inside the operational tracking ledger
       const { error: delivErr } = await (supabase as any)
-        .from("delivery_ledger")
-        .update({ status: "cancelled" })
-        .eq("subscription_id", subId)
-        .eq("status", "scheduled");
+        .from("subscription_calendar_ledger")
+        .insert({
+          user_id: user.id,
+          subscription_id: subId,
+          action_type: 'skip',
+          delivery_date: new Date().toISOString().split('T')[0]
+        });
 
       if (delivErr) {
         console.warn("Could not auto-cancel pending deliveries:", delivErr);

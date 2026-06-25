@@ -205,7 +205,7 @@ export const useDeliveryCalendar = () => {
       const { error } = await supabase
         .from("subscription_calendar_ledger")
         .upsert([{
-          subscription_item_id: subs.subscription_items[0].id,
+          subscription_item_id: subs.subscription_items?.[0]?.id || null,
           delivery_date: date,
           product_slug,
           quantity: 1,
