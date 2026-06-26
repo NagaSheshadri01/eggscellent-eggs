@@ -109,7 +109,7 @@ async function runSimulations() {
     console.log("   ✅ Subscription Items Inserted:", subItem.id);
 
     console.log("-> Fetching valid delivery slot...");
-    const { data: slots, error: slotsErr } = await supabase.from("delivery_slots").select("id").limit(1);
+    const { data: slots, error: slotsErr } = await supabase.from("delivery_slots").select("slot_key, id").limit(1);
     if (slotsErr || !slots?.length) throw new Error("No delivery slots found");
 
     console.log("-> Inserting One-Time Order with Non-Wallet Payment...");
@@ -120,7 +120,7 @@ async function runSimulations() {
       status: "confirmed",
       payment_method: "upi", // Non-wallet payment method
       payment_status: "paid",
-      delivery_slot_key: slots[0].id, // Valid slot ID
+      delivery_slot_key: slots[0].slot_key || slots[0].id, // Valid slot key
       display_id: "SIM-OTO-" + displayId,
       delivery_date: new Date().toISOString().split('T')[0]
     }).select().single();

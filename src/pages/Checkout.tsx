@@ -278,7 +278,7 @@ const Checkout = () => {
       }
       
       const matchedSlot = dbSlots?.find(s => s.label === slot);
-      const resolvedSlotKey = matchedSlot?.id || null;
+      const resolvedSlotKey = matchedSlot?.slot_key || matchedSlot?.id || slot;
 
       const { data: order, error } = await supabase.from("one_time_orders").insert({
         user_id: user.id,

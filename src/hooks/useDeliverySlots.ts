@@ -8,6 +8,7 @@ export type DeliverySlot = {
   end_time: string;
   active: boolean;
   display_order: number;
+  slot_key: string;
 };
 
 export const useDeliverySlots = (onlyActive = true) =>
@@ -18,7 +19,7 @@ export const useDeliverySlots = (onlyActive = true) =>
       if (onlyActive) q = q.eq("active", true);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as DeliverySlot[];
+      return (data ?? []) as unknown as DeliverySlot[];
     },
     staleTime: 10 * 60_000, // 10 min — slot configs are set-and-forget by admin
   });
