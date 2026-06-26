@@ -33,30 +33,31 @@ async function runSimulations() {
   console.log("-> Authenticating Dummy User...");
   
   // Attempt to sign in or sign up the master test account to avoid rate limits
-  const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-    email: 'e2e_test_master123@gmail.com',
+  const randomEmail = `e2e_test_${Date.now()}@gmail.com`;
+  const { data: authData, error: authErr } = await supabase.auth.signUp({
+    email: randomEmail,
     password: 'TestPassword123!',
   });
-  
-  if (signInErr) {
-    const { data: authData, error: authErr } = await supabase.auth.signUp({
-      email: 'e2e_test_master123@gmail.com',
-      password: 'TestPassword123!',
-    });
-    if (authErr) {
-      console.log("⚠️ Could not auth via signIn/signUp (rate limit?). Using fallback UUIDs.");
+  if (authErr) {
+    console.log("⚠️ Could not auth via signUp. Using fallback UUIDs.");
     } else {
       testUserId = authData.user?.id || testUserId;
       console.log("   ✅ User created:", testUserId);
     }
-  } else {
-    testUserId = signInData.user?.id || testUserId;
-    console.log("   ✅ User signed in:", testUserId);
+
+
+  // FORCE a valid user ID from existing subscriptions to ensure auth.users foreign key constraint passes
+  const { data: existingSub } = await supabase.from('subscriptions').select('user_id').limit(1).single();
+  if (existingSub) {
+    testUserId = existingSub.user_id;
   }
   
   // Try to grab IDs with whatever auth state we have
+  console.log("-> Using testUserId for E2E:", testUserId);
   try {
-    await supabase.from('profiles').upsert({ id: testUserId, full_name: 'E2E Test User', phone: '0000000000' });
+    if (!existingSub) {
+      await supabase.from('profiles').upsert({ id: testUserId, full_name: 'E2E Test User', phone: '0000000000' });
+    }
     
     const { data: addrData } = await supabase.from('addresses').insert({
       user_id: testUserId,
@@ -106,6 +107,26 @@ async function runSimulations() {
 
     if (itemErr) throw itemErr;
     console.log("   ✅ Subscription Items Inserted:", subItem.id);
+
+    console.log("-> Fetching valid delivery slot...");
+    const { data: slots, error: slotsErr } = await supabase.from("delivery_slots").select("id").limit(1);
+    if (slotsErr || !slots?.length) throw new Error("No delivery slots found");
+
+    console.log("-> Inserting One-Time Order with Non-Wallet Payment...");
+    const { data: oto, error: otoErr } = await supabase.from("one_time_orders").insert({
+      user_id: testUserId,
+      delivery_address_id: testAddressId || null,
+      total_amount: 150,
+      status: "confirmed",
+      payment_method: "upi", // Non-wallet payment method
+      payment_status: "paid",
+      delivery_slot_key: slots[0].id, // Valid slot ID
+      display_id: "SIM-OTO-" + displayId,
+      delivery_date: new Date().toISOString().split('T')[0]
+    }).select().single();
+
+    if (otoErr) throw otoErr;
+    console.log("   ✅ One-Time Order Inserted:", oto.id);
     
   } catch (e: any) {
     console.error("❌ TRACK A CRASHED:");

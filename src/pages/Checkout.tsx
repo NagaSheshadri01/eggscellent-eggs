@@ -278,7 +278,7 @@ const Checkout = () => {
       }
       
       const matchedSlot = dbSlots?.find(s => s.label === slot);
-      const resolvedSlotLabel = matchedSlot?.label || slot;
+      const resolvedSlotKey = matchedSlot?.id || null;
 
       const { data: order, error } = await supabase.from("one_time_orders").insert({
         user_id: user.id,
@@ -287,7 +287,7 @@ const Checkout = () => {
         status: payment === "online" || payment === "wallet" ? "confirmed" : "pending",
         payment_method: (payment === "online" ? "upi" : payment),
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
-        delivery_slot_key: resolvedSlotLabel,
+        delivery_slot_key: resolvedSlotKey,
         display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
         delivery_date: format(new Date(), "yyyy-MM-dd") // Just using today for checkout
       }).select().single();
