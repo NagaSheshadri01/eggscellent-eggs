@@ -345,8 +345,8 @@ const CartDrawer = () => {
         user_id: user.id,
         address_id: selectedAddressId,
         status: 'active',
-        payment_method: payment,
-        wallet_mode: payment === 'wallet' || payment === 'prepaid',
+        payment_method: 'wallet',
+        wallet_mode: true,
         display_id: displayId,
       }).select().single();
 
