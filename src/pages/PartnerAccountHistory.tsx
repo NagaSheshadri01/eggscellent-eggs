@@ -95,18 +95,14 @@ const PartnerAccountHistory = () => {
 
       // 2. Fetch Subscription Deliveries
       const { data: subData, error: subError } = await (supabase as any)
-        .from("subscription_calendar_ledger")
+        .from("subscription_deliveries")
         .select(`
-          *,
-          subscription_items (
-            product_slug,
-            quantity,
-            subscriptions (
-              user_id,
-              profiles:user_id (full_name, phone),
-              addresses:address_id (*)
-            )
-          )
+          id,
+          delivery_date,
+          status,
+          created_at,
+          addresses:delivery_address_id(*),
+          profiles:user_id(full_name, phone)
         `)
         .eq("delivery_partner_id", user!.id)
         .eq("status", "delivered")
@@ -122,17 +118,11 @@ const PartnerAccountHistory = () => {
           slot_id: o.delivery_slot_key || "unassigned"
         })),
         ...(subData || []).map((s: any) => {
-          let addr = {};
-          let profile = {};
-          if (s.subscription_items?.subscriptions) {
-            addr = s.subscription_items.subscriptions.addresses || {};
-            profile = s.subscription_items.subscriptions.profiles || {};
-          }
           return {
             id: s.id,
             status: s.status,
-            address_snapshot: { full_name: (profile as any).full_name },
-            addresses: addr,
+            address_snapshot: { full_name: s.profiles?.full_name || "Subscription Customer" },
+            addresses: s.addresses || {},
             delivery_slots: { label: "Subscription Delivery" },
             isSubscription: true,
             created_at: s.created_at || new Date(s.delivery_date).toISOString(),

@@ -16,9 +16,26 @@ const OrdersList = ({ limit }: { limit?: number }) => {
 
   useEffect(() => {
     if (!user) return;
-    let q = supabase.from("one_time_orders").select("id,total_amount,status,created_at,coupon_code,display_id,one_time_order_items(product_slug,quantity,price,products(name,image_url))").eq("user_id", user.id).order("created_at", { ascending: false });
-    if (limit) q = q.limit(limit);
-    q.then(({ data }) => setOrders(data ?? []));
+    
+    const fetchAllHistory = async () => {
+      let q1 = supabase.from("one_time_orders").select("id,total_amount,status,created_at,coupon_code,display_id,one_time_order_items(product_slug,quantity,price,products(name,image_url))").eq("user_id", user.id).order("created_at", { ascending: false });
+      if (limit) q1 = q1.limit(limit);
+      
+      let q2 = supabase.from("subscriptions").select("id, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false });
+      if (limit) q2 = q2.limit(limit);
+
+      const [oneTimeRes, subRes] = await Promise.all([q1, q2]);
+      
+      const merged = [
+        ...(oneTimeRes.data || []).map(o => ({ ...o, type: 'one_time' })),
+        ...(subRes.data || []).map(s => ({ ...s, type: 'subscription', display_id: `SUB-${s.id.slice(0,8).toUpperCase()}` }))
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      if (limit) setOrders(merged.slice(0, limit));
+      else setOrders(merged);
+    };
+
+    fetchAllHistory();
   }, [user, limit]);
 
   if (orders === null) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>;

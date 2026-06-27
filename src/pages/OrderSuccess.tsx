@@ -24,20 +24,21 @@ export default function OrderSuccess() {
     });
 
     // Real-time listener
-    const channel = supabase.channel(`order-${id}`)
+    const isSubscription = id.startsWith("sub_") || (customOrderId && !customOrderId.startsWith("O"));
+    const targetTable = isSubscription ? "subscription_deliveries" : "one_time_orders";
+
+    const channel = supabase.channel(`order-live-${id}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "one_time_orders", filter: `id=eq.${id}` },
-        (payload) => {
-          setStatus(payload.new.status);
-        }
+        { event: "UPDATE", schema: "public", table: targetTable as any, filter: `id=eq.${id}` },
+        (payload) => { setStatus(payload.new.status); }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id]);
+  }, [id, customOrderId]);
 
   if (!loaded) return <div className="min-h-screen bg-background"><Header /></div>;
 

@@ -85,7 +85,7 @@ const AdminOrders = () => {
     if (error) toast.error(error.message);
     else {
       toast.success("Updated");
-      load();
+      qc.invalidateQueries({ queryKey: ["orders"] });
     }
   };
 
@@ -245,7 +245,7 @@ const AdminOrders = () => {
                   const snap = (o.address_snapshot as any) || {};
                   const slot = Array.isArray(o.delivery_slots) ? o.delivery_slots[0] : o.delivery_slots;
                   const addr = Array.isArray(o.addresses) ? o.addresses[0] : o.addresses;
-                  const slotLabel = o.slot_id ? getSlotLabel(o.slot_id) : (slot?.label || "—");
+                  const slotLabel = o.slot_id ? getSlotLabel(o.slot_id) : (slot?.name || slot?.slot_key || slot?.label || "—");
                   
                   return (
                     <tr key={o.id} className={`border-b border-border/50 transition-colors ${
