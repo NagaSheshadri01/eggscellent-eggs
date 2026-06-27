@@ -6,4 +6,4 @@ const env = fs.readFileSync('.env', 'utf8').split('\n').reduce((acc, line) => {
   return acc;
 }, {});
 const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_PUBLISHABLE_KEY);
-supabase.from('delivery_slots').select('*').limit(1).then(console.log).catch(console.error);
+supabase.from('delivery_slots').select('*').then(console.log).catch(console.error);

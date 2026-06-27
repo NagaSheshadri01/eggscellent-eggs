@@ -273,6 +273,26 @@ const CartDrawer = () => {
     const instantItems = items.filter(i => i.purchase_type === 'instant');
     const subItems = items.filter(i => i.purchase_type === 'subscription');
 
+    // 1. Audit the slot matching logic right before checkout execution
+    const actualSlotRow = dbSlots?.find(s => s.id === selectedSlotId || s.slot_key === selectedSlotId || s.label === selectedSlotId || (s as any).name === selectedSlotId);
+
+    console.dir({
+      DEBUG_CHECKOUT_SLOT_STATE: {
+        selectedSlotStateValue: selectedSlotId,
+        matchedSlotRowObject: actualSlotRow,
+        finalResolvedKeyToSend: actualSlotRow?.slot_key || actualSlotRow?.id
+      }
+    });
+
+    // 2. Hard runtime gate
+    if (!actualSlotRow) {
+      console.error("CRITICAL: Checkout aborted. The selected slot value does not match any valid row in the delivery_slots table.");
+      setPlacing(false);
+      alert("Error: Selected delivery slot is invalid. Please re-select your delivery time window.");
+      return; 
+    }
+    const resolvedSlotKey = actualSlotRow.slot_key || actualSlotRow.id;
+
     if (subItems.length > 0) {
       const singleDeliveryCost = subItems.reduce((s, i) => s + i.discountPrice * i.qty, 0);
       const { data: wallet } = await (supabase as any).from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
@@ -304,15 +324,12 @@ const CartDrawer = () => {
 
     // 1. Process Instant Items (Standard Order)
     if (instantItems.length > 0) {
-      const chosenSlot = dbSlots?.find(s => s.id === selectedSlotId);
-      const chosenSlotLabel = chosenSlot?.label || "Standard Delivery";
-
       const { data: order, error } = await (supabase as any).from("one_time_orders").insert({
         user_id: user.id,
         delivery_address_id: selectedAddressId,
         total_amount: finalTotal,
         status: payment === "online" ? "confirmed" : "pending",
-        delivery_slot_key: chosenSlotLabel,
+        delivery_slot_key: resolvedSlotKey,
         delivery_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : null,
         payment_method: (payment === "online" ? "upi" : payment) as any,
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
@@ -385,6 +402,34 @@ const CartDrawer = () => {
         toast.error("Subscription items failed to save: " + itemsErr.message);
         setPlacing(false);
         return;
+      }
+
+      // IMMEDIATE downstream delivery manifest generator execution post-subscription success:
+      const deliveryDates: string[] = [];
+      const today = new Date();
+      for (let i = 1; i <= 14; i++) {
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + i);
+        const dateString = targetDate.toISOString().split('T')[0];
+        deliveryDates.push(dateString);
+      }
+
+      const deliveryPayloads = deliveryDates.map(date => ({
+        display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
+        user_id: user.id,
+        subscription_id: subContract.id,
+        delivery_date: date,
+        delivery_slot_key: resolvedSlotKey,
+        status: 'pending',
+        delivery_address_id: selectedAddressId
+      }));
+
+      const { error: deliveryGenError } = await (supabase as any)
+        .from('subscription_deliveries')
+        .insert(deliveryPayloads);
+        
+      if (deliveryGenError) {
+        console.error("Downstream calendar generation failed:", deliveryGenError);
       }
     }
 
