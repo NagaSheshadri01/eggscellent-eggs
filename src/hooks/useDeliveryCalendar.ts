@@ -36,10 +36,10 @@ export const useDeliveryCalendar = () => {
       const itemIds = subs.flatMap((s) => s.subscription_items.map((si) => si.id));
       if (itemIds.length === 0) return [];
 
-      const { data: ledger, error: ledgerError } = await supabase
+      const { data: ledger, error: ledgerError } = await (supabase as any)
         .from("subscription_calendar_ledger")
         .select("*, products(name, image_url, price, is_in_stock)")
-        .in("subscription_item_id", itemIds)
+        .in("subscription_id", subs.map(s => s.id))
         .neq("status", "cancelled")
         .order("delivery_date", { ascending: true });
 

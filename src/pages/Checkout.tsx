@@ -268,7 +268,40 @@ const Checkout = () => {
         setPlacing(false);
         return toast.error("Failed to setup subscription items: " + subErr.message);
       }
+      const matchedSlot = dbSlots?.find(s => s.label === slot);
+      const resolvedSlotKey = matchedSlot?.slot_key || matchedSlot?.id || slot;
+
+      // IMMEDIATE downstream delivery manifest generator execution post-subscription success:
+      const deliveryDates: string[] = [];
+      const today = new Date();
+      for (let i = 1; i <= 14; i++) {
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + i);
+        const dateString = targetDate.toISOString().split('T')[0];
+        deliveryDates.push(dateString);
+      }
+
+      const deliveryPayloads = deliveryDates.map(date => ({
+        display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
+        user_id: user.id,
+        subscription_id: subContract.id,
+        delivery_date: date,
+        delivery_slot_key: resolvedSlotKey,
+        status: 'pending',
+        delivery_address_id: selectedAddr
+      }));
+
+      const { error: deliveryGenError } = await (supabase as any)
+        .from('subscription_deliveries')
+        .insert(deliveryPayloads);
+        
+      if (deliveryGenError) {
+        console.error("Downstream calendar generation failed:", deliveryGenError);
+      }
     }
+
+    const matchedSlot = dbSlots?.find(s => s.label === slot);
+    const resolvedSlotKey = matchedSlot?.slot_key || matchedSlot?.id || slot;
 
     if (instantItems.length > 0 || (subItems.length === 0 && items.length === 0)) {
       if (payment === "wallet") {
@@ -277,9 +310,6 @@ const Checkout = () => {
         onlinePaid = true;
       }
       
-      const matchedSlot = dbSlots?.find(s => s.label === slot);
-      const resolvedSlotKey = matchedSlot?.slot_key || matchedSlot?.id || slot;
-
       const { data: order, error } = await supabase.from("one_time_orders").insert({
         user_id: user.id,
         delivery_address_id: selectedAddr,

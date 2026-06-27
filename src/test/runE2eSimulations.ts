@@ -112,6 +112,32 @@ async function runSimulations() {
     const { data: slots, error: slotsErr } = await supabase.from("delivery_slots").select("slot_key, id").limit(1);
     if (slotsErr || !slots?.length) throw new Error("No delivery slots found");
 
+    console.log("-> Generating Downstream Subscription Calendar Deliveries...");
+    const deliveryDates: string[] = [];
+    const today = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + i);
+      deliveryDates.push(targetDate.toISOString().split('T')[0]);
+    }
+    
+    const deliveryPayloads = deliveryDates.map(date => ({
+      display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
+      user_id: testUserId,
+      subscription_id: subContract.id,
+      delivery_date: date,
+      delivery_slot_key: slots[0].slot_key || slots[0].id,
+      status: 'pending',
+      delivery_address_id: testAddressId || null
+    }));
+
+    const { error: deliveryGenError } = await (supabase as any)
+      .from('subscription_deliveries')
+      .insert(deliveryPayloads);
+
+    if (deliveryGenError) throw deliveryGenError;
+    console.log("   ✅ Instantiated 14 downstream delivery dates");
+
     console.log("-> Inserting One-Time Order with Non-Wallet Payment...");
     const { data: oto, error: otoErr } = await supabase.from("one_time_orders").insert({
       user_id: testUserId,
