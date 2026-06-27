@@ -296,6 +296,8 @@ const Checkout = () => {
       if (subErr) {
         setPlacing(false);
         return toast.error("Failed to setup subscription items: " + subErr.message);
+      }
+
       // IMMEDIATE downstream delivery manifest generator execution post-subscription success:
       const deliveryDates: string[] = [];
       const today = new Date();
