@@ -220,7 +220,15 @@ const Checkout = () => {
       return; 
     }
 
-    const resolvedSlotKey = actualSlotRow.slot_key || actualSlotRow.id;
+    // Enforce strict relational slot_key mapping
+    const targetSlotKey = actualSlotRow?.slot_key;
+
+    if (!targetSlotKey) {
+      console.error("Core Data Mismatch: Selected slot row is missing its database 'slot_key' identifier.");
+      setPlacing(false);
+      toast.error("Delivery slot mapping configuration error. Please re-select a slot.");
+      return;
+    }
 
     const subItems = items.filter(i => i.purchase_type === 'subscription');
     const instantItems = items.filter(i => i.purchase_type === 'instant');
@@ -303,7 +311,7 @@ const Checkout = () => {
         user_id: user.id,
         subscription_id: subContract.id,
         delivery_date: date,
-        delivery_slot_key: resolvedSlotKey,
+        delivery_slot_key: targetSlotKey,
         status: 'pending',
         delivery_address_id: selectedAddr
       }));
@@ -331,7 +339,7 @@ const Checkout = () => {
         status: payment === "online" || payment === "wallet" ? "confirmed" : "pending",
         payment_method: (payment === "online" ? "upi" : payment),
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
-        delivery_slot_key: resolvedSlotKey,
+        delivery_slot_key: targetSlotKey,
         display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
         delivery_date: format(new Date(), "yyyy-MM-dd") // Just using today for checkout
       }).select().single();

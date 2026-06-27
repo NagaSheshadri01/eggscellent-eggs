@@ -291,7 +291,16 @@ const CartDrawer = () => {
       alert("Error: Selected delivery slot is invalid. Please re-select your delivery time window.");
       return; 
     }
-    const resolvedSlotKey = actualSlotRow.slot_key || actualSlotRow.id;
+
+    // Enforce strict relational slot_key mapping
+    const targetSlotKey = actualSlotRow?.slot_key;
+
+    if (!targetSlotKey) {
+      console.error("Core Data Mismatch: Selected slot row is missing its database 'slot_key' identifier.");
+      setPlacing(false);
+      toast.error("Delivery slot mapping configuration error. Please re-select a slot.");
+      return;
+    }
 
     if (subItems.length > 0) {
       const singleDeliveryCost = subItems.reduce((s, i) => s + i.discountPrice * i.qty, 0);
@@ -329,7 +338,7 @@ const CartDrawer = () => {
         delivery_address_id: selectedAddressId,
         total_amount: finalTotal,
         status: payment === "online" ? "confirmed" : "pending",
-        delivery_slot_key: resolvedSlotKey,
+        delivery_slot_key: targetSlotKey,
         delivery_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : null,
         payment_method: (payment === "online" ? "upi" : payment) as any,
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
@@ -419,7 +428,7 @@ const CartDrawer = () => {
         user_id: user.id,
         subscription_id: subContract.id,
         delivery_date: date,
-        delivery_slot_key: resolvedSlotKey,
+        delivery_slot_key: targetSlotKey,
         status: 'pending',
         delivery_address_id: selectedAddressId
       }));
