@@ -201,6 +201,27 @@ const Checkout = () => {
     if (!hasPhone) { setVerifyOpen(true); return; }
     setPlacing(true);
 
+    // 1. Audit the slot matching logic right before checkout execution
+    const actualSlotRow = dbSlots?.find(s => s.id === slot || s.slot_key === slot || s.label === slot || (s as any).name === slot);
+
+    console.dir({
+      DEBUG_CHECKOUT_SLOT_STATE: {
+        selectedSlotStateValue: slot,
+        matchedSlotRowObject: actualSlotRow,
+        finalResolvedKeyToSend: actualSlotRow?.slot_key || actualSlotRow?.id
+      }
+    });
+
+    // 2. Hard runtime gate: Prevent the database constraint from ever being violated
+    if (!actualSlotRow) {
+      console.error("CRITICAL: Checkout aborted. The selected slot value does not match any valid row in the delivery_slots table.");
+      setPlacing(false);
+      alert("Error: Selected delivery slot is invalid. Please re-select your delivery time window.");
+      return; 
+    }
+
+    const resolvedSlotKey = actualSlotRow.slot_key || actualSlotRow.id;
+
     const subItems = items.filter(i => i.purchase_type === 'subscription');
     const instantItems = items.filter(i => i.purchase_type === 'instant');
 
@@ -267,10 +288,6 @@ const Checkout = () => {
       if (subErr) {
         setPlacing(false);
         return toast.error("Failed to setup subscription items: " + subErr.message);
-      }
-      const matchedSlot = dbSlots?.find(s => s.label === slot);
-      const resolvedSlotKey = matchedSlot?.slot_key || matchedSlot?.id || slot;
-
       // IMMEDIATE downstream delivery manifest generator execution post-subscription success:
       const deliveryDates: string[] = [];
       const today = new Date();
@@ -299,9 +316,6 @@ const Checkout = () => {
         console.error("Downstream calendar generation failed:", deliveryGenError);
       }
     }
-
-    const matchedSlot = dbSlots?.find(s => s.label === slot);
-    const resolvedSlotKey = matchedSlot?.slot_key || matchedSlot?.id || slot;
 
     if (instantItems.length > 0 || (subItems.length === 0 && items.length === 0)) {
       if (payment === "wallet") {
