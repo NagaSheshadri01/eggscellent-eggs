@@ -363,7 +363,7 @@ const CartDrawer = () => {
         address_id: selectedAddressId,
         status: 'active',
         payment_method: 'wallet',
-        wallet_mode: true,
+        wallet_mode: 'TRUE',
         display_id: displayId,
       }).select().single();
 
