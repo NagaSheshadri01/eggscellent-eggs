@@ -24,7 +24,7 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import { useDeliveryConfig } from "@/hooks/useDeliveryConfig";
 import { evaluateTieredDeliveryFee } from "@/utils/distance";
 
-const slots = ["08:00 AM – 12:00 PM", "02:00 PM – 06:00 PM", "06:00 PM – 08:00 PM"];
+
 
 const Checkout = () => {
   const { items, total, clear, appliedCoupon, setAppliedCoupon, discount, grandTotal, selectedAddressId } = useCart();
@@ -91,7 +91,7 @@ const Checkout = () => {
   const minOrderValue = deliveryConfig?.min_order_value || 150;
   const isBelowMinOrder = total < minOrderValue;
 
-  const [slot, setSlot] = useState(hasSubscriptionInCart ? "early_morning" : slots[0]);
+  const [slot, setSlot] = useState<string>("");
   const [payment, setPayment] = useState<"online" | "upi" | "cod" | "wallet">("online");
   const [coupon, setCoupon] = useState("");
   const [placing, setPlacing] = useState(false);
@@ -106,10 +106,17 @@ const Checkout = () => {
     if (selectedAddressId && !selectedAddr) setSelectedAddr(selectedAddressId);
   }, [selectedAddressId]);
 
-  // Ensure early morning slot when subscription present
   useEffect(() => {
-    if (hasSubscriptionInCart) setSlot("early_morning");
-  }, [hasSubscriptionInCart]);
+    if (dbSlots && dbSlots.length > 0) {
+      if (hasSubscriptionInCart) {
+        const subSlot = dbSlots.find(s => s.tag === 'subscription' || s.slot_key === 'subscription');
+        if (subSlot) setSlot(subSlot.slot_key);
+      } else {
+        const firstOneTime = dbSlots.find(s => s.tag === 'one_time');
+        if (firstOneTime) setSlot(firstOneTime.slot_key);
+      }
+    }
+  }, [dbSlots, hasSubscriptionInCart]);
 
   // Real-time Qualification Engine for the offer cards on checkout page
   const offersWithEligibility = useMemo(() => {
@@ -202,7 +209,7 @@ const Checkout = () => {
     setPlacing(true);
 
     // 1. Audit the slot matching logic right before checkout execution
-    const actualSlotRow = dbSlots?.find(s => s.id === slot || s.slot_key === slot || s.label === slot || (s as any).name === slot);
+    const actualSlotRow = dbSlots?.find(s => s.slot_key === slot || s.id === slot);
 
     console.dir({
       DEBUG_CHECKOUT_SLOT_STATE: {
@@ -443,11 +450,14 @@ const Checkout = () => {
             <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-1"><Clock className="w-5 h-5 text-primary" /> Delivery slot</h2>
             <p className="text-xs text-muted-foreground mb-4 ml-7">Standard Delivery Windows</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {slots.map(s => (
-                <button key={s} onClick={() => { setSlot(s); setStep(st => Math.max(st, 2)); }} className={`px-4 py-3 rounded-xl text-sm font-medium border transition-smooth ${slot === s ? "border-primary bg-primary/10 text-brown" : "border-border text-muted-foreground hover:border-primary/40"}`}>
-                  {s}
-                </button>
-              ))}
+              {dbSlots
+                ?.filter(s => hasSubscriptionInCart ? s.tag === 'subscription' : s.tag === 'one_time')
+                ?.map((s) => (
+                  <button key={s.id} onClick={() => { setSlot(s.slot_key); setStep(st => Math.max(st, 2)); }} className={`px-4 py-3 rounded-xl text-sm font-medium border transition-smooth ${slot === s.slot_key ? "border-primary bg-primary/10 text-brown" : "border-border text-muted-foreground hover:border-primary/40"}`}>
+                    {s.label}
+                  </button>
+                ))
+              }
             </div>
           </section>
         )}

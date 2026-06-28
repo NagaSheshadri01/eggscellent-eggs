@@ -246,7 +246,8 @@ const CartDrawer = () => {
     if (!addrServiceable) { toast.error("Address is outside our delivery zone"); return; }
     if (hasSubscriptionInCart) {
       setDeliveryDate(new Date());
-      setSelectedSlotId("subscription"); // Dummy key for sub-only checkout
+      const subSlot = dbSlots?.find(s => s.tag === 'subscription' || s.slot_key === 'subscription');
+      if (subSlot) setSelectedSlotId(subSlot.slot_key);
       setStep("payment");
     } else {
       setStep("slots");
@@ -274,7 +275,7 @@ const CartDrawer = () => {
     const subItems = items.filter(i => i.purchase_type === 'subscription');
 
     // 1. Audit the slot matching logic right before checkout execution
-    const actualSlotRow = dbSlots?.find(s => s.id === selectedSlotId || s.slot_key === selectedSlotId || s.label === selectedSlotId || (s as any).name === selectedSlotId);
+    const actualSlotRow = dbSlots?.find(s => s.slot_key === selectedSlotId || s.id === selectedSlotId);
 
     console.dir({
       DEBUG_CHECKOUT_SLOT_STATE: {
@@ -725,7 +726,8 @@ const CartDrawer = () => {
                         </p>
                         <Button variant="hero" className="mt-6 w-full" onClick={() => {
                           setDeliveryDate(new Date()); 
-                          setSelectedSlotId("subscription"); // Dummy key for sub-only checkout
+                          const subSlot = dbSlots?.find(s => s.tag === 'subscription' || s.slot_key === 'subscription');
+                          if (subSlot) setSelectedSlotId(subSlot.slot_key);
                           setStep("payment");
                         }}>
                           Continue to Payment
