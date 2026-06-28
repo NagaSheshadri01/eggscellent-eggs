@@ -48,7 +48,7 @@ const CartDrawer = () => {
   const { data: allProducts } = useProducts({ onlyActive: true });
 
   const [step, setStep] = useState<CheckoutStep>("cart");
-  const [payment, setPayment] = useState<"online" | "upi" | "cod">("cod");
+  const [payment, setPayment] = useState<"online" | "upi" | "cod" | "wallet">("cod");
   const [selectedSlotId, setSelectedSlotId] = useState<string>();
   const [deliveryDate, setDeliveryDate] = useState<Date>(new Date());
   const [placing, setPlacing] = useState(false);

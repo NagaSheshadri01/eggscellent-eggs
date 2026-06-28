@@ -344,6 +344,17 @@ const Partner = () => {
     return () => { supabase.removeChannel(ch); };
   }, [user?.id, qc]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('partner-orders-live-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'one_time_orders' }, () => {
+        qc.invalidateQueries({ queryKey: ["partner_orders"] });
+        qc.invalidateQueries({ queryKey: ["partner_history"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [qc, user?.id]);
+
   // ⚠️ ALL hooks MUST be before any conditional returns (Rules of Hooks)
   const processedShifts = useMemo((): any[] => {
     const activeOrders = ((orders.data || [])).filter(o => o.status !== "delivered" && o.status !== "cancelled");
@@ -730,7 +741,7 @@ const Partner = () => {
                             <p className="text-sm font-bold text-stone-800">{stop.customer_name}</p>
                             <p className="text-xs text-stone-500 font-medium truncate max-w-[200px] sm:max-w-[300px] mt-0.5">{stop.address_string}</p>
                             <div className="text-[10px] font-bold text-primary uppercase tracking-tighter bg-primary/10 px-2 py-0.5 rounded mt-2 inline-block">
-                                Verification: Bill #{o.id.slice(0, 8)}{o.custom_order_id ? ` (${o.custom_order_id})` : ''}
+                                Verification: Bill #{o.display_id || o.id.slice(0, 8)}
                             </div>
                           </div>
                         </div>

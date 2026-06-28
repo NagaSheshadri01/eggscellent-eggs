@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Truck, CheckCircle2, ChevronRight, Search } from "lucide-react";
 import { toast } from "sonner";
 
-const STATUSES = ["placed", "confirmed", "out_for_delivery", "delivered", "cancelled"];
+const STATUSES = ["pending", "confirmed", "out_for_delivery", "delivered", "cancelled"];
 const PENDING = ["placed", "pending", "confirmed", "out_for_delivery"];
 
 const AdminOrders = () => {
@@ -78,6 +78,16 @@ const AdminOrders = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [qc]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-orders-live-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'one_time_orders' }, () => {
+        qc.invalidateQueries({ queryKey: ["orders"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [qc]);
 
   const update = async (id: string, status: string) => {
