@@ -49,7 +49,7 @@ export default function OrderSuccess() {
     { key: "delivered", label: "Delivered", icon: Home },
   ];
 
-  const currentIdx = steps.findIndex(s => s.key === status) || 0;
+  const currentIdx = Math.max(0, steps.findIndex(s => s.key === (status === 'pending' ? 'placed' : status)));
 
   return (
     <div className="min-h-screen bg-background">

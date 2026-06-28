@@ -338,7 +338,7 @@ const CartDrawer = () => {
         user_id: user.id,
         delivery_address_id: selectedAddressId,
         total_amount: finalTotal,
-        status: payment === "online" ? "confirmed" : "pending",
+        status: (payment === "online" || payment === "wallet") ? "confirmed" : "pending",
         delivery_slot_key: targetSlotKey,
         delivery_date: deliveryDate ? format(deliveryDate, "yyyy-MM-dd") : null,
         payment_method: (payment === "online" ? "upi" : payment) as any,
