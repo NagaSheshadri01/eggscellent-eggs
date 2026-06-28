@@ -27,8 +27,8 @@ const OrdersList = ({ limit }: { limit?: number }) => {
       const [oneTimeRes, subRes] = await Promise.all([q1, q2]);
       
       const merged = [
-        ...(oneTimeRes.data || []).map(o => ({ ...o, type: 'one_time' })),
-        ...(subRes.data || []).map(s => ({ ...s, type: 'subscription', display_id: `SUB-${s.id.slice(0,8).toUpperCase()}` }))
+        ...(oneTimeRes.data || []).map((o: any) => ({ ...o, type: 'one_time' })),
+        ...(subRes.data || []).map((s: any) => ({ ...s, type: 'subscription', display_id: `SUB-${s.id.slice(0,8).toUpperCase()}` }))
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       if (limit) setOrders(merged.slice(0, limit));

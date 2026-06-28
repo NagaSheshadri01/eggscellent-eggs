@@ -53,7 +53,7 @@ export default function OrderSuccess() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Seo title="Order Success — Eggscellent" />
+      <Seo title="Order Success — Eggscellent PIPELINE_TEST" />
       <Header />
       <main className="container max-w-xl py-16">
         <div className="text-center mb-10">
@@ -71,19 +71,17 @@ export default function OrderSuccess() {
               const Icon = step.icon;
               const isActive = idx <= currentIdx;
               const isCurrent = idx === currentIdx;
-              
+
               return (
                 <div key={step.key} className="flex gap-4">
                   <div className="relative flex flex-col items-center">
-                    <div className={`w-10 h-10 rounded-full grid place-items-center z-10 transition-smooth ${
-                      isActive ? "bg-primary text-brown" : "bg-secondary text-muted-foreground"
-                    }`}>
+                    <div className={`w-10 h-10 rounded-full grid place-items-center z-10 transition-smooth ${isActive ? "bg-primary text-brown" : "bg-secondary text-muted-foreground"
+                      }`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     {idx < steps.length - 1 && (
-                      <div className={`absolute top-10 bottom-[-24px] w-0.5 ${
-                        idx < currentIdx ? "bg-primary" : "bg-secondary"
-                      }`} />
+                      <div className={`absolute top-10 bottom-[-24px] w-0.5 ${idx < currentIdx ? "bg-primary" : "bg-secondary"
+                        }`} />
                     )}
                   </div>
                   <div className={`pt-2 ${isActive ? "text-brown font-semibold" : "text-muted-foreground"}`}>
