@@ -36,6 +36,17 @@ const OrdersList = ({ limit }: { limit?: number }) => {
     };
 
     fetchAllHistory();
+
+    const channel = supabase
+      .channel('user-orders-live-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'one_time_orders', filter: `user_id=eq.${user.id}` }, () => {
+        if (typeof fetchAllHistory === 'function') {
+          fetchAllHistory();
+        }
+      })
+      .subscribe();
+      
+    return () => { supabase.removeChannel(channel); };
   }, [user, limit]);
 
   if (orders === null) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>;

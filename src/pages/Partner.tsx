@@ -345,13 +345,16 @@ const Partner = () => {
   }, [user?.id, qc]);
 
   useEffect(() => {
+    if (!user?.id) return;
+
     const channel = supabase
-      .channel('partner-orders-live-sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'one_time_orders' }, () => {
-        qc.invalidateQueries({ queryKey: ["partner_orders"] });
-        qc.invalidateQueries({ queryKey: ["partner_history"] });
+      .channel('partner-delivery-live-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'one_time_orders' }, () => {
+        qc.invalidateQueries({ queryKey: ["partner_orders", user.id] });
+        qc.invalidateQueries({ queryKey: ["partner_history", user.id] });
       })
       .subscribe();
+      
     return () => { supabase.removeChannel(channel); };
   }, [qc, user?.id]);
 

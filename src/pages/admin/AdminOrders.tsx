@@ -12,12 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Truck, CheckCircle2, ChevronRight, Search } from "lucide-react";
 import { toast } from "sonner";
+import { useDeliverySlots } from "@/hooks/useDeliverySlots";
 
 const STATUSES = ["pending", "confirmed", "out_for_delivery", "delivered", "cancelled"];
 const PENDING = ["placed", "pending", "confirmed", "out_for_delivery"];
 
 const AdminOrders = () => {
   const qc = useQueryClient();
+  const { data: dbSlots } = useDeliverySlots(true);
 
   const { data: orders, isLoading: ordersLoading, error: ordersError, refetch: load } = useQuery<any[]>({
     queryKey: ["orders"],
@@ -82,11 +84,12 @@ const AdminOrders = () => {
 
   useEffect(() => {
     const channel = supabase
-      .channel('admin-orders-live-sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'one_time_orders' }, () => {
+      .channel('admin-orders-global-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'one_time_orders' }, () => {
         qc.invalidateQueries({ queryKey: ["orders"] });
       })
       .subscribe();
+      
     return () => { supabase.removeChannel(channel); };
   }, [qc]);
 
@@ -255,8 +258,6 @@ const AdminOrders = () => {
                   const snap = (o.address_snapshot as any) || {};
                   const slot = Array.isArray(o.delivery_slots) ? o.delivery_slots[0] : o.delivery_slots;
                   const addr = Array.isArray(o.addresses) ? o.addresses[0] : o.addresses;
-                  const slotLabel = o.slot_id ? getSlotLabel(o.slot_id) : (slot?.name || slot?.slot_key || slot?.label || "—");
-                  
                   return (
                     <tr key={o.id} className={`border-b border-border/50 transition-colors ${
                       selectedIds.includes(o.id)
@@ -304,9 +305,17 @@ const AdminOrders = () => {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <Badge variant="outline" className="font-medium text-[10px] bg-secondary/30 border-secondary-foreground/10 capitalize">
-                          {slotLabel}
-                        </Badge>
+                        {(() => {
+                          // Handle cases where the property is bound to delivery_slot_key or its alias
+                          const rawKey = o.delivery_slot_key || (o as any).delivery_slots;
+                          const matchedSlotRow = dbSlots?.find(s => s.slot_key === rawKey || s.id === rawKey);
+                          
+                          if (matchedSlotRow) {
+                            // Extract the clean time string window from the full database label
+                            return <span className="font-medium text-xs text-brown">{matchedSlotRow.label}</span>;
+                          }
+                          return <span className="text-stone-400 text-xs">-</span>;
+                        })()}
                       </td>
                       <td className="px-4 py-4">
                         <span className="font-semibold text-brown">{addr?.pincode || snap.pincode || "—"}</span>
