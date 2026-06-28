@@ -53,14 +53,14 @@ export default function OrderSuccess() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Seo title="Order Success — Eggscellent PIPELINE_TEST" />
+      <Seo title="Order Success — Eggscellent" />
       <Header />
       <main className="container max-w-xl py-16">
         <div className="text-center mb-10">
           <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-8 h-8 text-success" />
           </div>
-          <h1 className="font-display font-bold text-brown text-3xl mb-2">Order successful!</h1>
+          <h1 className="font-display font-bold text-brown text-3xl mb-2">Order successful! test case </h1>
           <p className="text-muted-foreground text-sm">Your order #{customOrderId || id?.split("-")[0]} has been placed successfully.</p>
         </div>
 
