@@ -431,6 +431,34 @@ const Partner = () => {
 
   // Route link generated dynamically via generateMapLink
 
+  const handleDeliveryComplete = async (orderId: string) => {
+    const { error } = await supabase.rpc("partner_update_order_status", { _order_id: orderId, _new_status: "delivered" });
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Delivered");
+      qc.invalidateQueries({ queryKey: ["partner_orders"] });
+      qc.invalidateQueries({ queryKey: ["partner_history"] });
+    }
+  };
+
+  const handleDeliveryFailure = async (orderId: string, reasonCode: "cancelled") => {
+    const confirmAction = window.confirm(`Are you sure you want to mark this delivery as failed?`);
+    if (!confirmAction) return;
+
+    const { error } = await (supabase as any)
+      .from("one_time_orders")
+      .update({ status: reasonCode })
+      .eq("id", orderId);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Delivery update submitted successfully");
+      qc.invalidateQueries({ queryKey: ["partner_orders"] });
+      qc.invalidateQueries({ queryKey: ["partner_history"] });
+    }
+  };
+
   const bulkMarkOutForDelivery = async (shiftOrders: any[]) => {
     const ids = shiftOrders.filter(o => o.status === "confirmed").map(o => o.id);
     if (ids.length === 0) {
@@ -763,12 +791,25 @@ const Partner = () => {
                       </div>
                       
                       <div className="flex items-center justify-between gap-2 pl-9 mt-1 border-t border-border/30 pt-3">
-                        <div className="flex items-center gap-2">
-                           <PartnerOrderCard 
-                            order={o}
-                            compact
-                            onUpdate={() => qc.invalidateQueries({ queryKey: ["partner_orders"] })} 
-                           />
+                        <div className="flex flex-row gap-2 w-full mt-2">
+                          <Button onClick={() => handleDeliveryComplete(o.id)} 
+                            className="flex-1 bg-amber-500 text-white font-bold h-9 text-xs"
+                          >
+                            Mark delivered
+                          </Button>
+                          
+                          <select 
+                            onChange={(e) => {
+                              if (e.target.value === "failed") {
+                                handleDeliveryFailure(o.id, "cancelled");
+                                e.target.value = ""; // Reset dropdown state trigger
+                              }
+                            }}
+                            className="h-9 px-2 text-xs rounded-md border border-stone-300 bg-white font-medium text-stone-600 focus:outline-none"
+                          >
+                            <option value="">Report Issue</option>
+                            <option value="failed">Customer Rejected / Not Available</option>
+                          </select>
                         </div>
                         <div className="flex items-center gap-2">
                           <a 

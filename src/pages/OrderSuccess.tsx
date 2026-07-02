@@ -51,6 +51,9 @@ export default function OrderSuccess() {
 
   const currentIdx = Math.max(0, steps.findIndex(s => s.key === (status === 'pending' ? 'placed' : status)));
 
+  const isCancelled = status === "cancelled";
+  const isRefunded = status === "refunded";
+
   return (
     <div className="min-h-screen bg-background">
       <Seo title="Order Success — Eggscellent" />
@@ -66,32 +69,44 @@ export default function OrderSuccess() {
 
         <div className="bg-card rounded-3xl shadow-soft p-6 mb-8">
           <h2 className="font-display font-semibold text-brown text-lg mb-6">Live Status</h2>
-          <div className="space-y-6">
-            {steps.map((step, idx) => {
-              const Icon = step.icon;
-              const isActive = idx <= currentIdx;
-              const isCurrent = idx === currentIdx;
+          {isCancelled ? (
+            <div className="p-4 mb-6 text-center rounded-xl bg-red-50 border border-red-100 text-red-700 animate-fade-in">
+              <p className="font-bold text-base">This order has been Cancelled</p>
+              <p className="text-xs text-red-500 mt-1">If money was deducted, your refund will be processed automatically.</p>
+            </div>
+          ) : isRefunded ? (
+            <div className="p-4 mb-6 text-center rounded-xl bg-blue-50 border border-blue-100 text-blue-700 animate-fade-in">
+              <p className="font-bold text-base">Order Fully Refunded</p>
+              <p className="text-xs text-blue-500 mt-1">Funds have been successfully credited back to your wallet.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {steps.map((step, idx) => {
+                const Icon = step.icon;
+                const isActive = idx <= currentIdx;
+                const isCurrent = idx === currentIdx;
 
-              return (
-                <div key={step.key} className="flex gap-4">
-                  <div className="relative flex flex-col items-center">
-                    <div className={`w-10 h-10 rounded-full grid place-items-center z-10 transition-smooth ${isActive ? "bg-primary text-brown" : "bg-secondary text-muted-foreground"
-                      }`}>
-                      <Icon className="w-5 h-5" />
+                return (
+                  <div key={step.key} className="flex gap-4">
+                    <div className="relative flex flex-col items-center">
+                      <div className={`w-10 h-10 rounded-full grid place-items-center z-10 transition-smooth ${isActive ? "bg-primary text-brown" : "bg-secondary text-muted-foreground"
+                        }`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      {idx < steps.length - 1 && (
+                        <div className={`absolute top-10 bottom-[-24px] w-0.5 ${idx < currentIdx ? "bg-primary" : "bg-secondary"
+                          }`} />
+                      )}
                     </div>
-                    {idx < steps.length - 1 && (
-                      <div className={`absolute top-10 bottom-[-24px] w-0.5 ${idx < currentIdx ? "bg-primary" : "bg-secondary"
-                        }`} />
-                    )}
+                    <div className={`pt-2 ${isActive ? "text-brown font-semibold" : "text-muted-foreground"}`}>
+                      {step.label}
+                      {isCurrent && <span className="ml-2 text-xs font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full animate-pulse">Current</span>}
+                    </div>
                   </div>
-                  <div className={`pt-2 ${isActive ? "text-brown font-semibold" : "text-muted-foreground"}`}>
-                    {step.label}
-                    {isCurrent && <span className="ml-2 text-xs font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full animate-pulse">Current</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="text-center">
