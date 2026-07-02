@@ -18,10 +18,22 @@ const OrdersList = ({ limit }: { limit?: number }) => {
     if (!user) return;
     
     const fetchAllHistory = async () => {
-      let q1 = supabase.from("one_time_orders").select("id,total_amount,status,created_at,coupon_code,display_id,one_time_order_items(product_slug,quantity,price,products(name,image_url))").eq("user_id", user.id).order("created_at", { ascending: false });
+      const userPhone = user.phone || "";
+
+      let q1 = supabase
+        .from("one_time_orders")
+        .select("id, total_amount, status, created_at, coupon_code, display_id, addresses!inner(phone), one_time_order_items(product_slug, quantity, price, products(name, image_url))")
+        .or(`user_id.eq.${user.id}, addresses.phone.eq.${userPhone}`)
+        .order("created_at", { ascending: false });
+
       if (limit) q1 = q1.limit(limit);
-      
-      let q2 = supabase.from("subscriptions").select("id, status, created_at").eq("user_id", user.id).order("created_at", { ascending: false });
+
+      let q2 = supabase
+        .from("subscriptions")
+        .select("id, status, created_at, addresses!inner(phone)")
+        .or(`user_id.eq.${user.id}, addresses.phone.eq.${userPhone}`)
+        .order("created_at", { ascending: false });
+
       if (limit) q2 = q2.limit(limit);
 
       const [oneTimeRes, subRes] = await Promise.all([q1, q2]);
