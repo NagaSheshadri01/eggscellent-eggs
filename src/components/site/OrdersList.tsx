@@ -18,7 +18,9 @@ const OrdersList = ({ limit }: { limit?: number }) => {
     if (!user) return;
     
     const fetchAllHistory = async () => {
-      const userPhone = user.phone || "";
+      // Normalize the phone string to ensure it contains the + prefix matching the DB
+      const rawPhone = user?.phone || "";
+      const userPhone = rawPhone.startsWith("+") || rawPhone === "" ? rawPhone : `+${rawPhone}`;
 
       // 1. Fetch One-Time Orders by Account UUID
       const reqOneTimeUUID = supabase
