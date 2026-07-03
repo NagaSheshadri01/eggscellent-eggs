@@ -20,31 +20,48 @@ const OrdersList = ({ limit }: { limit?: number }) => {
     const fetchAllHistory = async () => {
       const userPhone = user.phone || "";
 
-      let q1 = supabase
+      // 1. Fetch One-Time Orders by Account UUID
+      const reqOneTimeUUID = supabase
+        .from("one_time_orders")
+        .select("id, total_amount, status, created_at, coupon_code, display_id, one_time_order_items(product_slug, quantity, price, products(name, image_url))")
+        .eq("user_id", user.id);
+
+      // 2. Fetch One-Time Orders by Joining Addresses Table via Phone String
+      const reqOneTimePhone = supabase
         .from("one_time_orders")
         .select("id, total_amount, status, created_at, coupon_code, display_id, addresses!inner(phone), one_time_order_items(product_slug, quantity, price, products(name, image_url))")
-        .or(`user_id.eq.${user.id}, addresses.phone.eq.${userPhone}`)
-        .order("created_at", { ascending: false });
+        .eq("addresses.phone", userPhone);
 
-      if (limit) q1 = q1.limit(limit);
-
-      let q2 = supabase
+      // 3. Fetch Subscriptions by Account UUID
+      let reqSubUUID = supabase
         .from("subscriptions")
-        .select("id, status, created_at, addresses!inner(phone)")
-        .or(`user_id.eq.${user.id}, addresses.phone.eq.${userPhone}`)
-        .order("created_at", { ascending: false });
+        .select("id, status, created_at")
+        .eq("user_id", user.id);
 
-      if (limit) q2 = q2.limit(limit);
+      if (limit) reqSubUUID = reqSubUUID.limit(limit);
 
-      const [oneTimeRes, subRes] = await Promise.all([q1, q2]);
-      
+      // Run all network requests simultaneously
+      const [resUUID, resPhone, resSub] = await Promise.all([reqOneTimeUUID, reqOneTimePhone, reqSubUUID]);
+
+      // Merge and deduplicate one-time orders using their primary database ID
+      const combinedOneTime = [...(resUUID.data || []), ...(resPhone.data || [])];
+      const uniqueOneTimeMap = new Map();
+      combinedOneTime.forEach(item => {
+        uniqueOneTimeMap.set(item.id, item);
+      });
+      const normalizedOneTime = Array.from(uniqueOneTimeMap.values());
+
+      // Structure and sort records chronologically
       const merged = [
-        ...(oneTimeRes.data || []).map((o: any) => ({ ...o, type: 'one_time' })),
-        ...(subRes.data || []).map((s: any) => ({ ...s, type: 'subscription', display_id: `SUB-${s.id.slice(0,8).toUpperCase()}` }))
+        ...normalizedOneTime.map((o: any) => ({ ...o, type: 'one_time' })),
+        ...(resSub.data || []).map((s: any) => ({ ...s, type: 'subscription', display_id: `SUB-${s.id.slice(0, 8).toUpperCase()}` }))
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      if (limit) setOrders(merged.slice(0, limit));
-      else setOrders(merged);
+
+      if (limit) {
+        setOrders(merged.slice(0, limit));
+      } else {
+        setOrders(merged);
+      }
     };
 
     fetchAllHistory();
