@@ -121,9 +121,9 @@ const CartDrawer = () => {
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
 
   const handleUpdateSubDays = (itemId: string, newDays: number[]) => {
-    updateItems(items.map(item => 
-      (item.id === itemId && item.purchase_type === 'subscription') 
-        ? { ...item, subscription_days: newDays } 
+    updateItems(items.map(item =>
+      (item.id === itemId && item.purchase_type === 'subscription')
+        ? { ...item, subscription_days: newDays }
         : item
     ));
   };
@@ -167,7 +167,7 @@ const CartDrawer = () => {
         return null;
       }
       const isSub = i.purchase_type === 'subscription';
-      const isOOS = isSub 
+      const isOOS = isSub
         ? (p.out_of_stock_subscriptions === true || p.stock_quantity <= 0)
         : (p.out_of_stock_one_time === true || p.stock_quantity <= 0);
       if (isOOS) {
@@ -290,7 +290,7 @@ const CartDrawer = () => {
       console.error("CRITICAL: Checkout aborted. The selected slot value does not match any valid row in the delivery_slots table.");
       setPlacing(false);
       alert("Error: Selected delivery slot is invalid. Please re-select your delivery time window.");
-      return; 
+      return;
     }
 
     // Enforce strict relational slot_key mapping
@@ -387,8 +387,8 @@ const CartDrawer = () => {
         subItems.map(i => {
           const product = allProducts?.find(p => p.slug === i.slug || p.name === i.slug || p.id === i.id);
           const resolvedSlug = product?.slug || i.slug;
-          const plan = activePlans?.find(p => 
-            (p.product_slug === resolvedSlug || p.product_slug === i.slug) && 
+          const plan = activePlans?.find(p =>
+            (p.product_slug === resolvedSlug || p.product_slug === i.slug) &&
             p.frequency_type === i.frequency_type
           );
           const isWeekly = i.frequency_type === 'weekly';
@@ -437,7 +437,7 @@ const CartDrawer = () => {
       const { error: deliveryGenError } = await (supabase as any)
         .from('subscription_deliveries')
         .insert(deliveryPayloads);
-        
+
       if (deliveryGenError) {
         console.error("Downstream calendar generation failed:", deliveryGenError);
       }
@@ -462,31 +462,10 @@ const CartDrawer = () => {
           {/* ── HEADER ── */}
           <SheetHeader className="px-5 py-4 border-b border-border shrink-0">
             <SheetTitle className="font-display text-brown text-xl flex items-center gap-3">
-              {step !== "cart" && (
-                <button onClick={() => setStep(step === "payment" ? (hasSubscriptionInCart ? "address" : "slots") : step === "slots" ? "address" : "cart")} className="text-muted-foreground hover:text-brown transition-colors">
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-              )}
               <ShoppingBag className="w-5 h-5" />
-              {stepLabel}
-              {step === "cart" && count > 0 && <span className="text-sm text-muted-foreground font-body font-normal">({count})</span>}
+              Your Cart
+              {count > 0 && <span className="text-sm text-muted-foreground font-body font-normal">({count})</span>}
             </SheetTitle>
-            {/* Step progress bar */}
-            {items.length > 0 && (
-              <div className="flex gap-1.5 pt-2">
-                {(["cart", "address", "slots", "payment"] as CheckoutStep[]).map(s => {
-                  const active = (
-                    (s === "cart") ||
-                    (s === "address" && ["address", "slots", "payment"].includes(step)) ||
-                    (s === "slots" && ["slots", "payment"].includes(step)) ||
-                    (s === "payment" && step === "payment")
-                  );
-                  return (
-                    <div key={s} className={`flex-1 h-1 rounded-full transition-all duration-500 ${active ? "bg-primary" : "bg-border"}`} />
-                  );
-                })}
-              </div>
-            )}
           </SheetHeader>
 
           {items.length === 0 ? (
@@ -497,13 +476,13 @@ const CartDrawer = () => {
                 </div>
                 <p className="font-display font-semibold text-brown">Your cart is empty</p>
                 <p className="text-sm text-muted-foreground mt-1">Add some farm-fresh eggs to get started.</p>
-                <Button variant="hero" className="mt-6" onClick={() => { 
-                    setOpen(false); 
-                    nav("/#products");
-                    setTimeout(() => {
-                      document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
-                    }, 100);
-                  }}>Browse Products</Button>
+                <Button variant="hero" className="mt-6" onClick={() => {
+                  setOpen(false);
+                  nav("/#products");
+                  setTimeout(() => {
+                    document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
+                  }, 100);
+                }}>Browse Products</Button>
               </div>
             </div>
           ) : (
@@ -557,7 +536,7 @@ const CartDrawer = () => {
                                   )}
                                 </div>
                                 <div className="text-xs text-muted-foreground">{i.unit}</div>
-                                
+
                                 {i.purchase_type === 'subscription' && daysArray.length > 0 && (
                                   <div className="text-[10px] text-muted-foreground mt-1 font-semibold bg-secondary/50 px-2 py-0.5 rounded-md inline-block border border-border/40">
                                     Schedule: {getDaysLabel(daysArray)}
@@ -607,9 +586,8 @@ const CartDrawer = () => {
                             const isActive = activeOffer?.id === offer.id;
                             const Icon = OFFER_ICONS[offer.offer_type] || Tag;
                             return (
-                              <div key={offer.id} className={`flex-none w-52 p-3 rounded-xl border snap-start transition-all duration-300 ${
-                                isActive ? "border-success bg-success/5" : isEligible ? "border-primary/40 bg-card shadow-sm" : "opacity-55 border-dashed bg-secondary/10"
-                              }`}>
+                              <div key={offer.id} className={`flex-none w-52 p-3 rounded-xl border snap-start transition-all duration-300 ${isActive ? "border-success bg-success/5" : isEligible ? "border-primary/40 bg-card shadow-sm" : "opacity-55 border-dashed bg-secondary/10"
+                                }`}>
                                 <div className="flex justify-between items-start mb-1.5">
                                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${isActive ? "bg-success text-white" : "bg-primary/20 text-brown"}`}>
                                     <Icon className="w-2.5 h-2.5" />
@@ -702,11 +680,10 @@ const CartDrawer = () => {
                                 key={day}
                                 type="button"
                                 onClick={() => setSelectedWeeklyDay(idx)}
-                                className={`h-8 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center ${
-                                  isSelected
-                                    ? "bg-primary text-primary-foreground shadow"
-                                    : "bg-card border border-border text-muted-foreground hover:bg-secondary/40"
-                                }`}
+                                className={`h-8 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center ${isSelected
+                                  ? "bg-primary text-primary-foreground shadow"
+                                  : "bg-card border border-border text-muted-foreground hover:bg-secondary/40"
+                                  }`}
                               >
                                 {day[0]}
                               </button>
@@ -721,11 +698,11 @@ const CartDrawer = () => {
                         <Calendar className="w-10 h-10 text-primary mx-auto mb-3" />
                         <p className="font-display font-bold text-brown">Subscription Fulfillment</p>
                         <p className="text-sm text-muted-foreground mt-2">
-                          Your subscriptions will be delivered according to their selected weekly schedules. 
+                          Your subscriptions will be delivered according to their selected weekly schedules.
                           Daily cutoff times do not apply to recurring orders.
                         </p>
                         <Button variant="hero" className="mt-6 w-full" onClick={() => {
-                          setDeliveryDate(new Date()); 
+                          setDeliveryDate(new Date());
                           const subSlot = dbSlots?.find(s => s.tag === 'subscription' || s.slot_key === 'subscription');
                           if (subSlot) setSelectedSlotId(subSlot.slot_key);
                           setStep("payment");
@@ -772,15 +749,14 @@ const CartDrawer = () => {
                           ].map(o => {
                             const isDisabled = o.disabled;
                             return (
-                              <label 
-                                key={o.v} 
-                                className={`flex items-center gap-3 p-3 rounded-xl border transition-smooth ${
-                                  isDisabled 
-                                    ? "opacity-40 grayscale cursor-not-allowed pointer-events-none" 
-                                    : payment === o.v 
-                                      ? "border-primary bg-primary/5 cursor-pointer" 
-                                      : "border-border hover:border-primary/30 cursor-pointer"
-                                }`}
+                              <label
+                                key={o.v}
+                                className={`flex items-center gap-3 p-3 rounded-xl border transition-smooth ${isDisabled
+                                  ? "opacity-40 grayscale cursor-not-allowed pointer-events-none"
+                                  : payment === o.v
+                                    ? "border-primary bg-primary/5 cursor-pointer"
+                                    : "border-border hover:border-primary/30 cursor-pointer"
+                                  }`}
                               >
                                 <RadioGroupItem value={o.v} disabled={isDisabled} />
                                 <div className="flex-1">
@@ -801,7 +777,7 @@ const CartDrawer = () => {
                       <div className="space-y-2 text-xs">
                         {hasSubscriptionInCart ? (
                           <div className="flex justify-between text-muted-foreground">
-                            <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
+                            <span>Per Delivery Cost ({items.filter(i => i.purchase_type === 'subscription').reduce((s, i) => s + i.qty, 0)} items)</span>
                             <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
                           </div>
                         ) : (
@@ -865,8 +841,12 @@ const CartDrawer = () => {
                         Minimum order value for delivery is ₹{minOrderValue}. Please add ₹{minOrderValue - total} more to proceed!
                       </div>
                     )}
-                    <Button variant="hero" size="lg" className="w-full h-12 font-bold shadow-yolk" onClick={goToAddress} disabled={isBelowMinOrder}>
-                      Proceed to Address <ChevronRight className="w-5 h-5 ml-1" />
+                    <Button className="w-full h-12 text-base font-bold bg-primary text-primary-foreground hover:bg-primary/90 mt-4" onClick={() => {
+                        setOpen(false); // Close the cart drawer
+                        nav("/checkout"); // Redirect to the standalone checkout page
+                      }}
+                    >
+                      Proceed to Checkout <ChevronRight className="ml-2 h-5 w-5"/>
                     </Button>
                   </div>
                 )}
