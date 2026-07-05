@@ -45,6 +45,13 @@ const OrdersList = ({ limit }: { limit?: number }) => {
       // Run all network requests simultaneously
       const [resUUID, resPhone, resSub] = await Promise.all([reqOneTimeUUID, reqOneTimePhone, reqSubUUID]);
 
+      // --- DIAGNOSTIC ERROR EXPOSURE ---
+      if (resUUID.error) console.error("🚨 UUID Query Error:", resUUID.error);
+      if (resPhone.error) console.error("🚨 Phone Query Error:", resPhone.error);
+      if (resSub.error) console.error("🚨 Sub Query Error:", resSub.error);
+      console.log("Raw Phone Query Data:", resPhone.data);
+      // ---------------------------------
+
       // Merge and deduplicate one-time orders using their primary database ID
       const combinedOneTime = [...(resUUID.data || []), ...(resPhone.data || [])];
       const uniqueOneTimeMap = new Map();
