@@ -25,13 +25,13 @@ const OrdersList = ({ limit }: { limit?: number }) => {
       // 1. Fetch One-Time Orders by Account UUID
       const reqOneTimeUUID = supabase
         .from("one_time_orders")
-        .select("id, total_amount, status, created_at, coupon_code, display_id, one_time_order_items(product_slug, quantity, price, products(name, image_url))")
+        .select("id, total_amount, status, created_at, display_id, one_time_order_items(product_slug, quantity, price, products(name, image_url))")
         .eq("user_id", user.id);
 
       // 2. Fetch One-Time Orders by Joining Addresses Table via Phone String
       const reqOneTimePhone = supabase
         .from("one_time_orders")
-        .select("id, total_amount, status, created_at, coupon_code, display_id, addresses!inner(phone), one_time_order_items(product_slug, quantity, price, products(name, image_url))")
+        .select("id, total_amount, status, created_at, display_id, addresses!inner(phone), one_time_order_items(product_slug, quantity, price, products(name, image_url))")
         .eq("addresses.phone", userPhone);
 
       // 3. Fetch Subscriptions by Account UUID
