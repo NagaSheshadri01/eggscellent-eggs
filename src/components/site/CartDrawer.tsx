@@ -843,10 +843,10 @@ const CartDrawer = () => {
                 <div className="flex justify-between items-baseline mb-3">
                   <div>
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      {hasSubscriptionInCart ? "Per Delivery" : (step === "cart" ? "Subtotal" : "Grand Total")}
+                      {hasSubscriptionInCart ? "Per Delivery" : "Subtotal"}
                     </div>
                     <div className="font-display font-bold text-brown text-xl">
-                      {hasSubscriptionInCart ? `₹${perDeliveryCost}` : `₹${step === "cart" ? total : finalTotal}`}
+                      {hasSubscriptionInCart ? `₹${perDeliveryCost}` : `₹${total}`}
                     </div>
                   </div>
                   {discount > 0 && (
