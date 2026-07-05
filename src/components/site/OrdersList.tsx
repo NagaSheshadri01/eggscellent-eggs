@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Package, ChevronRight } from "lucide-react";
 
 const statusLabel: Record<string, string> = {
-  placed: "Placed", confirmed: "Confirmed", packed: "Packed",
+  pending: "Placed", placed: "Placed", confirmed: "Confirmed", packed: "Packed",
   out_for_delivery: "Out for delivery", delivered: "Delivered", cancelled: "Cancelled",
 };
 

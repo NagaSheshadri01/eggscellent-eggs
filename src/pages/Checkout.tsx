@@ -345,7 +345,7 @@ const Checkout = () => {
         user_id: user.id,
         delivery_address_id: selectedAddr,
         total_amount: grand,
-        status: (payment === "online" || payment === "wallet") ? "confirmed" : "pending",
+        status: "pending", // <-- FIXED: Always defaults to pending for Admin assignment
         payment_method: (payment === "online" ? "upi" : payment),
         payment_status: payment === "cod" ? "pending" : (onlinePaid ? "paid" : "pending"),
         delivery_slot_key: targetSlotKey,
