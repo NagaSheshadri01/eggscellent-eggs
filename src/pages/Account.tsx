@@ -125,7 +125,12 @@ const Account = ({ defaultTab }: AccountProps) => {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
+              {wallet && wallet.reserved_balance !== undefined && wallet.reserved_balance > 0 && (
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1 mt-1">
+                  🔒 ₹{wallet.reserved_balance.toFixed(2)} reserved for scheduled deliveries
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
                 Automatic deductions will occur upon successful deliveries.
               </p>
             </div>
@@ -178,6 +183,11 @@ const Account = ({ defaultTab }: AccountProps) => {
                     </span>
                   )}
                 </div>
+                {wallet && wallet.reserved_balance !== undefined && wallet.reserved_balance > 0 && (
+                  <p className="text-sm text-muted-foreground font-medium flex items-center gap-1.5 mb-2">
+                    🔒 ₹{wallet.reserved_balance.toFixed(2)} reserved for scheduled deliveries
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
                   Your prepaid wallet balance is the primary source of payment for delivery deductions. Minimum recommended balance is ₹100.
                 </p>
