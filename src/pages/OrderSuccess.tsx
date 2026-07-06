@@ -25,7 +25,7 @@ export default function OrderSuccess() {
 
     // Real-time listener
     const isSubscription = id.startsWith("sub_") || (customOrderId && !customOrderId.startsWith("O"));
-    const targetTable = isSubscription ? "subscription_deliveries" : "one_time_orders";
+    const targetTable = isSubscription ? "manifest_drops" : "one_time_orders";
 
     const channel = supabase.channel(`order-live-${id}`)
       .on(

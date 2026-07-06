@@ -23,15 +23,15 @@ const Dashboard = () => {
     (async () => {
       const [oneTimeOrders, subDeliveries, profiles, oneTimeItems, subItems] = await Promise.all([
         supabase.from("one_time_orders").select("total_amount,created_at,status"),
-        supabase.from("subscription_deliveries").select("created_at,status,subscription_delivery_items(effective_price)"),
+        supabase.from("manifest_drops").select("created_at,status,escrow_amount"),
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("one_time_order_items").select("product_name,product_slug,quantity,price"),
-        supabase.from("subscription_delivery_items").select("product_slug,quantity"),
+        supabase.from("manifest_drops").select("product_slug,quantity"),
       ]);
       const list = [
         ...(oneTimeOrders.data ?? []).map((o: any) => ({ total: Number(o.total_amount || 0), created_at: o.created_at, status: o.status })),
         ...(subDeliveries.data ?? []).map((d: any) => {
-          const total = (d.subscription_delivery_items || []).reduce((sum: number, item: any) => sum + Number(item.effective_price || 0), 0);
+          const total = Number(d.escrow_amount || 0);
           return { total, created_at: d.created_at, status: d.status };
         })
       ];

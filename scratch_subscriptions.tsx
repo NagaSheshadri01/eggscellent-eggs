@@ -15,7 +15,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const AdminSubscriptions = () => {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState("contracts");
+  const [activeTab, setActiveTab] = useState("dispatch");
 
   // Plan Creator Form State
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -66,7 +66,7 @@ const AdminSubscriptions = () => {
         .select(`
           *,
           profiles:user_id (full_name, email, phone),
-          
+          subscription_items(id, product_slug, quantity, selected_days)
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -273,7 +273,9 @@ const AdminSubscriptions = () => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-secondary/40 p-1 mb-6">
-          
+          <TabsTrigger value="dispatch" className="flex items-center gap-2">
+            <Truck className="w-4 h-4" /> Today's Dispatch
+          </TabsTrigger>
           <TabsTrigger value="contracts" className="flex items-center gap-2">
             <Repeat className="w-4 h-4" /> Active Subscriptions
           </TabsTrigger>
@@ -281,6 +283,97 @@ const AdminSubscriptions = () => {
             <Plus className="w-4 h-4" /> Manage Plans
           </TabsTrigger>
         </TabsList>
+
+        {/* ── TAB: TODAY'S DISPATCH ── */}
+        <TabsContent value="dispatch" className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-brown">
+              <Calendar className="w-4 h-4 text-primary" />
+              Queue for {new Date().toLocaleDateString(undefined, { dateStyle: 'long' })}
+            </div>
+            <div className="text-[10px] uppercase font-bold text-muted-foreground flex gap-3">
+              <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-400" /> Unassigned</span>
+              <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-400" /> Assigned</span>
+            </div>
+          </div>
+
+          {dispatchQ.isLoading ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Skeleton className="h-40 rounded-2xl" />
+              <Skeleton className="h-40 rounded-2xl" />
+            </div>
+          ) : dispatchQ.error ? (
+            <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-2xl mb-6 text-sm">
+              <p className="font-bold">Error loading dispatch queue:</p>
+              <p>{(dispatchQ.error ).message || "Unknown error"}</p>
+            </div>
+          ) : sortedDispatch.length === 0 ? (
+            <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border flex flex-col items-center">
+              <CheckCircle2 className="w-12 h-12 text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">No deliveries scheduled for today.</p>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sortedDispatch.map((d: any) => {
+                const subItem = d.subscription_items || {};
+                const sub = subItem.subscriptions || {};
+                const profile = sub.profiles || {};
+                const addr = sub.addresses || {};
+                const isAssigned = !!d.delivery_partner_id;
+
+                return (
+                  <div 
+                    key={d.id} 
+                    className={`rounded-2xl border p-4 shadow-soft transition-all ${
+                      isAssigned 
+                        ? "bg-green-50/60 border-green-200 hover:bg-green-50" 
+                        : "bg-red-50/60 border-red-200 hover:bg-red-50 ring-1 ring-red-100"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-2 font-display font-bold text-brown text-sm">
+                        <User className="w-3.5 h-3.5 text-primary" />
+                        {profile.full_name || "Guest Customer"}
+                      </div>
+                      <span className="text-[9px] font-mono font-bold bg-white/60 px-1.5 py-0.5 rounded border border-black/5">
+                        #{d.id.slice(0,8)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center gap-2 text-xs text-brown font-medium">
+                        <Package className="w-3 h-3" />
+                        {subItem.quantity || d.quantity}x {products.find((p: any) => p.slug === subItem.product_slug || p.slug === d.product_slug)?.name || subItem.product_slug || d.product_slug}
+                      </div>
+                      <div className="flex items-start gap-2 text-[10px] text-muted-foreground leading-relaxed">
+                        <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+                        {addr.address_line_1 || "No Address"}, {addr.pincode || ""}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-black/5">
+                      <label className="text-[9px] font-bold uppercase text-muted-foreground mb-1 block">Assign Partner</label>
+                      <Select 
+                        value={d.delivery_partner_id || "unassigned"} 
+                        onValueChange={(v) => assignPartner.mutate({ deliveryId: d.id, partnerId: v })}
+                      >
+                        <SelectTrigger className="h-8 text-[10px] bg-white/80 border-black/5">
+                          <SelectValue placeholder="Choose partner..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">-- Unassigned --</SelectItem>
+                          {partners.filter((p: any) => p.user_id).map((p: any) => (
+                            <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
 
         {/* ── TAB: ACTIVE CONTRACTS ── */}
         <TabsContent value="contracts">
@@ -316,37 +409,34 @@ const AdminSubscriptions = () => {
                       </td>
                       <td className="px-5 py-4">
                         <div className="space-y-2">
-                        
-                          <div className="flex items-center gap-1.5 font-medium text-brown">
+                        {s.subscription_items?.map((item: any) => (
+                          <div key={item.id} className="flex items-center gap-1.5 font-medium text-brown">
                             <Package className="w-3.5 h-3.5 text-primary" />
-                            {s.quantity}x {products.find((p: any) => p.slug === s.product_slug)?.name || s.product_slug}
+                            {item.quantity}x {products.find((p: any) => p.slug === item.product_slug)?.name || item.product_slug}
                           </div>
-
+                        ))}
                         </div>
                       </td>
                       <td className="px-5 py-4">
                         <div className="space-y-2">
-                        
-                          {(() => {
-                            const days = typeof s.selected_days === "string" ? JSON.parse(s.selected_days) : (s.selected_days || []);
-                            return (
-                              <div className="flex gap-1">
-                                {DAYS.map((day, idx) => (
-                                  <span 
-                                    key={day} 
-                                    className={`text-[9px] font-bold w-6 h-6 rounded-full flex items-center justify-center border ${
-                                      days.includes(idx) || days.includes(String(idx))
-                                        ? "bg-primary/20 border-primary text-brown" 
-                                        : "bg-secondary/40 border-border text-muted-foreground"
-                                    }`}
-                                  >
-                                    {day[0]}
-                                  </span>
-                                ))}
-                              </div>
-                            );
-                          })()}
-
+                        {s.subscription_items?.map((item: any) => {
+                          const days = typeof item.selected_days === "string" ? JSON.parse(item.selected_days) : (item.selected_days || []);
+                          return (
+                          <div key={item.id} className="flex gap-1">
+                            {DAYS.map((day, idx) => (
+                              <span 
+                                key={day} 
+                                className={`text-[9px] font-bold w-6 h-6 rounded-full flex items-center justify-center border ${
+                                  days.includes(idx) || days.includes(String(idx))
+                                    ? "bg-primary/20 border-primary text-brown" 
+                                    : "bg-secondary/40 border-border text-muted-foreground"
+                                }`}
+                              >
+                                {day[0]}
+                              </span>
+                            ))}
+                          </div>
+                        )})}
                         </div>
                       </td>
                       <td className="px-5 py-4 font-mono text-xs text-brown">

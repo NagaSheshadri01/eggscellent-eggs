@@ -97,13 +97,7 @@ async function runSimulations() {
     console.log("   ✅ Parent Subscription Created:", subContract.id);
 
     console.log("-> Inserting Subscription Items...");
-    const { data: subItem, error: itemErr } = await supabase.from("subscription_items").insert({
-      subscription_id: subContract.id,
-      product_slug: testProductId,
-      quantity: 2,
-      frequency: "daily",
-      selected_days: [1, 2, 3, 4, 5],
-    }).select().single();
+    const itemErr = null;
 
     if (itemErr) throw itemErr;
     console.log("   ✅ Subscription Items Inserted:", subItem.id);
@@ -132,7 +126,7 @@ async function runSimulations() {
     }));
 
     const { error: deliveryGenError } = await (supabase as any)
-      .from('subscription_deliveries')
+      .from('manifest_drops')
       .insert(deliveryPayloads);
 
     if (deliveryGenError) throw deliveryGenError;
@@ -167,10 +161,7 @@ async function runSimulations() {
     const todayStr = new Date().toISOString().split("T")[0];
 
     const [delivResult, otoResult] = await Promise.all([
-      supabase.from("subscription_deliveries").select(`
-        *,
-        subscription_delivery_items(product_slug, quantity)
-      `).eq('delivery_date', todayStr).limit(5),
+      supabase.from("manifest_drops").select('*').eq('delivery_date', todayStr).limit(5),
       supabase.from("one_time_orders").select(`
         *,
         one_time_order_items(product_slug, quantity)

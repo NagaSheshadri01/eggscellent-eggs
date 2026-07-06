@@ -7,7 +7,7 @@ export const useDriverShift = (partnerId?: string, todayStr?: string) => {
 
   const updateStopStatus = useMutation({
     mutationFn: async ({ stopId, type, status }: { stopId: string; type: 'instant' | 'subscription'; status: "delivered" | "skipped" | "failed" }) => {
-      const table = type === 'instant' ? 'one_time_orders' : 'subscription_calendar_ledger';
+      const table = type === 'instant' ? 'one_time_orders' : 'manifest_drops';
       const { error } = await supabase
         .from(table)
         .update({ status })

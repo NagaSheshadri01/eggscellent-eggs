@@ -100,7 +100,7 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
 
   const advance = async () => {
     if (!flow) return;
-    const { error } = await (supabase as any).rpc("partner_update_order_status", { _order_id: order.id, _new_status: flow.next });
+    const { error } = await supabase.rpc("partner_update_order_status", { _order_id: order.id, _new_status: flow.next });
     if (error) toast.error(error.message);
     else { toast.success(flow.label.replace("Mark ", "")); onUpdate(); }
   };
@@ -221,7 +221,7 @@ const Partner = () => {
 
   useEffect(() => {
     const fetchWarehouse = async () => {
-      const { data, error } = await (supabase as any).from("delivery_config").select("store_latitude, store_longitude").eq("id", 1).maybeSingle();
+      const { data, error } = await (supabase.from("delivery_config") ).select("store_latitude, store_longitude").eq("id", 1).maybeSingle();
       if (data?.store_latitude && data?.store_longitude) {
         setWarehouse({ lat: data.store_latitude, lng: data.store_longitude });
       }
@@ -293,18 +293,21 @@ const Partner = () => {
     enabled: !!user?.id && activeFeed === 'subscription',
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('manifest_drops')
+        .from('subscription_calendar_ledger')
         .select(`
           *,
-          manifests!inner(delivery_date, driver_id),
-          subscriptions (
-            user_id,
-            profiles:user_id (id, full_name, phone),
-            addresses:address_id (*)
+          subscription_items (
+            product_slug,
+            quantity,
+            subscriptions (
+              user_id,
+              profiles:user_id (id, full_name, phone),
+              addresses:address_id (*)
+            )
           )
         `)
-        .eq('manifests.driver_id', user!.id)
-        .in('manifests.delivery_date', [todayStr, tomorrowStr]);
+        .eq('delivery_partner_id', user!.id)
+        .in('delivery_date', [todayStr, tomorrowStr]);
       if (error) throw error;
       return (data ?? []) ;
     },
@@ -323,7 +326,7 @@ const Partner = () => {
       // instantly update the partner's tomorrow shift view without a manual refresh.
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "manifest_drops" },
+        { event: "UPDATE", schema: "public", table: "subscription_calendar_ledger" },
         () => qc.invalidateQueries({ queryKey: ["driver-active-shift"] }),
       )
       .on('broadcast', { event: 'direct_assignment' }, ({ payload }) => {
@@ -357,7 +360,7 @@ const Partner = () => {
 
   // ⚠️ ALL hooks MUST be before any conditional returns (Rules of Hooks)
   const processedShifts = useMemo((): any[] => {
-    const activeOrders = ((orders.data || [])).filter((o: any) => o.status !== "delivered" && o.status !== "cancelled");
+    const activeOrders = ((orders.data || [])).filter(o => o.status !== "delivered" && o.status !== "cancelled");
     
     const groups: Record<string, any[]> = {};
     activeOrders.forEach((o: any) => {
@@ -429,7 +432,7 @@ const Partner = () => {
   // Route link generated dynamically via generateMapLink
 
   const handleDeliveryComplete = async (orderId: string) => {
-    const { error } = await (supabase as any).rpc("partner_update_order_status", { _order_id: orderId, _new_status: "delivered" });
+    const { error } = await supabase.rpc("partner_update_order_status", { _order_id: orderId, _new_status: "delivered" });
     if (error) toast.error(error.message);
     else {
       toast.success("Delivered");
@@ -463,7 +466,7 @@ const Partner = () => {
       return;
     }
     
-    const { error } = await (supabase as any).from("one_time_orders").update({ status: "out_for_delivery" }).in("id", ids);
+    const { error } = await supabase.from("one_time_orders").update({ status: "out_for_delivery" }).in("id", ids);
     if (error) {
       toast.error("Failed to dispatch: " + error.message);
     } else {
@@ -513,39 +516,39 @@ const Partner = () => {
           const rawStops = subDeliveries.data || [];
           
           // Split stops by date bounds
-          const todayStops = rawStops.filter((s: any) => s.manifests?.delivery_date === todayStr);
-          const tomorrowStops = rawStops.filter((s: any) => s.manifests?.delivery_date === tomorrowStr);
+          const todayStops = rawStops.filter((s: any) => s.delivery_date === todayStr);
+          const tomorrowStops = rawStops.filter((s: any) => s.delivery_date === tomorrowStr);
 
-          // Active stops logic
+          // Active stops logic (only filtering completed/inactive for today's live execution)
           const activeStops = todayStops.filter((s: any) => !completedStops[s.id] && s.status !== 'delivered' && s.status !== 'skipped' && s.status !== 'failed');
           const tomorrowActiveStops = tomorrowStops;
 
           const isFutureShift = subscriptionTab === 'tomorrow';
           const displayStops = isFutureShift ? tomorrowActiveStops : activeStops;
 
-          // Group by user_id
-          const userGroups: Record<string, any> = {};
-          displayStops.forEach((drop: any) => {
-             const uid = drop.user_id;
-             if (!userGroups[uid]) {
-                userGroups[uid] = {
-                   userId: uid,
-                   customerInfo: drop.subscriptions?.profiles,
-                   address: drop.subscriptions?.addresses,
-                   items: [],
-                   master_order_id: drop.manifests?.id,
-                   custom_order_id: drop.id
-                };
-             }
-             userGroups[uid].items.push({
-               ...drop,
-               product_slug: drop.product_slug,
-               quantity: drop.quantity,
-               status: drop.status
-             });
-          });
+          // Master Orders already act as the group! We map them to the same structure.
+          let groupedStops = displayStops.map((masterOrder: any) => {
+            const userId = masterOrder.user_id;
+            // Filter child ledger rows if needed (e.g. exclude failed ones for driver view)
+            const activeItems = masterOrder.delivery_ledger?.filter((item: any) => item.status !== 'failed' && item.status !== 'skipped') || [];
+            
+            // Find an address
+            let addr = {};
+            activeItems.forEach((ledgerItem: any) => {
+              if (ledgerItem.subscriptions?.addresses) {
+                addr = ledgerItem.subscriptions.addresses;
+              }
+            });
 
-          let groupedStops = Object.values(userGroups);
+            return {
+              userId,
+              customerInfo: masterOrder.profiles,
+              address: addr,
+              items: activeItems,
+              master_order_id: masterOrder.id,
+              custom_order_id: masterOrder.custom_order_id
+            };
+          }).filter((group: any) => group.items.length > 0);
           
           const mappedStops = groupedStops.map((stop: any) => ({
             ...stop,
@@ -556,13 +559,9 @@ const Partner = () => {
 
           // Helper to count unique customer stops for badge tabs
           const getUniqueStopsCount = (itemsList: any[]) => {
-             const set = new Set();
-             itemsList.forEach((i: any) => {
-               if (i.status !== 'failed' && i.status !== 'skipped') {
-                  set.add(i.user_id);
-               }
-             });
-             return set.size;
+            return itemsList.filter((mo: any) => 
+              (mo.delivery_ledger || []).some((item: any) => item.status !== 'failed' && item.status !== 'skipped')
+            ).length;
           };
 
           const todayStopsCount = getUniqueStopsCount(todayStops);
@@ -648,7 +647,7 @@ const Partner = () => {
                             className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-12 px-6 shadow-lg shadow-amber-500/20"
                             onClick={async () => {
                               const pendingIds = activeStops.filter((s: any) => s.status === 'scheduled').map((s: any) => s.id);
-                              const { error } = await (supabase as any).from("manifest_drops").update({ status: 'out_for_delivery' }).in('id', pendingIds);
+                              const { error } = await supabase.from('subscription_calendar_ledger').update({ status: 'out_for_delivery' }).in('id', pendingIds);
                               if (error) toast.error(error.message);
                               else { subDeliveries.refetch(); toast.success(`${pendingIds.length} subscription stops dispatched!`); }
                             }}

@@ -95,7 +95,7 @@ const PartnerAccountHistory = () => {
 
       // 2. Fetch Subscription Deliveries
       const { data: subData, error: subError } = await (supabase as any)
-        .from("subscription_deliveries")
+        .from("manifest_drops")
         .select(`
           id,
           delivery_date,

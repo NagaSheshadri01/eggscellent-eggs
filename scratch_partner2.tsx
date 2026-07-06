@@ -100,7 +100,7 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
 
   const advance = async () => {
     if (!flow) return;
-    const { error } = await (supabase as any).rpc("partner_update_order_status", { _order_id: order.id, _new_status: flow.next });
+    const { error } = await supabase.rpc("partner_update_order_status", { _order_id: order.id, _new_status: flow.next });
     if (error) toast.error(error.message);
     else { toast.success(flow.label.replace("Mark ", "")); onUpdate(); }
   };
@@ -221,7 +221,7 @@ const Partner = () => {
 
   useEffect(() => {
     const fetchWarehouse = async () => {
-      const { data, error } = await (supabase as any).from("delivery_config").select("store_latitude, store_longitude").eq("id", 1).maybeSingle();
+      const { data, error } = await (supabase.from("delivery_config") ).select("store_latitude, store_longitude").eq("id", 1).maybeSingle();
       if (data?.store_latitude && data?.store_longitude) {
         setWarehouse({ lat: data.store_latitude, lng: data.store_longitude });
       }
@@ -357,7 +357,7 @@ const Partner = () => {
 
   // ⚠️ ALL hooks MUST be before any conditional returns (Rules of Hooks)
   const processedShifts = useMemo((): any[] => {
-    const activeOrders = ((orders.data || [])).filter((o: any) => o.status !== "delivered" && o.status !== "cancelled");
+    const activeOrders = ((orders.data || [])).filter(o => o.status !== "delivered" && o.status !== "cancelled");
     
     const groups: Record<string, any[]> = {};
     activeOrders.forEach((o: any) => {
@@ -429,7 +429,7 @@ const Partner = () => {
   // Route link generated dynamically via generateMapLink
 
   const handleDeliveryComplete = async (orderId: string) => {
-    const { error } = await (supabase as any).rpc("partner_update_order_status", { _order_id: orderId, _new_status: "delivered" });
+    const { error } = await supabase.rpc("partner_update_order_status", { _order_id: orderId, _new_status: "delivered" });
     if (error) toast.error(error.message);
     else {
       toast.success("Delivered");
@@ -463,7 +463,7 @@ const Partner = () => {
       return;
     }
     
-    const { error } = await (supabase as any).from("one_time_orders").update({ status: "out_for_delivery" }).in("id", ids);
+    const { error } = await supabase.from("one_time_orders").update({ status: "out_for_delivery" }).in("id", ids);
     if (error) {
       toast.error("Failed to dispatch: " + error.message);
     } else {
@@ -648,7 +648,7 @@ const Partner = () => {
                             className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-12 px-6 shadow-lg shadow-amber-500/20"
                             onClick={async () => {
                               const pendingIds = activeStops.filter((s: any) => s.status === 'scheduled').map((s: any) => s.id);
-                              const { error } = await (supabase as any).from("manifest_drops").update({ status: 'out_for_delivery' }).in('id', pendingIds);
+                              const { error } = await supabase.from('manifest_drops').update({ status: 'out_for_delivery' }).in('id', pendingIds);
                               if (error) toast.error(error.message);
                               else { subDeliveries.refetch(); toast.success(`${pendingIds.length} subscription stops dispatched!`); }
                             }}

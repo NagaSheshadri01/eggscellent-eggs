@@ -25,7 +25,7 @@ export const useDeliveryCalendar = () => {
         .select(`
           id, 
           status,
-          subscription_items ( id, product_slug, quantity, selected_days )
+          
         `)
         .eq("user_id", user.id)
         .eq("status", "active");
@@ -33,11 +33,11 @@ export const useDeliveryCalendar = () => {
       if (subsError) throw subsError;
       if (!subs || subs.length === 0) return [];
 
-      const itemIds = subs.flatMap((s) => s.subscription_items.map((si) => si.id));
+      const itemIds = subs.map(s => s.id);
       if (itemIds.length === 0) return [];
 
       const { data: ledger, error: ledgerError } = await (supabase as any)
-        .from("subscription_calendar_ledger")
+        .from("manifest_drops")
         .select("*, products(name, image_url, price, is_in_stock)")
         .in("subscription_id", subs.map(s => s.id))
         .neq("status", "cancelled")
@@ -54,7 +54,7 @@ export const useDeliveryCalendar = () => {
         .select("slug, discounted_price");
 
       for (const sub of subs) {
-        for (const item of sub.subscription_items) {
+        const item = sub; {
           const days = (item.selected_days as number[] || []).map((d) => Number(d));
           const existingDates = new Set(
             existingLedger
@@ -91,14 +91,14 @@ export const useDeliveryCalendar = () => {
 
       if (missingEntries.length > 0) {
         const { error: seedError } = await supabase
-          .from("subscription_calendar_ledger")
+          .from("manifest_drops")
           .upsert(missingEntries, { onConflict: "subscription_item_id, delivery_date, product_slug" });
 
         if (seedError) {
           console.error("Error seeding calendar:", seedError);
         } else {
           const { data: seededLedger } = await supabase
-            .from("subscription_calendar_ledger")
+            .from("manifest_drops")
             .select("*, products(name, image_url, price, is_in_stock)")
             .in("subscription_item_id", itemIds)
             .order("delivery_date", { ascending: true });
@@ -122,7 +122,7 @@ export const useDeliveryCalendar = () => {
         {
           event: "UPDATE",
           schema: "public",
-          table: "subscription_calendar_ledger",
+          table: "manifest_drops",
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ["delivery-ledger", user.id] });
@@ -138,7 +138,7 @@ export const useDeliveryCalendar = () => {
   const toggleSkip = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "scheduled" | "skipped" }) => {
       const { error } = await supabase
-        .from("subscription_calendar_ledger")
+        .from("manifest_drops")
         .update({ status })
         .eq("id", id);
       if (error) throw error;
@@ -159,13 +159,13 @@ export const useDeliveryCalendar = () => {
       
       if (id) {
         const { error } = await supabase
-          .from("subscription_calendar_ledger")
+          .from("manifest_drops")
           .update({ quantity, status })
           .eq("id", id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from("subscription_calendar_ledger")
+          .from("manifest_drops")
           .upsert([{
             subscription_item_id,
             delivery_date,
@@ -192,20 +192,20 @@ export const useDeliveryCalendar = () => {
       
       const { data: subs } = await supabase
         .from("subscriptions")
-        .select("id, subscription_items(id)")
+        .select("id")
         .eq("user_id", user.id)
         .eq("status", "active")
         .limit(1)
         .maybeSingle();
 
-      if (!subs?.id || !subs.subscription_items || subs.subscription_items.length === 0) {
+      if (!subs?.id) {
         throw new Error("Need an active subscription to add standalone items");
       }
 
       const { error } = await supabase
-        .from("subscription_calendar_ledger")
+        .from("manifest_drops")
         .upsert([{
-          subscription_item_id: subs.subscription_items?.[0]?.id || null,
+          /* subscription_item_id removed */
           delivery_date: date,
           product_slug,
           quantity: 1,

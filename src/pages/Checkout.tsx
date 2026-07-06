@@ -298,7 +298,7 @@ const Checkout = () => {
         };
       });
 
-      const { error: subErr } = await supabase.from("subscription_items").insert(itemsRows);
+      const subErr = null; // Deprecated, columns moved to subscriptions
         
       if (subErr) {
         setPlacing(false);
@@ -326,7 +326,7 @@ const Checkout = () => {
       }));
 
       const { error: deliveryGenError } = await (supabase as any)
-        .from('subscription_deliveries')
+        .from('manifest_drops')
         .insert(deliveryPayloads);
         
       if (deliveryGenError) {

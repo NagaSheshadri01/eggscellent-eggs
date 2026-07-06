@@ -73,26 +73,25 @@ const HorizontalCalendarLedger = () => {
         .eq('status', 'active');
 
       const { data: manifestDrops } = await (supabase as any)
-        .from('subscription_deliveries')
-        .select('id, delivery_date, status, subscription_delivery_items(id, product_slug, quantity, effective_price)')
+        .from('manifest_drops')
+        .select('id, status, product_slug, quantity, escrow_amount, manifests!inner(delivery_date)')
         .eq('user_id', uid)
-        .gte('delivery_date', startStr)
-        .lte('delivery_date', endStr);
+        .gte('manifests.delivery_date', startStr)
+        .lte('manifests.delivery_date', endStr);
 
       let itemsList: any[] = [];
       const generatedDropsMap = new Map();
       
       (manifestDrops || []).forEach((del: any) => {
-        generatedDropsMap.set(del.delivery_date, true);
-        (del.subscription_delivery_items || []).forEach((i: any) => {
-          itemsList.push({
-            id: i.id,
-            delivery_id: del.id,
-            delivery_date: del.delivery_date,
+        generatedDropsMap.set(del.manifests?.delivery_date, true);
+        itemsList.push({
+            id: del.id,
+            delivery_id: del.manifests?.id,
+            delivery_date: del.manifests?.delivery_date,
             status: del.status,
-            product_slug: i.product_slug,
-            quantity: i.quantity,
-            effective_price: i.effective_price,
+            product_slug: del.product_slug,
+            quantity: del.quantity,
+            effective_price: del.escrow_amount,
             is_manifest: true,
             subscription_id: null
           });
@@ -106,6 +105,7 @@ const HorizontalCalendarLedger = () => {
             try { allowedDays = JSON.parse(allowedDays); } catch(e) {}
           }
           const allowedDaysArray = Array.isArray(allowedDays) ? allowedDays : [];
+          const pausedDatesArray = Array.isArray(sub.paused_dates) ? sub.paused_dates : [];
 
           for (let i = 0; i < 30; i++) {
             const d = new Date();
@@ -115,8 +115,9 @@ const HorizontalCalendarLedger = () => {
             const dayOfWeek = d.getDay();
             
             const isScheduledDay = sub.frequency === 'daily' || allowedDaysArray.includes(dayOfWeek) || allowedDaysArray.includes(String(dayOfWeek));
+            const isPausedDay = pausedDatesArray.includes(dateStr);
 
-            if (!generatedDropsMap.has(dateStr) && isScheduledDay) {
+            if (!generatedDropsMap.has(dateStr) && isScheduledDay && !isPausedDay) {
               itemsList.push({
                 id: `proj_${sub.id}_${dateStr}`,
                 delivery_id: null,
@@ -155,8 +156,27 @@ const HorizontalCalendarLedger = () => {
     
     setActionLoading(true);
     try {
-      await handleSubscriptionPause(supabase as any, item.subscription_id);
-      toast.success("Subscription paused successfully.");
+      const { data: subData, error: subError } = await (supabase as any)
+        .from('subscriptions')
+        .select('paused_dates')
+        .eq('id', item.subscription_id)
+        .single();
+        
+      if (subError) throw subError;
+      
+      let currentPaused = Array.isArray(subData.paused_dates) ? subData.paused_dates : [];
+      if (!currentPaused.includes(item.delivery_date)) {
+        currentPaused.push(item.delivery_date);
+        
+        const { error: updateError } = await (supabase as any)
+          .from('subscriptions')
+          .update({ paused_dates: currentPaused })
+          .eq('id', item.subscription_id);
+          
+        if (updateError) throw updateError;
+      }
+      
+      toast.success("Delivery skipped for this day.");
       await fetchDynamicLedger(userId);
     } catch (e: any) {
       toast.error(e.message);

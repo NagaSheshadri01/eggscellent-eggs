@@ -145,7 +145,7 @@ const AccountSubscriptions = () => {
 
       // 2. Clear out future calendar ledger overrides to reset the schedule
       await (supabase as any)
-        .from("subscription_calendar_ledger")
+        .from("manifest_drops")
         .delete()
         .eq("subscription_id", subId)
         .gte("delivery_date", todayStr);
@@ -206,7 +206,7 @@ const AccountSubscriptions = () => {
       // 2. Post-cleanup logistics: Cancel all upcoming pending deliveries
       // Cancel active scheduled items inside the operational tracking ledger
       const { error: delivErr } = await (supabase as any)
-        .from("subscription_calendar_ledger")
+        .from("manifest_drops")
         .insert({
           user_id: user.id,
           subscription_id: subId,

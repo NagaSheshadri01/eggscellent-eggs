@@ -16,7 +16,7 @@ const AdminCustomerDetail = () => {
       supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
       supabase.from("addresses").select("*").eq("user_id", id),
       supabase.from("one_time_orders").select("id,total_amount,status,created_at").eq("user_id", id),
-      supabase.from("subscription_deliveries").select("id,status,created_at,delivery_date,subscription_delivery_items(effective_price)").eq("user_id", id)
+      supabase.from("manifest_drops").select("id,status,created_at,escrow_amount").eq("user_id", id)
     ]).then(([p, a, o1, o2]) => { 
       setProfile(p.data); 
       setAddresses(a.data ?? []); 
@@ -30,9 +30,9 @@ const AdminCustomerDetail = () => {
         })),
         ...(o2.data ?? []).map((o: any) => ({
           id: o.id,
-          total: (o.subscription_delivery_items || []).reduce((sum: number, item: any) => sum + Number(item.effective_price || 0), 0),
+          total: Number(o.escrow_amount || 0),
           order_status: o.status,
-          created_at: o.created_at || new Date(o.delivery_date).toISOString(),
+          created_at: o.created_at,
           type: 'Subscription'
         }))
       ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
