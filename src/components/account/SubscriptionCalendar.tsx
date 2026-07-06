@@ -2,22 +2,40 @@ import React, { useState, useEffect } from 'react';
 import { format, addDays, isSameDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Trash2 } from 'lucide-react';
-import { handleSubscriptionPause, handleSubscriptionResume } from '@/lib/subscriptionUtils';
+import { Trash2, Lock, Plus, Minus } from 'lucide-react';
+import { handleSubscriptionPause } from '@/lib/subscriptionUtils';
+
+const isDateLocked = (targetDate: Date) => {
+  const now = new Date();
+  const currentUTC = now.getUTCHours() + now.getUTCMinutes() / 60;
+  const passed9PM = currentUTC >= 15.5;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(targetDate);
+  target.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+
+  if (diffDays <= 0) return true;
+  if (diffDays === 1) return passed9PM;
+  return false;
+};
 
 const HorizontalCalendarLedger = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [cachedLedger, setCachedLedger] = useState<any[]>([]);
+  const [projectedLedger, setProjectedLedger] = useState<any[]>([]);
   const [globalProducts, setGlobalProducts] = useState<any[]>([]);
   const [horizonDates, setHorizonDates] = useState<Date[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userSubscription, setUserSubscription] = useState<any>(null);
 
-  // Instantly compute the view target inside the UI thread (Zero Loading Spinners)
   const targetDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
-  const dailyDeliveries = cachedLedger.filter(item => item.delivery_date === targetDateStr);
+  
+  const dailyDeliveries = projectedLedger.filter(item => item.delivery_date === targetDateStr);
+  const isSelectedDateLocked = isDateLocked(selectedDate);
 
   useEffect(() => {
     const dates = Array.from({ length: 30 }, (_, i) => addDays(new Date(), i));
@@ -38,7 +56,7 @@ const HorizontalCalendarLedger = () => {
     fetchCatalog();
   }, []);
 
-  const fetchBulkLedger = async (uid = userId) => {
+  const fetchDynamicLedger = async (uid = userId) => {
     if (!uid) return;
     try {
       const today = new Date();
@@ -48,56 +66,74 @@ const HorizontalCalendarLedger = () => {
       const startStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-      // 1. Fetch Subscription Master Profiles (just to check existence if needed, but we rely on deliveries)
       const { data: subData } = await (supabase as any)
         .from('subscriptions')
         .select('*')
-        .eq('user_id', uid);
-      setUserSubscription(subData && subData.length > 0 ? subData[0] : null);
+        .eq('user_id', uid)
+        .eq('status', 'active');
 
-      // 2. Fetch Subscription Deliveries (Base)
-      const { data: baseDeliveries } = await (supabase as any)
+      const { data: manifestDrops } = await (supabase as any)
         .from('subscription_deliveries')
         .select('id, delivery_date, status, subscription_delivery_items(id, product_slug, quantity, effective_price)')
         .eq('user_id', uid)
         .gte('delivery_date', startStr)
         .lte('delivery_date', endStr);
 
-      // 3. Fetch Ledger Overrides
-      const { data: overrides } = await (supabase as any)
-        .from('subscription_calendar_ledger')
-        .select('*')
-        .eq('user_id', uid)
-        .gte('delivery_date', startStr)
-        .lte('delivery_date', endStr);
-
-      // Build unified cache array
       let itemsList: any[] = [];
+      const generatedDropsMap = new Map();
       
-      (baseDeliveries || []).forEach((del: any) => {
+      (manifestDrops || []).forEach((del: any) => {
+        generatedDropsMap.set(del.delivery_date, true);
         (del.subscription_delivery_items || []).forEach((i: any) => {
           itemsList.push({
             id: i.id,
             delivery_id: del.id,
             delivery_date: del.delivery_date,
-            status: del.status, // We map parent status for UI display
+            status: del.status,
             product_slug: i.product_slug,
             quantity: i.quantity,
-            effective_price: i.effective_price
+            effective_price: i.effective_price,
+            is_manifest: true,
+            subscription_id: null
           });
         });
       });
 
-      // Apply overrides natively in memory to strip out skipped items
-      const finalItems = itemsList.filter(item => {
-        const matchingOverride = (overrides || []).find((o: any) => o.delivery_date === item.delivery_date && o.product_slug === item.product_slug);
-        if (matchingOverride && matchingOverride.action_type === 'skip' && matchingOverride.override_quantity === 0) {
-           return false; // Stripped by ledger dustbin
-        }
-        return true;
-      });
+      if (subData && subData.length > 0) {
+        subData.forEach((sub: any) => {
+          let allowedDays = sub.selected_days || [];
+          if (typeof allowedDays === 'string') {
+            try { allowedDays = JSON.parse(allowedDays); } catch(e) {}
+          }
+          const allowedDaysArray = Array.isArray(allowedDays) ? allowedDays : [];
 
-      setCachedLedger(finalItems);
+          for (let i = 0; i < 30; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            
+            const dayOfWeek = d.getDay();
+            
+            const isScheduledDay = sub.frequency === 'daily' || allowedDaysArray.includes(dayOfWeek) || allowedDaysArray.includes(String(dayOfWeek));
+
+            if (!generatedDropsMap.has(dateStr) && isScheduledDay) {
+              itemsList.push({
+                id: `proj_${sub.id}_${dateStr}`,
+                delivery_id: null,
+                subscription_id: sub.id,
+                delivery_date: dateStr,
+                status: 'scheduled',
+                product_slug: sub.product_slug,
+                quantity: sub.quantity,
+                effective_price: 0,
+                is_manifest: false
+              });
+            }
+          }
+        });
+      }
+
+      setProjectedLedger(itemsList);
     } catch (err) {
       console.error(err);
     }
@@ -106,64 +142,51 @@ const HorizontalCalendarLedger = () => {
   useEffect(() => {
     if (userId) {
       setLoading(true);
-      fetchBulkLedger(userId).finally(() => setLoading(false));
+      fetchDynamicLedger(userId).finally(() => setLoading(false));
     }
   }, [userId]);
 
-  const handleResumeSubscription = async () => {
-    if (!userSubscription) return;
+  const handleDeleteCalendarItem = async (item: any) => {
+    if (item.is_manifest) {
+      toast.info("Cannot remove locked deliveries from this view.");
+      return;
+    }
+    if (!item.subscription_id) return;
+    
     setActionLoading(true);
     try {
-      await handleSubscriptionResume(supabase, userSubscription.id);
-      await fetchBulkLedger(userId);
-      toast.success("Subscription resumed!");
-    } catch (err: any) {
-      toast.error(err.message);
+      await handleSubscriptionPause(supabase as any, item.subscription_id);
+      toast.success("Subscription paused successfully.");
+      await fetchDynamicLedger(userId);
+    } catch (e: any) {
+      toast.error(e.message);
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Dustbin exclusion delete/skip handler
-  const handleDeleteCalendarItem = async (item: any) => {
-    const previousState = [...cachedLedger];
-    setCachedLedger(prev => prev.filter(i => !(i.product_slug === item.product_slug && i.delivery_date === targetDateStr)));
-    
+  const handleUpdateQuantity = async (item: any, newQuantity: number) => {
+    if (newQuantity < 1 || item.is_manifest || !item.subscription_id) return;
+    setActionLoading(true);
     try {
-      const { error } = await (supabase as any)
-        .from('subscription_calendar_ledger')
-        .insert({
-          user_id: userId,
-          subscription_id: userSubscription?.id || null,
-          delivery_date: targetDateStr,
-          product_slug: item.product_slug,
-          action_type: 'skip',
-          override_quantity: 0
-        });
+      const { error } = await (supabase as any).from('subscriptions').update({ quantity: newQuantity }).eq('id', item.subscription_id);
       if (error) throw error;
-      toast.success("Item removed from this delivery date.");
-    } catch (err) {
-      toast.error("Failed to skip item.");
-      setCachedLedger(previousState);
+      toast.success("Quantity updated successfully.");
+      await fetchDynamicLedger(userId);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setActionLoading(false);
     }
   };
-
-  const handleAddOneTimeItem = async (slug: string) => {
-    // Left as stub per instruction scope which is centered around subscription integration.
-    // If one-time additions from calendar are needed, they would hit one_time_orders.
-    toast.error("One-Time add-ons must be managed from the main store.");
-  };
-
-  const availableAddons = globalProducts.filter(
-    (product) => !dailyDeliveries.some((d) => d.product_slug === product.slug)
-  );
 
   return (
     <div className="w-full max-w-md mx-auto bg-stone-50 min-h-screen flex flex-col font-sans">
       <div className="bg-white border-b border-stone-100 shadow-sm sticky top-0 z-50 rounded-b-3xl pb-2">
         <div className="p-5 pb-3 flex justify-between items-center">
           <h2 className="text-lg font-bold text-stone-800 tracking-tight">Delivery Schedule</h2>
-          <span className="text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full shadow-sm">
+          <span className="text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1">
+            {isDateLocked(new Date()) ? <Lock className="w-3 h-3"/> : null}
             {format(selectedDate, 'MMMM yyyy')}
           </span>
         </div>
@@ -171,17 +194,26 @@ const HorizontalCalendarLedger = () => {
         <div className="flex overflow-x-auto px-5 pb-4 space-x-3 scrollbar-none snap-x">
           {horizonDates.map((date, idx) => {
             const isSelected = isSameDay(date, selectedDate);
-            const hasDelivery = cachedLedger.some(i => i.delivery_date === format(date, 'yyyy-MM-dd'));
+            const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            const hasDelivery = projectedLedger.some(i => i.delivery_date === dateStr);
+            const locked = isDateLocked(date);
 
             return (
               <button
                 key={idx}
                 onClick={() => setSelectedDate(date)}
-                className={`flex flex-col items-center justify-center min-w-[64px] h-[86px] rounded-2xl transition-all duration-300 ease-out snap-center border ${isSelected
+                className={`relative flex flex-col items-center justify-center min-w-[64px] h-[86px] rounded-2xl transition-all duration-300 ease-out snap-center border ${isSelected
                   ? 'bg-gradient-to-b from-amber-500 to-orange-500 border-amber-500 text-white shadow-lg shadow-amber-500/30 scale-105'
                   : 'bg-white border-stone-200/80 text-stone-700 hover:border-amber-300 hover:shadow-md'
                   }`}
               >
+                {locked && !isSelected && (
+                  <Lock className="absolute top-1.5 right-1.5 w-3 h-3 text-stone-300" />
+                )}
+                {locked && isSelected && (
+                  <Lock className="absolute top-1.5 right-1.5 w-3 h-3 text-amber-200" />
+                )}
+                
                 <span className={`text-[11px] font-bold uppercase tracking-widest ${isSelected ? 'text-amber-100' : 'text-stone-400'}`}>
                   {format(date, 'EEE')}
                 </span>
@@ -198,8 +230,9 @@ const HorizontalCalendarLedger = () => {
       <div className="flex-1 p-5 space-y-8 overflow-y-auto pb-24">
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-stone-800 tracking-tight">
+              <h3 className="text-sm font-bold text-stone-800 tracking-tight flex items-center gap-2">
                 Deliveries for {format(selectedDate, 'EEEE, dd MMM')}
+                {isSelectedDateLocked && <Lock className="w-4 h-4 text-stone-400" />}
               </h3>
             </div>
 
@@ -207,7 +240,7 @@ const HorizontalCalendarLedger = () => {
               <div className="flex justify-center items-center py-12">
                 <div className="animate-pulse flex flex-col items-center space-y-3">
                   <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
-                  <span className="text-sm text-stone-400 font-bold">Syncing Ledger...</span>
+                  <span className="text-sm text-stone-400 font-bold">Syncing Schedule...</span>
                 </div>
               </div>
             ) : dailyDeliveries.length === 0 ? (
@@ -220,9 +253,16 @@ const HorizontalCalendarLedger = () => {
               </div>
             ) : (
               <div className="space-y-3">
+                {isSelectedDateLocked && (
+                  <div className="bg-stone-100 text-stone-500 text-xs px-4 py-2 rounded-xl flex items-center gap-2">
+                    <Lock className="w-4 h-4 shrink-0" />
+                    Orders for this date are locked and cannot be edited.
+                  </div>
+                )}
+                
                 {dailyDeliveries.map((item) => {
                   const liveProduct = globalProducts.find(p => p.slug === item.product_slug);
-                  const productData = liveProduct || item.products;
+                  const productData = liveProduct || item;
 
                   const isOOS = productData?.out_of_stock_subscriptions === true || 
                                 (productData?.stock_subscriptions !== undefined && productData.stock_subscriptions <= 0) || 
@@ -276,21 +316,43 @@ const HorizontalCalendarLedger = () => {
                         <div className="flex flex-col items-end space-y-2">
                           {!isItemInStock ? (
                             <span className="text-[10px] font-extrabold text-red-600 bg-red-50 p-2 rounded-xl border border-red-200 text-right max-w-[180px] leading-tight">
-                              ⚠️ Out of Stock - We are sorry, couldn't deliver right now. Will be fulfilled automatically if restocked before delivery.
+                              ⚠️ Out of Stock - Will be fulfilled automatically if restocked before delivery.
                             </span>
                           ) : (
-                            <span className="px-1 min-w-[24px] text-center text-sm font-extrabold text-stone-800">{item.quantity}x</span>
+                            <div className="flex items-center gap-2">
+                              {!isSelectedDateLocked && !item.is_manifest && (
+                                <button 
+                                  onClick={() => handleUpdateQuantity(item, item.quantity - 1)}
+                                  disabled={actionLoading || item.quantity <= 1}
+                                  className="w-6 h-6 flex items-center justify-center rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200 disabled:opacity-50"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                              )}
+                              <span className="min-w-[20px] text-center text-sm font-extrabold text-stone-800">{item.quantity}</span>
+                              {!isSelectedDateLocked && !item.is_manifest && (
+                                <button 
+                                  onClick={() => handleUpdateQuantity(item, item.quantity + 1)}
+                                  disabled={actionLoading}
+                                  className="w-6 h-6 flex items-center justify-center rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200 disabled:opacity-50"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                         
-                        <button
-                          disabled={actionLoading}
-                          onClick={() => handleDeleteCalendarItem(item)}
-                          className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
-                          title="Remove from schedule"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        {!isSelectedDateLocked && !item.is_manifest && (
+                          <button
+                            disabled={actionLoading}
+                            onClick={() => handleDeleteCalendarItem(item)}
+                            className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
+                            title="Pause this subscription"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

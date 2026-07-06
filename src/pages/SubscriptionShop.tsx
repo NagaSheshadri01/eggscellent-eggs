@@ -47,23 +47,21 @@ const SubscriptionShop = () => {
       // Fetch subscriptions
       const { data: subsData, error: subsError } = await (supabase as any)
         .from('subscriptions')
-        .select('id, status, subscription_items(product_slug, quantity, frequency, selected_days)')
+        .select('id, status, product_slug, quantity, frequency, selected_days')
         .in('status', ['active', 'paused'])
         .eq('user_id', user.id);
 
       if (subsError) throw subsError;
       if (!subsData || subsData.length === 0) return [];
 
-      const flatItems = subsData.flatMap((sub: any) => 
-        (sub.subscription_items || []).map((item: any) => ({
-          subscription_id: sub.id,
-          status: sub.status,
-          product_slug: item.product_slug,
-          quantity: item.quantity,
-          selected_days: item.selected_days,
-          frequency: item.frequency
-        }))
-      );
+      const flatItems = subsData.map((sub: any) => ({
+        subscription_id: sub.id,
+        status: sub.status,
+        product_slug: sub.product_slug,
+        quantity: sub.quantity,
+        selected_days: sub.selected_days,
+        frequency: sub.frequency
+      }));
 
       // Fetch products to map parent_group_id
       const { data: prodsData } = await (supabase as any)
@@ -171,22 +169,14 @@ const SubscriptionShop = () => {
           status: 'active',
           payment_method: 'wallet',
           wallet_mode: 'prepaid',
-          display_id: displayId
+          display_id: displayId,
+          product_slug: plan.product_slug,
+          quantity: plan.quantity || 1,
+          frequency: plan.frequency_type,
+          selected_days: days
         }])
         .select('id')
         .single();
-
-      if (!error && insertedSub) {
-        await (supabase as any)
-          .from('subscription_items')
-          .insert([{
-            subscription_id: insertedSub.id,
-            product_slug: plan.product_slug,
-            quantity: plan.quantity || 1,
-            frequency: plan.frequency_type,
-            selected_days: days
-          }]);
-      }
 
       if (error) {
         toast.error("Failed to initialize subscription schedule: " + error.message);

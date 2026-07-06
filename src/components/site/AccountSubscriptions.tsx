@@ -19,19 +19,16 @@ type SubscriptionContract = {
   wallet_mode?: string;
   address_id: string | null;
   created_at: string;
-  subscription_items: Array<{
-    id: string;
-    product_slug: string;
-    quantity: number;
-    frequency: string;
-    selected_days: number[];
-    products: {
-      name: string;
-      discounted_price: number | null;
-      original_price: number | null;
-      image_url: string | null;
-    } | null;
-  }>;
+  product_slug: string;
+  quantity: number;
+  frequency: string;
+  selected_days: number[];
+  products: {
+    name: string;
+    discounted_price: number | null;
+    original_price: number | null;
+    image_url: string | null;
+  } | null;
   addresses?: {
     address_line_1: string;
     address_line_2: string | null;
@@ -64,23 +61,39 @@ const AccountSubscriptions = () => {
           created_at,
           address_id,
           payment_method,
-          wallet_mode,
-          subscription_items (
-            id,
-            product_slug,
-            quantity,
-            frequency,
-            selected_days,
-            products:product_slug (name, discounted_price, image_url)
-          ),
-          addresses:address_id (address_line_1, address_line_2, landmark, city, state, pincode)
+          *,
+          addresses(address_line_1, address_line_2, landmark, city, state, pincode)
         `)
         .eq("user_id", user.id)
         .in("status", ["active", "paused"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as any[];
+      const subs = data || [];
+      
+      if (subs.length === 0) return [];
+
+      // Extract unique product slugs
+      const slugs = [...new Set(subs.map(s => s.product_slug).filter(Boolean))];
+      
+      let productsMap = new Map();
+      if (slugs.length > 0) {
+        const { data: productsData } = await supabase
+          .from("products")
+          .select("*")
+          .in("slug", slugs);
+        if (productsData) {
+          productsData.forEach(p => productsMap.set(p.slug, p));
+        }
+      }
+
+      // Merge manually
+      const mergedSubs = subs.map(sub => ({
+        ...sub,
+        products: productsMap.get(sub.product_slug) || null
+      }));
+
+      return mergedSubs as any[];
     },
     enabled: !!user
   });
@@ -124,9 +137,9 @@ const AccountSubscriptions = () => {
 
       // 1. Update selected_days on ALL items in this subscription (assuming unified schedule)
       const { error } = await (supabase as any)
-        .from("subscription_items")
+        .from("subscriptions")
         .update({ selected_days: newDays })
-        .eq("subscription_id", subId);
+        .eq("id", subId);
 
       if (error) throw error;
 
@@ -267,9 +280,9 @@ const AccountSubscriptions = () => {
     <div className="space-y-6">
       {contracts.map((sub: any) => {
         const addr = sub.addresses;
-        const items = sub.subscription_items || [];
+        const items = [sub];
         // Extract common selected_days / frequency from the first item (assuming bundled schedule)
-        const firstItem = items[0] || {};
+        const firstItem = sub;
         const isWeekly = firstItem.frequency === "weekly";
         const isAlternate = firstItem.frequency === "alternate";
         const commonDays = firstItem.selected_days || [];
