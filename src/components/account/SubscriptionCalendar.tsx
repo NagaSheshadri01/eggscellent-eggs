@@ -95,7 +95,6 @@ const HorizontalCalendarLedger = () => {
             is_manifest: true,
             subscription_id: null
           });
-        });
       });
 
       if (subData && subData.length > 0) {
