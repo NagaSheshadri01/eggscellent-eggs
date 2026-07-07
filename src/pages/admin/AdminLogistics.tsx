@@ -27,7 +27,7 @@ export const AdminLogistics = () => {
         .select(`
           *,
           profiles:user_id (id, full_name, phone, email),
-          one_time_order_items (*),
+          one_time_order_items (*, products (name)),
           addresses:delivery_address_id (*)
         `)
         .in("status", ["pending", "confirmed", "out_for_delivery"]);
@@ -44,7 +44,8 @@ export const AdminLogistics = () => {
         .select(`
           id, delivery_date, status, driver_id,
           manifest_drops (
-            id, product_slug, quantity, status, user_id
+            id, product_slug, quantity, status, user_id,
+            addresses:address_id (*)
           )
         `)
         .eq("delivery_date", tomorrowStr);
@@ -64,6 +65,13 @@ export const AdminLogistics = () => {
     });
     return totals;
   }, [morningManifestsQ.data]);
+
+  if (liveDispatchQ.error) {
+    console.error("Supabase Error (liveDispatch):", liveDispatchQ.error);
+  }
+  if (morningManifestsQ.error) {
+    console.error("Supabase Error (morningManifests):", morningManifestsQ.error);
+  }
 
   return (
     <div className="space-y-6 pb-28">
@@ -87,6 +95,8 @@ export const AdminLogistics = () => {
         <TabsContent value="live-dispatch" className="space-y-6">
           {liveDispatchQ.isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading dispatch board...</div>
+          ) : liveDispatchQ.error ? (
+            <div className="p-8 text-center text-red-500 font-bold">Error: {(liveDispatchQ.error as any)?.message || "An error occurred"}</div>
           ) : liveDispatchQ.data?.length === 0 ? (
             <div className="bg-card border-2 border-dashed border-border/50 rounded-2xl flex flex-col items-center justify-center py-16 text-center">
               <Package className="w-8 h-8 text-primary/50 mb-4" />
@@ -101,11 +111,11 @@ export const AdminLogistics = () => {
                 <div key={order.id} className="bg-card p-4 rounded-2xl border flex items-center justify-between">
                   <div>
                     <h3 className="font-bold">{order.profiles?.full_name || 'Unknown Customer'}</h3>
-                    <p className="text-xs text-muted-foreground">{order.addresses?.address_line_1}, {order.addresses?.city}</p>
+                    <p className="text-xs text-muted-foreground">{order.addresses?.address_line_1 || 'No Address'}</p>
                     <div className="mt-2 flex gap-2">
                       {order.one_time_order_items?.map((item: any) => (
                         <span key={item.id} className="text-xs bg-secondary px-2 py-1 rounded-md font-medium">
-                          {item.quantity}x {item.product_slug}
+                          {item.quantity}x {item.products?.name || item.product_slug}
                         </span>
                       ))}
                     </div>
@@ -131,6 +141,8 @@ export const AdminLogistics = () => {
 
           {morningManifestsQ.isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading manifests...</div>
+          ) : morningManifestsQ.error ? (
+            <div className="p-8 text-center text-red-500 font-bold">Error: {(morningManifestsQ.error as any)?.message || "An error occurred"}</div>
           ) : Object.keys(productTotals).length === 0 ? (
             <div className="bg-card border-2 border-dashed border-border/50 rounded-2xl flex flex-col items-center justify-center py-16 text-center">
               <Truck className="w-8 h-8 text-primary/50 mb-4" />

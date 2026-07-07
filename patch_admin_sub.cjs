@@ -3,60 +3,37 @@ const fs = require('fs');
 const path = 'src/pages/admin/AdminSubscriptions.tsx';
 let content = fs.readFileSync(path, 'utf8');
 
-// Change default tab
-content = content.replace('useState("dispatch")', 'useState("contracts")');
-
-// Fix subscriptionsQ
+// 1. Update subscriptionsQ to include addresses
 content = content.replace(
-  /subscription_items\(id, product_slug, quantity, selected_days\)/,
-  ''
+  /profiles:user_id \(full_name, email, phone\),\s*\n\s*\)/g,
+  "profiles:user_id (full_name, email, phone),\n          addresses:address_id (*)\n        )"
 );
 
-// We need to fix the rendering of subscriptionsQ.
-// The rendering uses s.subscription_items?.map((item: any) => ...)
-// Since the table is flattened, s itself is the item.
-const renderingRegex1 = /\{s\.subscription_items\?\.map\(\(item: any\) => \([\s\S]*?<Package className="w-3\.5 h-3\.5 text-primary" \/>\s*\{item\.quantity\}x \{products\.find\(\(p: any\) => p\.slug === item\.product_slug\)\?\.name \|\| item\.product_slug\}\s*<\/div>\s*\)\)\}/;
-content = content.replace(renderingRegex1, `
-                          <div className="flex items-center gap-1.5 font-medium text-brown">
-                            <Package className="w-3.5 h-3.5 text-primary" />
-                            {s.quantity}x {products.find((p: any) => p.slug === s.product_slug)?.name || s.product_slug}
-                          </div>
-`);
+// 2. Remove Tab 2: Today's Dispatch Queue code block
+const dispatchQStart = content.indexOf('// Tab 2: Today\'s Dispatch Queue');
+const dispatchQEnd = content.indexOf('// Tab 3: Subscription Plans Catalog');
+if (dispatchQStart !== -1 && dispatchQEnd !== -1) {
+  content = content.slice(0, dispatchQStart) + content.slice(dispatchQEnd);
+}
 
-const renderingRegex2 = /\{s\.subscription_items\?\.map\(\(item: any\) => \{\s*const days = typeof item\.selected_days === "string" \? JSON\.parse\(item\.selected_days\) : \(item\.selected_days \|\| \[\]\);\s*return \([\s\S]*?<\/div>\s*\)\}\)\}/;
-content = content.replace(renderingRegex2, `
-                          {(() => {
-                            const days = typeof s.selected_days === "string" ? JSON.parse(s.selected_days) : (s.selected_days || []);
-                            return (
-                              <div className="flex gap-1">
-                                {DAYS.map((day, idx) => (
-                                  <span 
-                                    key={day} 
-                                    className={\`text-[9px] font-bold w-6 h-6 rounded-full flex items-center justify-center border \${
-                                      days.includes(idx) || days.includes(String(idx))
-                                        ? "bg-primary/20 border-primary text-brown" 
-                                        : "bg-secondary/40 border-border text-muted-foreground"
-                                    }\`}
-                                  >
-                                    {day[0]}
-                                  </span>
-                                ))}
-                              </div>
-                            );
-                          })()}
-`);
+// 3. Remove assignPartner mutation
+const assignPartnerStart = content.indexOf('const assignPartner = useMutation({');
+const assignPartnerEnd = content.indexOf('const createPlan = useMutation({');
+if (assignPartnerStart !== -1 && assignPartnerEnd !== -1) {
+  content = content.slice(0, assignPartnerStart) + content.slice(assignPartnerEnd);
+}
 
-// Remove TabsTrigger for dispatch
-content = content.replace(
-  /<TabsTrigger value="dispatch" className="flex items-center gap-2">[\s\S]*?<\/TabsTrigger>/,
-  ''
-);
+// 4. Remove Priority Sorting Logic for Dispatch
+const sortedDispatchStart = content.indexOf('// Priority Sorting Logic for Dispatch');
+const sortedDispatchEnd = content.indexOf('return (', sortedDispatchStart);
+if (sortedDispatchStart !== -1 && sortedDispatchEnd !== -1) {
+  content = content.slice(0, sortedDispatchStart) + content.slice(sortedDispatchEnd);
+}
 
-// Remove TabsContent for dispatch
-content = content.replace(
-  /\{\/\* ── TAB: TODAY'S DISPATCH ── \*\/\}\s*<TabsContent value="dispatch" className="space-y-4">[\s\S]*?\{\/\* ── TAB: ACTIVE CONTRACTS ── \*\/\}/,
-  '{/* ── TAB: ACTIVE CONTRACTS ── */}'
-);
-
-fs.writeFileSync(path, content);
-console.log("AdminSubscriptions patched");
+// 5. Remove UI components for dispatch
+content = content.replace(/<TabsTrigger value="dispatch".*?<\/TabsTrigger>/gs, "");
+content = content.replace(/{\/\* ── TAB: LIVE DISPATCH ── \*\/}.*?<\/TabsContent>/gs, "");
+// Let's use a regex to carefully remove the live dispatch tab content
+// The tab content for dispatch usually starts with `<TabsContent value="dispatch">` and ends with `</TabsContent>`. 
+// Because of the nested structure, regex might be tricky, I'll use a safer approach or just search and replace if I can see it.
+fs.writeFileSync(path, content, 'utf8');

@@ -73,8 +73,15 @@ export type Database = {
           created_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "manifest_drops_manifest_id_fkey"
+            {
+              foreignKeyName: "manifest_drops_address_id_fkey"
+              columns: ["address_id"]
+              isOneToOne: false
+              referencedRelation: "addresses"
+              referencedColumns: ["id"]
+            },
+            {
+              foreignKeyName: "manifest_drops_manifest_id_fkey"
             columns: ["manifest_id"]
             isOneToOne: false
             referencedRelation: "manifests"

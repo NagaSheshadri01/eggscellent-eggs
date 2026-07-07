@@ -14,7 +14,7 @@ const Card = ({ icon: Icon, label, value, accent = "primary" }: any) => (
   </div>
 );
 
-const PENDING = ["placed","confirmed","packed","out_for_delivery"];
+const PENDING = ["placed", "confirmed", "packed", "out_for_delivery"];
 
 const Dashboard = () => {
   const [stats, setStats] = useState<any>(null);
@@ -25,7 +25,7 @@ const Dashboard = () => {
         supabase.from("one_time_orders").select("total_amount,created_at,status"),
         supabase.from("manifest_drops").select("created_at,status,escrow_amount"),
         supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase.from("one_time_order_items").select("product_name,product_slug,quantity,price"),
+        supabase.from("one_time_order_items").select("product_slug,quantity,price,products(name)"),
         supabase.from("manifest_drops").select("product_slug,quantity"),
       ]);
       const list = [
@@ -35,12 +35,12 @@ const Dashboard = () => {
           return { total, created_at: d.created_at, status: d.status };
         })
       ];
-      
-      const todayKey = new Date().toISOString().slice(0,10);
-      const today = list.filter(o => o.created_at.slice(0,10) === todayKey);
-      const todayRevenue = today.reduce((s,o) => s + Number(o.total), 0);
+
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const today = list.filter(o => o.created_at.slice(0, 10) === todayKey);
+      const todayRevenue = today.reduce((s, o) => s + Number(o.total), 0);
       const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 6);
-      const weekRevenue = list.filter(o => new Date(o.created_at) >= weekStart).reduce((s,o) => s + Number(o.total), 0);
+      const weekRevenue = list.filter(o => new Date(o.created_at) >= weekStart).reduce((s, o) => s + Number(o.total), 0);
       const pending = list.filter(o => PENDING.includes(o.status)).length;
       const delivered = list.filter(o => o.status === "delivered").length;
       const cancelled = list.filter(o => o.status === "cancelled").length;
@@ -49,26 +49,26 @@ const Dashboard = () => {
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
         const key = d.toISOString().slice(0, 10);
-        const rev = list.filter(o => o.created_at.slice(0,10) === key).reduce((s,o) => s + Number(o.total), 0);
+        const rev = list.filter(o => o.created_at.slice(0, 10) === key).reduce((s, o) => s + Number(o.total), 0);
         days.push({ date: d.toLocaleDateString(undefined, { weekday: "short" }), revenue: rev });
       }
 
       const agg = new Map<string, number>();
       (oneTimeItems.data ?? []).forEach((it: any) => {
-        const name = it.product_name || it.product_slug;
+        const name = it.products?.name || it.product_slug;
         agg.set(name, (agg.get(name) || 0) + Number(it.quantity));
       });
       (subItems.data ?? []).forEach((it: any) => {
         const name = it.product_slug;
         agg.set(name, (agg.get(name) || 0) + Number(it.quantity));
       });
-      const best = Array.from(agg.entries()).sort((a,b) => b[1]-a[1]).slice(0,5);
+      const best = Array.from(agg.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
       setStats({ todayRevenue, todayCount: today.length, weekRevenue, pending, delivered, cancelled, users: profiles.count ?? 0, days, best });
     })();
   }, []);
 
-  if (!stats) return <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({length:8}).map((_,i)=><Skeleton key={i} className="h-32 rounded-2xl"/>)}</div>;
+  if (!stats) return <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}</div>;
 
   return (
     <div>
@@ -93,7 +93,7 @@ const Dashboard = () => {
                 <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12 }} />
-                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[8,8,0,0]} />
+                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -104,7 +104,7 @@ const Dashboard = () => {
             <ol className="space-y-2.5">
               {stats.best.map(([name, qty]: [string, number], i: number) => (
                 <li key={name} className="flex items-center gap-3 text-sm">
-                  <span className="w-6 h-6 rounded-full bg-secondary grid place-items-center text-xs font-bold text-brown">{i+1}</span>
+                  <span className="w-6 h-6 rounded-full bg-secondary grid place-items-center text-xs font-bold text-brown">{i + 1}</span>
                   <span className="flex-1 font-semibold text-brown truncate">{name}</span>
                   <span className="text-muted-foreground">{qty} sold</span>
                 </li>

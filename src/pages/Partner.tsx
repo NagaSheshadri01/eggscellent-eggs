@@ -26,26 +26,26 @@ type AddrSnap = {
 };
 
 const STATUS_FLOW: Record<string, { next: string; label: string }> = {
-  placed:           { next: "confirmed",        label: "Mark confirmed" },
-  confirmed:        { next: "out_for_delivery", label: "Out for delivery" },
-  out_for_delivery: { next: "delivered",        label: "Mark delivered" },
+  placed: { next: "confirmed", label: "Mark confirmed" },
+  confirmed: { next: "out_for_delivery", label: "Out for delivery" },
+  out_for_delivery: { next: "delivered", label: "Mark delivered" },
 };
 
 const getDistanceKM = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
 const optimizeStopSequence = (store: { lat: number; lng: number }, stops: any[]) => {
   if (stops.length <= 1) return stops;
   let optimized = [...stops];
   let improved = true;
-  
+
   const calcTotalDist = (currentPath: any[]) => {
     let d = 0;
     let pos = store;
@@ -87,7 +87,7 @@ const generateMapLink = (store: { lat: number; lng: number }, sortedStops: any[]
       return addr?.lat && addr?.lng ? `${addr.lat},${addr.lng}` : null;
     })
     .filter(Boolean);
-  
+
   if (waypointCoordinates.length === 0) return null;
   return `https://www.google.com/maps/dir/${origin}/${waypointCoordinates.join('/')}`;
 };
@@ -95,7 +95,7 @@ const generateMapLink = (store: { lat: number; lng: number }, sortedStops: any[]
 const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: () => void; compact?: boolean }) => {
   const snap: AddrSnap = order.address_snapshot || {};
   const dbAddr = order.addresses || {};
-  
+
   const flow = STATUS_FLOW[order.status];
 
   const advance = async () => {
@@ -173,8 +173,8 @@ const PartnerOrderCard = ({ order, onUpdate, compact }: { order: any; onUpdate: 
 
       <div className="flex items-center justify-between text-xs px-1">
         <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Package className="w-3.5 h-3.5" /> 
-          <span className="font-semibold">{(order ).delivery_slots?.tag || order.delivery_slot || "Early Morning"}</span>
+          <Package className="w-3.5 h-3.5" />
+          <span className="font-semibold">{(order).delivery_slots?.tag || order.delivery_slot || "Early Morning"}</span>
         </div>
         <div className="font-bold text-brown text-base">₹{order.total}</div>
       </div>
@@ -208,15 +208,15 @@ const Partner = () => {
   const { data: status, isLoading: statusLoading } = usePartnerStatus();
   const qc = useQueryClient();
 
-  const partnerId = (status )?.partner?.id;
+  const partnerId = (status)?.partner?.id;
   const [activeFeed, setActiveFeed] = useState<'instant' | 'subscription'>('instant');
-  const [loc, setLoc] = useState<{lat: number, lng: number} | null>(null);
+  const [loc, setLoc] = useState<{ lat: number, lng: number } | null>(null);
   const [warehouse, setWarehouse] = useState(WAREHOUSE_DEFAULT);
 
   // Phase 5: Driver Shift states and hooks
   const [completedStops, setCompletedStops] = useState<Record<string, boolean>>({});
   const [selectedIssueStopId, setSelectedIssueStopId] = useState<string | null>(null);
-  
+
   const { data: productsList = [] } = useProducts({ onlyActive: false });
 
   useEffect(() => {
@@ -297,16 +297,16 @@ const Partner = () => {
         .select(`
           *,
           manifests!inner(delivery_date, driver_id),
+          addresses:address_id (*),
           subscriptions (
             user_id,
-            profiles:user_id (id, full_name, phone),
-            addresses:address_id (*)
+            profiles:user_id (id, full_name, phone)
           )
         `)
         .eq('manifests.driver_id', user!.id)
         .in('manifests.delivery_date', [todayStr, tomorrowStr]);
       if (error) throw error;
-      return (data ?? []) ;
+      return (data ?? []);
     },
   });
 
@@ -351,14 +351,14 @@ const Partner = () => {
         qc.invalidateQueries({ queryKey: ["partner_history", user.id] });
       })
       .subscribe();
-      
+
     return () => { supabase.removeChannel(channel); };
   }, [qc, user?.id]);
 
   // ⚠️ ALL hooks MUST be before any conditional returns (Rules of Hooks)
   const processedShifts = useMemo((): any[] => {
     const activeOrders = ((orders.data || [])).filter((o: any) => o.status !== "delivered" && o.status !== "cancelled");
-    
+
     const groups: Record<string, any[]> = {};
     activeOrders.forEach((o: any) => {
       const slotId = o.slot_id || "unassigned";
@@ -367,35 +367,35 @@ const Partner = () => {
     });
 
     const shifts = Object.keys(groups).map(slotId => {
-       const shiftOrders = groups[slotId];
-       const slotObj = shiftOrders[0]?.delivery_slots || {};
-       const slotName = slotId === "subscription" ? "📦 Early Morning Shift" : getSlotLabel(slotId);
-       
-       return {
-          id: slotId,
-          start_time: slotObj.start_time ? `1970-01-01T${slotObj.start_time}Z` : new Date().toISOString(),
-          shift_name: slotName,
-          orders: shiftOrders,
-          isOut: shiftOrders.some((o: any) => ["out_for_delivery", "delivered"].includes(o.status))
-       };
+      const shiftOrders = groups[slotId];
+      const slotObj = shiftOrders[0]?.delivery_slots || {};
+      const slotName = slotId === "subscription" ? "📦 Early Morning Shift" : getSlotLabel(slotId);
+
+      return {
+        id: slotId,
+        start_time: slotObj.start_time ? `1970-01-01T${slotObj.start_time}Z` : new Date().toISOString(),
+        shift_name: slotName,
+        orders: shiftOrders,
+        isOut: shiftOrders.some((o: any) => ["out_for_delivery", "delivered"].includes(o.status))
+      };
     });
 
     shifts.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
     return shifts.map(shift => {
-       if (!shift.orders || shift.orders.length === 0) return shift;
+      if (!shift.orders || shift.orders.length === 0) return shift;
 
-       const rawStops = shift.orders.map((order: any) => ({
-          order_id: order.id,
-          latitude: order.addresses?.lat || order.addresses?.latitude,
-          longitude: order.addresses?.lng || order.addresses?.longitude,
-          customer_name: order.address_snapshot?.full_name || order.addresses?.full_name || "Customer",
-          address_string: `${order.addresses?.building_name || order.addresses?.flat_building || order.address_snapshot?.address_line_1 || ''}, ${order.addresses?.area_locality || order.addresses?.city || ''}`,
-          original_order: order
-       }));
+      const rawStops = shift.orders.map((order: any) => ({
+        order_id: order.id,
+        latitude: order.addresses?.lat || order.addresses?.latitude,
+        longitude: order.addresses?.lng || order.addresses?.longitude,
+        customer_name: order.address_snapshot?.full_name || order.addresses?.full_name || "Customer",
+        address_string: `${order.addresses?.building_name || order.addresses?.flat_building || order.address_snapshot?.address_line_1 || ''}, ${order.addresses?.area_locality || order.addresses?.city || ''}`,
+        original_order: order
+      }));
 
-       const optimizedStops = optimizeStopSequence(warehouse, rawStops);
-       return { ...shift, optimizedStops };
+      const optimizedStops = optimizeStopSequence(warehouse, rawStops);
+      return { ...shift, optimizedStops };
     });
   }, [orders.data, warehouse]);
 
@@ -462,7 +462,7 @@ const Partner = () => {
       toast.info("No orders to dispatch in this shift.");
       return;
     }
-    
+
     const { error } = await (supabase as any).from("one_time_orders").update({ status: "out_for_delivery" }).in("id", ids);
     if (error) {
       toast.error("Failed to dispatch: " + error.message);
@@ -493,17 +493,15 @@ const Partner = () => {
         <div className="flex gap-2 bg-card border border-border rounded-2xl p-1.5 shadow-soft">
           <button
             onClick={() => setActiveFeed('instant')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all ${
-              activeFeed === 'instant' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all ${activeFeed === 'instant' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
+              }`}
           >
             <Zap className="w-4 h-4" /> Instant Orders
           </button>
           <button
             onClick={() => setActiveFeed('subscription')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all ${
-              activeFeed === 'subscription' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all ${activeFeed === 'subscription' ? 'bg-brown text-primary shadow-md' : 'text-muted-foreground hover:text-brown'
+              }`}
           >
             <Repeat className="w-4 h-4" /> Subscription Shifts
           </button>
@@ -511,7 +509,7 @@ const Partner = () => {
 
         {activeFeed === 'subscription' && (() => {
           const rawStops = subDeliveries.data || [];
-          
+
           // Split stops by date bounds
           const todayStops = rawStops.filter((s: any) => s.manifests?.delivery_date === todayStr);
           const tomorrowStops = rawStops.filter((s: any) => s.manifests?.delivery_date === tomorrowStr);
@@ -526,27 +524,27 @@ const Partner = () => {
           // Group by user_id
           const userGroups: Record<string, any> = {};
           displayStops.forEach((drop: any) => {
-             const uid = drop.user_id;
-             if (!userGroups[uid]) {
-                userGroups[uid] = {
-                   userId: uid,
-                   customerInfo: drop.subscriptions?.profiles,
-                   address: drop.subscriptions?.addresses,
-                   items: [],
-                   master_order_id: drop.manifests?.id,
-                   custom_order_id: drop.id
-                };
-             }
-             userGroups[uid].items.push({
-               ...drop,
-               product_slug: drop.product_slug,
-               quantity: drop.quantity,
-               status: drop.status
-             });
+            const uid = drop.user_id;
+            if (!userGroups[uid]) {
+              userGroups[uid] = {
+                userId: uid,
+                customerInfo: drop.subscriptions?.profiles,
+                address: drop.addresses,
+                items: [],
+                master_order_id: drop.manifests?.id,
+                custom_order_id: drop.id
+              };
+            }
+            userGroups[uid].items.push({
+              ...drop,
+              product_slug: drop.product_slug,
+              quantity: drop.quantity,
+              status: drop.status
+            });
           });
 
           let groupedStops = Object.values(userGroups);
-          
+
           const mappedStops = groupedStops.map((stop: any) => ({
             ...stop,
             latitude: stop.address?.lat || stop.addresses?.lat,
@@ -556,13 +554,13 @@ const Partner = () => {
 
           // Helper to count unique customer stops for badge tabs
           const getUniqueStopsCount = (itemsList: any[]) => {
-             const set = new Set();
-             itemsList.forEach((i: any) => {
-               if (i.status !== 'failed' && i.status !== 'skipped') {
-                  set.add(i.user_id);
-               }
-             });
-             return set.size;
+            const set = new Set();
+            itemsList.forEach((i: any) => {
+              if (i.status !== 'failed' && i.status !== 'skipped') {
+                set.add(i.user_id);
+              }
+            });
+            return set.size;
           };
 
           const todayStopsCount = getUniqueStopsCount(todayStops);
@@ -577,23 +575,21 @@ const Partner = () => {
                     {isFutureShift ? `Tomorrow's pre-assigned schedule — ${tomorrowStr}` : `Today's recurring delivery queue — ${todayStr}`}
                   </p>
                 </div>
-                
+
                 {/* Secondary Today vs Tomorrow Toggles */}
                 {!subDeliveries.isLoading && (
                   <div className="flex gap-2 bg-card border border-border rounded-xl p-1 shadow-soft w-full max-w-xs self-start md:self-center">
                     <button
                       onClick={() => setSubscriptionTab('today')}
-                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all ${
-                        subscriptionTab === 'today' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
-                      }`}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all ${subscriptionTab === 'today' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
+                        }`}
                     >
                       Today's Shift ({todayStopsCount})
                     </button>
                     <button
                       onClick={() => setSubscriptionTab('tomorrow')}
-                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all ${
-                        subscriptionTab === 'tomorrow' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
-                      }`}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs transition-all ${subscriptionTab === 'tomorrow' ? 'bg-primary/20 text-brown shadow-sm' : 'text-muted-foreground hover:text-brown'
+                        }`}
                     >
                       Tomorrow's Shift ({tomorrowStopsCount})
                     </button>
@@ -602,7 +598,7 @@ const Partner = () => {
               </div>
 
               {subDeliveries.isLoading && <div className="space-y-3"><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div>}
-              {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error ).message}</div>}
+              {subDeliveries.error && <div className="bg-destructive/10 text-destructive p-4 rounded-2xl text-sm">Error: {(subDeliveries.error).message}</div>}
 
               {!subDeliveries.isLoading && groupedStops.length === 0 && (
                 <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border animate-in fade-in duration-300">
@@ -666,7 +662,7 @@ const Partner = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         {groupedStops.map((stop: any, index: number) => {
                           return (
-                            <div 
+                            <div
                               key={stop.userId}
                               className="transition-all duration-500 ease-out transform relative"
                             >
@@ -715,123 +711,123 @@ const Partner = () => {
         })()}
 
         {activeFeed === 'instant' && (
-        <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Active Deliveries</h1>
-            <p className="text-sm text-muted-foreground">Grouped by shift. Start your route to update all orders at once.</p>
-          </div>
-        </div>
-
-        {orders.isLoading && <Skeleton className="h-64 rounded-2xl" />}
-        {!orders.isLoading && (orders.data ?? []).length === 0 && (
-          <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border flex flex-col items-center">
-            <Package className="w-12 h-12 text-muted-foreground mb-3 opacity-30" />
-            <p className="font-display font-bold text-brown">No orders assigned yet</p>
-            <p className="text-sm text-muted-foreground mt-1">New deliveries assigned by staff will appear here instantly.</p>
-          </div>
-        )}
-
-        <div className="space-y-10">
-          {processedShifts.map((shift, shiftIdx) => (
-            <div key={shift.id} className={`p-5 rounded-2xl bg-white border ${shiftIdx === 0 ? 'border-amber-400 ring-2 ring-amber-400/10' : 'border-stone-200'} shadow-sm space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500`}>
-              
-              <div className="flex justify-between items-center border-b border-border/40 pb-4">
-                <div>
-                  <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${shiftIdx === 0 ? 'bg-amber-50 text-amber-700' : 'bg-stone-100 text-stone-600'}`}>
-                    {shiftIdx === 0 ? '⚡ NEXT NEAREST UPCOMING SHIFT' : '🗓️ FUTURE SCHEDULED SHIFT'}
-                  </span>
-                  <h3 className="text-lg font-display font-extrabold text-brown mt-2">
-                    {shift.start_time && shift.start_time !== new Date().toISOString() ? new Date(shift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' - ' : ''} {shift.shift_name}
-                  </h3>
-                </div>
-                
-                <div className="flex gap-2">
-                   {!shift.isOut && (
-                      <Button 
-                        onClick={() => bulkMarkOutForDelivery(shift.orders)} 
-                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-10 px-4 shadow-lg shadow-amber-500/20"
-                      >
-                        🚀 Dispatch All
-                      </Button>
-                   )}
-                </div>
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="font-display font-bold text-brown text-3xl tracking-tight">Active Deliveries</h1>
+                <p className="text-sm text-muted-foreground">Grouped by shift. Start your route to update all orders at once.</p>
               </div>
+            </div>
 
-              <div className="space-y-2 pt-2">
-                {shift.optimizedStops?.map((stop: any, index: number) => {
-                  const o = stop.original_order;
-                  const snap: AddrSnap = o.address_snapshot || {};
-                  return (
-                    <div key={stop.order_id} className="flex flex-col p-4 bg-stone-50/50 rounded-xl border border-stone-200/60 gap-3 hover:border-primary/20 transition-all group">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-3 pt-1">
-                          <div className="w-6 h-6 rounded-full bg-stone-900 text-white font-black text-xs flex items-center justify-center shadow-sm shrink-0 mt-0.5 group-hover:bg-primary transition-colors">
-                            {String.fromCharCode(66 + (index % 26))}
+            {orders.isLoading && <Skeleton className="h-64 rounded-2xl" />}
+            {!orders.isLoading && (orders.data ?? []).length === 0 && (
+              <div className="text-center py-20 bg-card rounded-3xl border border-dashed border-border flex flex-col items-center">
+                <Package className="w-12 h-12 text-muted-foreground mb-3 opacity-30" />
+                <p className="font-display font-bold text-brown">No orders assigned yet</p>
+                <p className="text-sm text-muted-foreground mt-1">New deliveries assigned by staff will appear here instantly.</p>
+              </div>
+            )}
+
+            <div className="space-y-10">
+              {processedShifts.map((shift, shiftIdx) => (
+                <div key={shift.id} className={`p-5 rounded-2xl bg-white border ${shiftIdx === 0 ? 'border-amber-400 ring-2 ring-amber-400/10' : 'border-stone-200'} shadow-sm space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500`}>
+
+                  <div className="flex justify-between items-center border-b border-border/40 pb-4">
+                    <div>
+                      <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${shiftIdx === 0 ? 'bg-amber-50 text-amber-700' : 'bg-stone-100 text-stone-600'}`}>
+                        {shiftIdx === 0 ? '⚡ NEXT NEAREST UPCOMING SHIFT' : '🗓️ FUTURE SCHEDULED SHIFT'}
+                      </span>
+                      <h3 className="text-lg font-display font-extrabold text-brown mt-2">
+                        {shift.start_time && shift.start_time !== new Date().toISOString() ? new Date(shift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' - ' : ''} {shift.shift_name}
+                      </h3>
+                    </div>
+
+                    <div className="flex gap-2">
+                      {!shift.isOut && (
+                        <Button
+                          onClick={() => bulkMarkOutForDelivery(shift.orders)}
+                          className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-10 px-4 shadow-lg shadow-amber-500/20"
+                        >
+                          🚀 Dispatch All
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    {shift.optimizedStops?.map((stop: any, index: number) => {
+                      const o = stop.original_order;
+                      const snap: AddrSnap = o.address_snapshot || {};
+                      return (
+                        <div key={stop.order_id} className="flex flex-col p-4 bg-stone-50/50 rounded-xl border border-stone-200/60 gap-3 hover:border-primary/20 transition-all group">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-3 pt-1">
+                              <div className="w-6 h-6 rounded-full bg-stone-900 text-white font-black text-xs flex items-center justify-center shadow-sm shrink-0 mt-0.5 group-hover:bg-primary transition-colors">
+                                {String.fromCharCode(66 + (index % 26))}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-stone-800">{stop.customer_name}</p>
+                                <p className="text-xs text-stone-500 font-medium truncate max-w-[200px] sm:max-w-[300px] mt-0.5">{stop.address_string}</p>
+                                <div className="text-[10px] font-bold text-primary uppercase tracking-tighter bg-primary/10 px-2 py-0.5 rounded mt-2 inline-block">
+                                  Verification: Bill #{o.display_id || o.id.slice(0, 8)}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className="text-[10px] font-bold tracking-wide text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 shrink-0">
+                                Stop #{index + 1}
+                              </span>
+                              {snap.phone && (
+                                <a href={`tel:${snap.phone}`}>
+                                  <Button variant="outline" size="sm" className="h-7 w-7 p-0 border-border/50">
+                                    <Phone className="w-3 h-3" />
+                                  </Button>
+                                </a>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-stone-800">{stop.customer_name}</p>
-                            <p className="text-xs text-stone-500 font-medium truncate max-w-[200px] sm:max-w-[300px] mt-0.5">{stop.address_string}</p>
-                            <div className="text-[10px] font-bold text-primary uppercase tracking-tighter bg-primary/10 px-2 py-0.5 rounded mt-2 inline-block">
-                                Verification: Bill #{o.display_id || o.id.slice(0, 8)}
+
+                          <div className="flex items-center justify-between gap-2 pl-9 mt-1 border-t border-border/30 pt-3">
+                            <div className="flex flex-row gap-2 w-full mt-2">
+                              <Button onClick={() => handleDeliveryComplete(o.id)}
+                                className="flex-1 bg-amber-500 text-white font-bold h-9 text-xs"
+                              >
+                                Mark delivered
+                              </Button>
+
+                              <select
+                                onChange={(e) => {
+                                  if (e.target.value === "failed") {
+                                    handleDeliveryFailure(o.id, "cancelled");
+                                    e.target.value = ""; // Reset dropdown state trigger
+                                  }
+                                }}
+                                className="h-9 px-2 text-xs rounded-md border border-stone-300 bg-white font-medium text-stone-600 focus:outline-none"
+                              >
+                                <option value="">Report Issue</option>
+                                <option value="failed">Customer Rejected / Not Available</option>
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.latitude || 0)},${encodeURIComponent(stop.longitude || 0)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                              >
+                                🧭 Navigate
+                              </a>
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <span className="text-[10px] font-bold tracking-wide text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 shrink-0">
-                            Stop #{index + 1}
-                          </span>
-                          {snap.phone && (
-                              <a href={`tel:${snap.phone}`}>
-                                <Button variant="outline" size="sm" className="h-7 w-7 p-0 border-border/50">
-                                  <Phone className="w-3 h-3" />
-                                </Button>
-                              </a>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between gap-2 pl-9 mt-1 border-t border-border/30 pt-3">
-                        <div className="flex flex-row gap-2 w-full mt-2">
-                          <Button onClick={() => handleDeliveryComplete(o.id)} 
-                            className="flex-1 bg-amber-500 text-white font-bold h-9 text-xs"
-                          >
-                            Mark delivered
-                          </Button>
-                          
-                          <select 
-                            onChange={(e) => {
-                              if (e.target.value === "failed") {
-                                handleDeliveryFailure(o.id, "cancelled");
-                                e.target.value = ""; // Reset dropdown state trigger
-                              }
-                            }}
-                            className="h-9 px-2 text-xs rounded-md border border-stone-300 bg-white font-medium text-stone-600 focus:outline-none"
-                          >
-                            <option value="">Report Issue</option>
-                            <option value="failed">Customer Rejected / Not Available</option>
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <a 
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.latitude || 0)},${encodeURIComponent(stop.longitude || 0)}`}
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                          >
-                            🧭 Navigate
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
 
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        </div>
+          </div>
         )}
       </main>
     </div>

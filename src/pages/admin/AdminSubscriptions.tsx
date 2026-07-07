@@ -74,31 +74,6 @@ const AdminSubscriptions = () => {
     },
   });
 
-  // Tab 2: Today's Dispatch Queue
-  const today = new Date().toISOString().split("T")[0];
-  const dispatchQ = useQuery({
-    queryKey: ["admin-subscription-dispatch", today],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subscription_calendar_ledger")
-        .select(`
-          *,
-          subscription_items (
-            product_slug,
-            quantity,
-            subscriptions (
-              user_id,
-              profiles:user_id (full_name, phone),
-              addresses:address_id (*)
-            )
-          )
-        `)
-        .eq("delivery_date", today);
-      if (error) throw error;
-      return data;
-    },
-  });
-
   // Tab 3: Subscription Plans Catalog
   const plansQ = useQuery({
     queryKey: ["admin-subscription-plans"],
@@ -127,22 +102,6 @@ const AdminSubscriptions = () => {
     onSuccess: () => {
       toast.success("Subscription status updated");
       qc.invalidateQueries({ queryKey: ["admin-subscriptions-all"] });
-    },
-  });
-
-  const assignPartner = useMutation({
-    mutationFn: async ({ deliveryId, partnerId }: { deliveryId: string; partnerId: string }) => {
-      const { data, error } = await supabase
-        .from("subscription_calendar_ledger")
-        .update({ delivery_partner_id: partnerId === "unassigned" ? null : partnerId })
-        .eq("id", deliveryId)
-        .select("id");
-      if (error) throw error;
-      if (data && data.length === 0) throw new Error("Assignment failed: No rows updated (Permission denied?)");
-    },
-    onSuccess: () => {
-      toast.success("Delivery partner assigned");
-      qc.invalidateQueries({ queryKey: ["admin-subscription-dispatch"] });
     },
   });
 
@@ -250,17 +209,6 @@ const AdminSubscriptions = () => {
       toast.error("Failed to update status: " + err.message);
     },
   });
-
-  // Priority Sorting Logic for Dispatch
-  const sortedDispatch = useMemo(() => {
-    if (!dispatchQ.data) return [];
-    return [...dispatchQ.data].sort((a, b) => {
-      const aAssigned = !!a.delivery_partner_id;
-      const bAssigned = !!b.delivery_partner_id;
-      if (aAssigned !== bAssigned) return aAssigned ? 1 : -1;
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    });
-  }, [dispatchQ.data]);
 
   return (
     <div className="space-y-6">
