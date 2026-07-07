@@ -84,7 +84,7 @@ const Checkout = () => {
     queryKey: ['user-wallet-prediction', user?.id, tomorrowStr],
     queryFn: async () => {
       if (!user) return null;
-      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle();
+      const { data: profile } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
       const currentBalance = Number(profile?.balance || 0);
 
       const { data: subs } = await supabase.from('subscriptions')
