@@ -167,10 +167,9 @@ const SubscriptionShop = () => {
           user_id: user.id,
           address_id: defaultAddrId,
           status: 'active',
-          payment_method: 'wallet',
-          wallet_mode: 'prepaid',
           display_id: displayId,
           product_slug: plan.product_slug,
+          price_per_unit: plan.price_per_delivery,
           quantity: plan.quantity || 1,
           frequency: plan.frequency_type,
           selected_days: days

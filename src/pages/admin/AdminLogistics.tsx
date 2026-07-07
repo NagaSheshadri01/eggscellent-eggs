@@ -47,9 +47,9 @@ export const AdminLogistics = () => {
           id, delivery_date, status, driver_id,
           manifest_drops (
             id, product_slug, quantity, status, user_id, escrow_amount,
-            addresses:address_id (pincode, latitude, longitude, address_line_1, city),
+            addresses:address_id (pincode, lat, lng, address_line_1, city),
             profiles:user_id (full_name, phone),
-            products:product_slug (name)
+            products (name)
           )
         `)
         .eq("delivery_date", tomorrowStr);
@@ -97,6 +97,15 @@ export const AdminLogistics = () => {
     return groups;
   }, [morningManifestsQ.data]);
 
+  const groupedLiveDispatch = useMemo(() => {
+    return (liveDispatchQ.data || []).reduce((groups: Record<string, any[]>, order: any) => {
+      const pin = order.addresses?.pincode || "Unassigned Pincode";
+      if (!groups[pin]) groups[pin] = [];
+      groups[pin].push(order);
+      return groups;
+    }, {});
+  }, [liveDispatchQ.data]);
+
   if (liveDispatchQ.error) {
     console.error("Supabase Error (liveDispatch):", liveDispatchQ.error);
   }
@@ -137,24 +146,79 @@ export const AdminLogistics = () => {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4">
-              {liveDispatchQ.data?.map((order: any) => (
-                <div key={order.id} className="bg-card p-4 rounded-2xl border flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold">{order.profiles?.full_name || 'Unknown Customer'}</h3>
-                    <p className="text-xs text-muted-foreground">{order.addresses?.address_line_1 || 'No Address'}</p>
-                    <div className="mt-2 flex gap-2">
-                      {order.one_time_order_items?.map((item: any) => (
-                        <span key={item.id} className="text-xs bg-secondary px-2 py-1 rounded-md font-medium">
-                          {item.quantity}x {item.products?.name || item.product_slug}
-                        </span>
-                      ))}
+            <div className="space-y-6">
+              <h3 className="font-display font-bold text-brown text-xl border-b pb-2">Live Dispatch Command Center</h3>
+              {Object.entries(groupedLiveDispatch).map(([pincode, orders]) => (
+                <div key={pincode} className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                  {/* Level 1: Pincode Header */}
+                  <div className="bg-amber-50/50 px-5 py-4 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Checkbox id={`select-all-live-${pincode}`} />
+                      <div>
+                        <label htmlFor={`select-all-live-${pincode}`} className="font-display font-extrabold text-brown text-lg tracking-tight cursor-pointer">
+                          Pincode: {pincode}
+                        </label>
+                        <p className="text-xs font-bold text-amber-700 uppercase tracking-widest">{orders.length} Orders Pending</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-3 py-1 rounded-full">
-                      {order.status}
-                    </span>
+
+                  <div className="divide-y divide-border/40">
+                    {orders.map((order: any) => (
+                      <div key={order.id} className="p-5 flex flex-col md:flex-row gap-6 hover:bg-secondary/5 transition-colors">
+                        {/* Level 2: Customer Card */}
+                        <div className="flex-1 flex items-start gap-4">
+                          <Checkbox id={`select-live-${order.id}`} className="mt-1" />
+                          <div className="space-y-1">
+                            <h4 className="font-bold text-stone-900 text-base">{order.profiles?.full_name || 'Unknown'}</h4>
+                            <p className="text-sm font-medium text-stone-500">{order.profiles?.phone || 'No Phone'}</p>
+                            
+                            {/* Map Integration */}
+                            <div className="flex items-center gap-2 pt-2">
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${order.addresses?.lat || 0},${order.addresses?.lng || 0}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all shrink-0"
+                                title="Open in Google Maps"
+                              >
+                                <MapPin className="w-4 h-4" />
+                              </a>
+                              <span className="text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-[300px]">
+                                {order.addresses?.address_line_1 || 'No Address Provided'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Level 3: Fulfillment Details */}
+                        <div className="w-full md:w-80 bg-stone-50 rounded-xl p-4 border border-stone-100 flex flex-col justify-between gap-4">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest flex items-center gap-1"><Package className="w-3 h-3" /> Order ID</span>
+                              <span className="text-[10px] font-mono text-stone-500">{order.display_id || order.id.slice(0, 8)}</span>
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              {order.one_time_order_items?.map((item: any) => (
+                                <div key={item.id} className="flex justify-between items-end">
+                                  <span className="font-bold text-stone-800">{item.products?.name || item.product_slug}</span>
+                                  <div className="text-right">
+                                    <span className="text-xl font-black text-primary leading-none">{item.quantity}</span>
+                                    <span className="text-[10px] font-bold text-stone-400 ml-1">QTY</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div className="pt-2 border-t border-stone-200">
+                            <span className="inline-flex items-center text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full w-full justify-center">
+                              {order.status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -211,10 +275,10 @@ export const AdminLogistics = () => {
               {/* Pincode Command Center */}
               <div className="space-y-6">
                 <h3 className="font-display font-bold text-brown text-xl border-b pb-2">Command Center: Route Dispatch</h3>
-                
+
                 {Object.entries(groupedByPincode).map(([pincode, drops]) => (
                   <div key={pincode} className="bg-white border rounded-2xl overflow-hidden shadow-sm">
-                    
+
                     {/* Level 1: Pincode Header */}
                     <div className="bg-amber-50/50 px-5 py-4 border-b flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -231,18 +295,18 @@ export const AdminLogistics = () => {
                     <div className="divide-y divide-border/40">
                       {drops.map((drop: any) => (
                         <div key={drop.id} className="p-5 flex flex-col md:flex-row gap-6 hover:bg-secondary/5 transition-colors">
-                          
+
                           {/* Level 2: Customer Row */}
                           <div className="flex-1 flex items-start gap-4">
                             <Checkbox id={`select-${drop.id}`} className="mt-1" />
                             <div className="space-y-1">
                               <h4 className="font-bold text-stone-900 text-base">{drop.profiles?.full_name || 'Unknown'}</h4>
                               <p className="text-sm font-medium text-stone-500">{drop.profiles?.phone || 'No Phone'}</p>
-                              
+
                               {/* Level 3: Map Integration */}
                               <div className="flex items-center gap-2 pt-2">
-                                <a 
-                                  href={`https://www.google.com/maps/search/?api=1&query=${drop.addresses?.latitude || 0},${drop.addresses?.longitude || 0}`}
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${drop.addresses?.lat || 0},${drop.addresses?.lng || 0}`}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all shrink-0"
@@ -262,11 +326,11 @@ export const AdminLogistics = () => {
                             {drop.status === 'out_of_stock' && (
                               <div className="absolute top-0 right-0 w-2 h-full bg-red-500"></div>
                             )}
-                            
+
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest flex items-center gap-1"><Box className="w-3 h-3"/> Box ID</span>
-                                <span className="text-[10px] font-mono text-stone-500">{drop.id.slice(0,8)}</span>
+                                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest flex items-center gap-1"><Box className="w-3 h-3" /> Box ID</span>
+                                <span className="text-[10px] font-mono text-stone-500">{drop.id.slice(0, 8)}</span>
                               </div>
                               <div className="flex justify-between items-end mt-3">
                                 <span className="font-bold text-stone-800">{drop.products?.name || drop.product_slug}</span>
@@ -279,8 +343,8 @@ export const AdminLogistics = () => {
 
                             <div className="pt-2 border-t border-stone-200">
                               {drop.status === 'out_of_stock' ? (
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   className="w-full bg-white border-dashed border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                                   onClick={() => toggleStockMutation.mutate({ dropId: drop.id, isOutOfStock: false })}
@@ -290,8 +354,8 @@ export const AdminLogistics = () => {
                                   Restore Stock
                                 </Button>
                               ) : (
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="destructive"
                                   className="w-full shadow-sm hover:shadow-md transition-shadow"
                                   onClick={() => toggleStockMutation.mutate({ dropId: drop.id, isOutOfStock: true })}

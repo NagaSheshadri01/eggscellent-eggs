@@ -9,6 +9,7 @@ export type DeliverySlot = {
   active: boolean;
   display_order: number;
   slot_key: string;
+  tag?: string | null;
 };
 
 export const useDeliverySlots = (onlyActive = true) =>

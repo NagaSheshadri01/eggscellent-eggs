@@ -88,8 +88,6 @@ async function runSimulations() {
       user_id: testUserId,
       address_id: testAddressId || null,
       status: 'active',
-      payment_method: 'wallet',
-      wallet_mode: true as any,
       display_id: displayId,
     }).select().single();
 
