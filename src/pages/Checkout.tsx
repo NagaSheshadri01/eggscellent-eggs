@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Check, MapPin, Clock, CreditCard, Loader2, Tag, Wallet } from "lucide-react";
+import { Check, MapPin, Clock, CreditCard, Loader2, Tag, Wallet, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import AddressPicker from "@/components/site/AddressPicker";
 import JitVerifySheet from "@/components/site/JitVerifySheet";
@@ -74,17 +74,46 @@ const Checkout = () => {
   }, [items]);
   const projectedMonthlyTotal = grand; // monthly total with multiplier baked in
 
-  const { data: walletData } = useQuery({
-    queryKey: ['user-wallet-balance', user?.id],
+  const tomorrowStr = useMemo(() => {
+    const t = new Date();
+    t.setDate(t.getDate() + 1);
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const { data: walletPrediction, isLoading: walletLoading } = useQuery({
+    queryKey: ['user-wallet-prediction', user?.id, tomorrowStr],
     queryFn: async () => {
       if (!user) return null;
-      const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle();
-      return data;
+      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle();
+      const currentBalance = Number(profile?.balance || 0);
+
+      const { data: subs } = await supabase.from('subscriptions')
+        .select('quantity, price_per_unit, paused_dates')
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+        
+      let requiredFunds = 0;
+      if (subs) {
+        subs.forEach(sub => {
+          if (sub.paused_dates && Array.isArray(sub.paused_dates) && sub.paused_dates.includes(tomorrowStr)) {
+            return;
+          }
+          const qty = Number(sub.quantity || 1);
+          const price = Number(sub.price_per_unit || 0);
+          requiredFunds += (qty * price);
+        });
+      }
+      return { currentBalance, requiredFunds };
     },
     enabled: !!user
   });
-  const currentBalance = (walletData )?.balance || 0;
-  // Only block if they can't afford a SINGLE delivery drop
+
+  const currentBalance = walletPrediction?.currentBalance || 0;
+  const tomorrowsRequiredFunds = walletPrediction?.requiredFunds || 0;
+  const remainingBalance = currentBalance - grand;
+  const showWalletWarning = !walletLoading && (remainingBalance < tomorrowsRequiredFunds);
+
+  // Keep existing checks for subscriptions in cart
   const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
   
@@ -617,6 +646,13 @@ const Checkout = () => {
           {isBelowMinOrder && (
             <div className="mb-3 bg-red-50 text-red-700 p-3 rounded-lg font-medium text-sm border border-red-100">
               Minimum order value for delivery is ₹{minOrderValue}. Please add ₹{minOrderValue - total} more to proceed!
+            </div>
+          )}
+
+          {showWalletWarning && !hasSubscriptionInCart && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl text-sm font-medium flex items-start gap-3 shadow-sm">
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600" />
+              <p>Heads up! This purchase will leave you with insufficient funds for tomorrow's scheduled deliveries. Please recharge your wallet soon.</p>
             </div>
           )}
 

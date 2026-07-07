@@ -14,6 +14,261 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string
+          full_name: string | null
+          email: string | null
+          phone: string | null
+          avatar_url: string | null
+          created_at: string
+          updated_at: string
+          is_vip: boolean | null
+        }
+        Insert: {
+          id?: string
+          full_name?: string | null
+          email?: string | null
+          phone?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+          is_vip?: boolean | null
+        }
+        Update: {
+          id?: string
+          full_name?: string | null
+          email?: string | null
+          phone?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+          is_vip?: boolean | null
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          description: string | null
+          category: string | null
+          unit: string | null
+          benefit: string | null
+          image_url: string | null
+          images: string[]
+          original_price: number
+          discounted_price: number
+          stock_quantity: number
+          tags: string[]
+          nutrition_info: any | null
+          active: boolean
+          created_at: string
+          updated_at: string
+          display_order: number
+          parent_group_id: string | null
+          out_of_stock_one_time: boolean | null
+          out_of_stock_subscriptions: boolean | null
+          stock_one_time: number | null
+          stock_subscriptions: number | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          description?: string | null
+          category?: string | null
+          unit?: string | null
+          benefit?: string | null
+          image_url?: string | null
+          images?: string[]
+          original_price: number
+          discounted_price: number
+          stock_quantity: number
+          tags?: string[]
+          nutrition_info?: any | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+          display_order?: number
+          parent_group_id?: string | null
+          out_of_stock_one_time?: boolean | null
+          out_of_stock_subscriptions?: boolean | null
+          stock_one_time?: number | null
+          stock_subscriptions?: number | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          description?: string | null
+          category?: string | null
+          unit?: string | null
+          benefit?: string | null
+          image_url?: string | null
+          images?: string[]
+          original_price?: number
+          discounted_price?: number
+          stock_quantity?: number
+          tags?: string[]
+          nutrition_info?: any | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+          display_order?: number
+          parent_group_id?: string | null
+          out_of_stock_one_time?: boolean | null
+          out_of_stock_subscriptions?: boolean | null
+          stock_one_time?: number | null
+          stock_subscriptions?: number | null
+        }
+        Relationships: []
+      }
+      addresses: {
+        Row: {
+          id: string
+          user_id: string
+          full_name: string
+          phone: string
+          address_line_1: string
+          address_line_2: string | null
+          city: string
+          state: string
+          pincode: string
+          landmark: string | null
+          is_default: boolean
+          created_at: string
+          updated_at: string
+          label: string | null
+          lat: number | null
+          lng: number | null
+          email: string | null
+          address_name: string | null
+          address_phone: string | null
+          area_locality: string | null
+          address_tag: string | null
+          is_deleted: boolean | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          full_name: string
+          phone: string
+          address_line_1: string
+          address_line_2?: string | null
+          city: string
+          state: string
+          pincode: string
+          landmark?: string | null
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+          label?: string | null
+          lat?: number | null
+          lng?: number | null
+          email?: string | null
+          address_name?: string | null
+          address_phone?: string | null
+          area_locality?: string | null
+          address_tag?: string | null
+          is_deleted?: boolean | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          full_name?: string
+          phone?: string
+          address_line_1?: string
+          address_line_2?: string | null
+          city?: string
+          state?: string
+          pincode?: string
+          landmark?: string | null
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+          label?: string | null
+          lat?: number | null
+          lng?: number | null
+          email?: string | null
+          address_name?: string | null
+          address_phone?: string | null
+          area_locality?: string | null
+          address_tag?: string | null
+          is_deleted?: boolean | null
+        }
+        Relationships: []
+      }
+      wallets: {
+        Row: {
+          id: string
+          user_id: string | null
+          balance: number
+          updated_at: string | null
+          reserved_balance: number | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          balance: number
+          updated_at?: string | null
+          reserved_balance?: number | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          balance?: number
+          updated_at?: string | null
+          reserved_balance?: number | null
+        }
+        Relationships: []
+      }
+      coupons: {
+        Row: {
+          id: string
+          code: string
+          description: string | null
+          discount_type: any
+          discount_value: number
+          min_order_amount: number | null
+          expiry: string | null
+          active: boolean
+          created_at: string
+          updated_at: string
+          usage_limit: number | null
+          used_count: number | null
+        }
+        Insert: {
+          id?: string
+          code: string
+          description?: string | null
+          discount_type: any
+          discount_value: number
+          min_order_amount?: number | null
+          expiry?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+          usage_limit?: number | null
+          used_count?: number | null
+        }
+        Update: {
+          id?: string
+          code?: string
+          description?: string | null
+          discount_type?: any
+          discount_value?: number
+          min_order_amount?: number | null
+          expiry?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+          usage_limit?: number | null
+          used_count?: number | null
+        }
+        Relationships: []
+      }
       manifests: {
         Row: {
           id: string
