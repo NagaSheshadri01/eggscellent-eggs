@@ -180,3 +180,5 @@ export const AdminLogistics = () => {
     </div>
   );
 };
+
+export default AdminLogistics;

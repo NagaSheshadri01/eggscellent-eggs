@@ -190,44 +190,60 @@ export type Database = {
           }
         ]
       },
-      subscription_items: {
+      subscriptions: {
         Row: {
           id: string
-          subscription_id: string
+          display_id: string | null
+          user_id: string
           product_slug: string
-          quantity: number
+          quantity: number | null
           frequency: string
-          selected_days: Json | null
-          created_at: string
+          status: string | null
+          created_at: string | null
+          updated_at: string | null
+          price_per_unit: number
+          selected_days: string[] | null
+          paused_dates: string[] | null
+          address_id: string | null
         }
         Insert: {
           id?: string
-          subscription_id: string
+          display_id?: string | null
+          user_id: string
           product_slug: string
-          quantity: number
+          quantity?: number | null
           frequency?: string
-          selected_days?: Json | null
-          created_at?: string
+          status?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          price_per_unit?: number
+          selected_days?: string[] | null
+          paused_dates?: string[] | null
+          address_id?: string | null
         }
         Update: {
           id?: string
-          subscription_id?: string
+          display_id?: string | null
+          user_id?: string
           product_slug?: string
-          quantity?: number
+          quantity?: number | null
           frequency?: string
-          selected_days?: Json | null
-          created_at?: string
+          status?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          price_per_unit?: number
+          selected_days?: string[] | null
+          paused_dates?: string[] | null
+          address_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "subscription_items_subscription_id_fkey"
-            columns: ["subscription_id"]
+            foreignKeyName: "subscriptions_address_id_fkey"
+            columns: ["address_id"]
             isOneToOne: false
-            referencedRelation: "subscriptions"
+            referencedRelation: "addresses"
             referencedColumns: ["id"]
-          }
-        ]
-      },,
+          },
           {
             foreignKeyName: "subscriptions_user_id_fkey"
             columns: ["user_id"]
