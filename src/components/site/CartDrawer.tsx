@@ -368,36 +368,35 @@ const CartDrawer = () => {
       }
 
       const subscriptionPayloads = subItems.map(i => {
-          const resolvedSlug = allProducts?.find(p => p.slug === i.slug || p.name === i.slug || p.id === i.id)?.slug || i.slug;
-          const plan = activePlans?.find(p =>
-            (p.product_slug === resolvedSlug || p.product_slug === i.slug) &&
-            p.frequency_type === i.frequency_type
-          );
-          const isWeekly = i.frequency_type === 'weekly';
-          return {
-             user_id: user.id,
-             address_id: selectedAddressId,
-             status: 'active',
-             payment_method: 'wallet',
-             wallet_mode: 'TRUE',
-             display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
-             product_slug: resolvedSlug,
-             quantity: i.qty,
-             frequency: i.frequency_type,
-             selected_days: i.subscription_days || (isWeekly ? [selectedWeeklyDay] : (plan?.frequency_type === 'alternate' ? (
-                (() => {
-                  const cDays = plan?.custom_days || [];
-                  const dividerIndex = cDays.indexOf(-1);
-                  return dividerIndex === -1 ? (cDays.length > 0 ? cDays : [0, 2, 4]) : cDays.slice(0, dividerIndex);
-                })()
-             ) : [0, 1, 2, 3, 4, 5, 6]))
-          };
+        const resolvedSlug = allProducts?.find(p => p.slug === i.slug || p.name === i.slug || p.id === i.id)?.slug || i.slug;
+        const plan = activePlans?.find(p =>
+          (p.product_slug === resolvedSlug || p.product_slug === i.slug) &&
+          p.frequency_type === i.frequency_type
+        );
+        const isWeekly = i.frequency_type === 'weekly';
+        return {
+          user_id: user.id,
+          address_id: selectedAddressId,
+          status: 'active',
+
+          display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
+          product_slug: resolvedSlug,
+          quantity: i.qty,
+          frequency: i.frequency_type,
+          selected_days: i.subscription_days || (isWeekly ? [selectedWeeklyDay] : (plan?.frequency_type === 'alternate' ? (
+            (() => {
+              const cDays = plan?.custom_days || [];
+              const dividerIndex = cDays.indexOf(-1);
+              return dividerIndex === -1 ? (cDays.length > 0 ? cDays : [0, 2, 4]) : cDays.slice(0, dividerIndex);
+            })()
+          ) : [0, 1, 2, 3, 4, 5, 6]))
+        };
       });
 
       const { data: subContracts, error: contractErr } = await (supabase as any)
-          .from("subscriptions")
-          .insert(subscriptionPayloads)
-          .select();
+        .from("subscriptions")
+        .insert(subscriptionPayloads)
+        .select();
 
       if (contractErr || !subContracts || subContracts.length === 0) {
         toast.error("Subscriptions contract failed to save: " + contractErr?.message);
@@ -417,16 +416,16 @@ const CartDrawer = () => {
 
       const deliveryPayloads: any[] = [];
       subContracts.forEach((contract: any) => {
-         deliveryDates.forEach(date => {
-            deliveryPayloads.push({
-               user_id: user.id,
-               subscription_id: contract.id,
-               product_slug: contract.product_slug,
-               quantity: contract.quantity,
-               escrow_amount: subItems.find(i => i.slug === contract.product_slug || i.name === contract.product_slug)?.discountPrice || 0,
-               status: 'pending'
-            });
-         });
+        deliveryDates.forEach(date => {
+          deliveryPayloads.push({
+            user_id: user.id,
+            subscription_id: contract.id,
+            product_slug: contract.product_slug,
+            quantity: contract.quantity,
+            escrow_amount: subItems.find(i => i.slug === contract.product_slug || i.name === contract.product_slug)?.discountPrice || 0,
+            status: 'pending'
+          });
+        });
       });
 
       const { error: deliveryGenError } = await (supabase as any)
@@ -837,11 +836,11 @@ const CartDrawer = () => {
                       </div>
                     )}
                     <Button className="w-full h-12 text-base font-bold bg-primary text-primary-foreground hover:bg-primary/90 mt-4" onClick={() => {
-                        setOpen(false); // Close the cart drawer
-                        nav("/checkout"); // Redirect to the standalone checkout page
-                      }}
+                      setOpen(false); // Close the cart drawer
+                      nav("/checkout"); // Redirect to the standalone checkout page
+                    }}
                     >
-                      Proceed to Checkout <ChevronRight className="ml-2 h-5 w-5"/>
+                      Proceed to Checkout <ChevronRight className="ml-2 h-5 w-5" />
                     </Button>
                   </div>
                 )}

@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      delivery_slots: {
+        Row: {
+          id: string
+          label: string
+          start_time: string | null
+          end_time: string | null
+          active: boolean
+          display_order: number
+          created_at: string
+          updated_at: string
+          tag: string | null
+          slot_key: string | null
+          cutoff_time: string | null
+          is_active: boolean | null
+        }
+        Insert: {
+          id?: string
+          label: string
+          start_time?: string | null
+          end_time?: string | null
+          active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+          tag?: string | null
+          slot_key?: string | null
+          cutoff_time?: string | null
+          is_active?: boolean | null
+        }
+        Update: {
+          id?: string
+          label?: string
+          start_time?: string | null
+          end_time?: string | null
+          active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+          tag?: string | null
+          slot_key?: string | null
+          cutoff_time?: string | null
+          is_active?: boolean | null
+        }
+        Relationships: []
+      }
+      serviceable_pincodes: {
+        Row: {
+          id: string
+          pincode: string
+          area_name: string | null
+          active: boolean
+          delivery_fee_override: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          pincode: string
+          area_name?: string | null
+          active?: boolean
+          delivery_fee_override?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          pincode?: string
+          area_name?: string | null
+          active?: boolean
+          delivery_fee_override?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           id: string

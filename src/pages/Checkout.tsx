@@ -38,7 +38,7 @@ const Checkout = () => {
   const nav = useNavigate();
   const { isComplete, missing, hasPhone, refetch: refetchProfile, isLoading: profileLoading } = useProfileCompleteness();
   const { data: availableOffers } = useOffers({ onlyActive: true });
-  
+
   const [step, setStep] = useState(1);
   const [selectedAddr, setSelectedAddr] = useState<string>(selectedAddressId || "");
 
@@ -60,7 +60,7 @@ const Checkout = () => {
   });
 
   const deliveryFeeConfig = dynamicDeliveryFee !== null && dynamicDeliveryFee !== undefined ? dynamicDeliveryFee : 30;
-  
+
   const isDeliveryFree = discount > 0 ? false : false; // Temporarily using discount or offers for this later, but for now we enforce the tiered fee
   const deliveryFee = deliveryFeeConfig;
   const calculatedDiscount = discount;
@@ -91,7 +91,7 @@ const Checkout = () => {
         .select('quantity, price_per_unit, paused_dates')
         .eq('user_id', user.id)
         .eq('status', 'active');
-        
+
       let requiredFunds = 0;
       if (subs) {
         subs.forEach(sub => {
@@ -116,7 +116,7 @@ const Checkout = () => {
   // Keep existing checks for subscriptions in cart
   const isShortfundedForFirstDelivery = currentBalance < perDeliveryCost;
   const minimumNeededToActivate = Math.max(0, perDeliveryCost - currentBalance);
-  
+
   const minOrderValue = deliveryConfig?.min_order_value || 150;
   const isBelowMinOrder = total < minOrderValue;
 
@@ -210,7 +210,7 @@ const Checkout = () => {
           toast.warning("Prices have been updated to reflect the latest discounts");
         }
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount — cart is already in memory
 
 
@@ -218,11 +218,11 @@ const Checkout = () => {
   const applyCoupon = async (manualCode?: string) => {
     const codeToTry = manualCode || coupon.trim().toUpperCase();
     if (!codeToTry) return;
-    
+
     const { data, error } = await supabase.from("coupons").select("*").eq("code", codeToTry).eq("active", true).maybeSingle();
     if (error || !data) return toast.error("Invalid coupon");
     if (data.expiry && new Date(data.expiry) < new Date()) return toast.error("Coupon expired");
-    
+
     if (total < (data.min_order_amount || 0)) {
       return toast.error(`Add ₹${(data.min_order_amount || 0) - total} more to use this coupon`);
     }
@@ -253,7 +253,7 @@ const Checkout = () => {
       console.error("CRITICAL: Checkout aborted. The selected slot value does not match any valid row in the delivery_slots table.");
       setPlacing(false);
       alert("Error: Selected delivery slot is invalid. Please re-select your delivery time window.");
-      return; 
+      return;
     }
 
     // Enforce strict relational slot_key mapping
@@ -299,39 +299,40 @@ const Checkout = () => {
     let orderIdToNavigate = "sub-success";
 
     if (subItems.length > 0) {
-      const displayId = Math.random().toString(36).substring(2, 10).toUpperCase();
-      const { data: subContract, error: contractErr } = await supabase.from("subscriptions").insert({
-        user_id: user.id,
-        address_id: selectedAddr,
-        status: 'active',
-        payment_method: 'wallet',
-        wallet_mode: 'TRUE',
-        display_id: displayId,
-      }).select().single();
-
-      if (contractErr || !subContract) {
-        setPlacing(false);
-        return toast.error("Failed to setup subscriptions: " + contractErr.message);
-      }
-
-      const itemsRows = subItems.map(i => {
-        const plan = activePlans?.find(p => p.product_slug === i.slug && p.frequency_type === i.frequency_type);
+      const subscriptionPayloads = subItems.map(i => {
+        const resolvedSlug = i.slug || i.id;
+        const plan = activePlans?.find(p =>
+          (p.product_slug === resolvedSlug || p.product_slug === i.slug) &&
+          p.frequency_type === i.frequency_type
+        );
         const isWeekly = i.frequency_type === 'weekly';
-        const isAlternate = i.frequency_type === 'alternate';
         return {
-          subscription_id: subContract.id,
-          product_slug: i.slug || '',
+          user_id: user.id,
+          address_id: selectedAddr,
+          status: 'active',
+          display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
+          product_slug: resolvedSlug,
           quantity: i.qty,
           frequency: i.frequency_type,
-          selected_days: i.subscription_days || (isWeekly ? [3] : (isAlternate ? [0,2,4] : [0,1,2,3,4,5,6])),
+          price_per_unit: i.discountPrice,
+          selected_days: i.subscription_days || (isWeekly ? [3] : (plan?.frequency_type === 'alternate' ? (
+            (() => {
+              const cDays = plan?.custom_days || [];
+              const dividerIndex = cDays.indexOf(-1);
+              return dividerIndex === -1 ? (cDays.length > 0 ? cDays : [0, 2, 4]) : cDays.slice(0, dividerIndex);
+            })()
+          ) : [0, 1, 2, 3, 4, 5, 6]))
         };
       });
 
-      const subErr = null; // Deprecated, columns moved to subscriptions
-        
-      if (subErr) {
+      const { data: subContracts, error: contractErr } = await (supabase as any)
+        .from("subscriptions")
+        .insert(subscriptionPayloads)
+        .select();
+
+      if (contractErr || !subContracts || subContracts.length === 0) {
         setPlacing(false);
-        return toast.error("Failed to setup subscription items: " + subErr.message);
+        return toast.error("Failed to setup subscriptions: " + contractErr?.message);
       }
 
       // IMMEDIATE downstream delivery manifest generator execution post-subscription success:
@@ -344,20 +345,28 @@ const Checkout = () => {
         deliveryDates.push(dateString);
       }
 
-      const deliveryPayloads = deliveryDates.map(date => ({
-        display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
-        user_id: user.id,
-        subscription_id: subContract.id,
-        delivery_date: date,
-        delivery_slot_key: targetSlotKey,
-        status: 'pending',
-        delivery_address_id: selectedAddr
-      }));
+      const deliveryPayloads: any[] = [];
+      subContracts.forEach((contract: any) => {
+        deliveryDates.forEach(date => {
+          deliveryPayloads.push({
+            display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
+            user_id: user.id,
+            subscription_id: contract.id,
+            product_slug: contract.product_slug,
+            quantity: contract.quantity,
+            delivery_date: date,
+            delivery_slot_key: targetSlotKey,
+            status: 'pending',
+            delivery_address_id: selectedAddr,
+            escrow_amount: subItems.find(i => i.slug === contract.product_slug || i.name === contract.product_slug)?.discountPrice || 0
+          });
+        });
+      });
 
       const { error: deliveryGenError } = await (supabase as any)
         .from('manifest_drops')
         .insert(deliveryPayloads);
-        
+
       if (deliveryGenError) {
         console.error("Downstream calendar generation failed:", deliveryGenError);
       }
@@ -369,7 +378,7 @@ const Checkout = () => {
         if (error) { setPlacing(false); toast.error("Wallet deduction failed"); return; }
         onlinePaid = true;
       }
-      
+
       const { data: order, error } = await supabase.from("one_time_orders").insert({
         user_id: user.id,
         delivery_address_id: selectedAddr,
@@ -381,7 +390,7 @@ const Checkout = () => {
         display_id: Math.random().toString(36).substring(2, 10).toUpperCase(),
         delivery_date: format(new Date(), "yyyy-MM-dd") // Just using today for checkout
       }).select().single();
-      
+
       if (error || !order) { setPlacing(false); return toast.error(error?.message || "Could not place order"); }
       orderIdToNavigate = order.id;
 
@@ -435,7 +444,7 @@ const Checkout = () => {
 
         {/* Steps progress */}
         <div className="flex items-center gap-2 mb-8">
-          {[1,2,3].map(s => (
+          {[1, 2, 3].map(s => (
             <div key={s} className={`flex-1 h-1.5 rounded-full transition-smooth ${step >= s ? "bg-primary" : "bg-secondary"}`} />
           ))}
         </div>
@@ -443,14 +452,14 @@ const Checkout = () => {
         {/* Address */}
         <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6 mb-4" onClick={() => setStep(s => Math.max(s, 1))}>
           <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><MapPin className="w-5 h-5 text-primary" /> Delivery address</h2>
-          <AddressPicker 
-            showSelect 
-            selectedId={selectedAddr} 
-            onSelect={(id) => { 
-              setSelectedAddr(id); 
-              setStep(s => Math.max(s, 2)); 
+          <AddressPicker
+            showSelect
+            selectedId={selectedAddr}
+            onSelect={(id) => {
+              setSelectedAddr(id);
+              setStep(s => Math.max(s, 2));
               setIsAddressFormOpen(false);
-            }} 
+            }}
             onFormToggle={(isOpen) => {
               setIsAddressFormOpen(isOpen);
               if (isOpen) setSelectedAddr("");
@@ -528,7 +537,7 @@ const Checkout = () => {
         {/* Coupon + Summary */}
         <section className="bg-card rounded-3xl shadow-soft p-5 sm:p-6">
           <h2 className="font-display font-semibold text-brown text-lg flex items-center gap-2 mb-4"><Tag className="w-5 h-5 text-primary" /> Offers & Coupons</h2>
-          
+
           {/* Dynamic Offer Cards */}
           <div className="flex gap-3 overflow-x-auto pb-4 mb-4 no-scrollbar min-h-[110px]">
             {availableOffers === undefined ? (
@@ -539,20 +548,19 @@ const Checkout = () => {
               offersWithEligibility.map(offer => {
                 const isActive = appliedCoupon?.code === offer.coupon_code_to_apply;
                 return (
-                  <div 
-                    key={offer.id} 
-                    className={`flex-none w-64 p-4 rounded-2xl border transition-all duration-300 ${
-                      offer.isEligible 
-                        ? (isActive ? "border-success bg-success/5 shadow-md" : "border-border hover:border-primary/40 bg-card") 
+                  <div
+                    key={offer.id}
+                    className={`flex-none w-64 p-4 rounded-2xl border transition-all duration-300 ${offer.isEligible
+                        ? (isActive ? "border-success bg-success/5 shadow-md" : "border-border hover:border-primary/40 bg-card")
                         : "opacity-60 grayscale-[0.5] border-dashed border-border bg-secondary/10"
-                    }`}
+                      }`}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isActive ? "bg-success text-white" : "bg-primary/20 text-brown"}`}>
                         {offer.title}
                       </span>
                       {offer.isEligible && (
-                        <button 
+                        <button
                           onClick={() => applyCoupon(offer.coupon_code_to_apply)}
                           className={`text-xs font-bold uppercase transition-smooth ${isActive ? "text-success" : "text-primary hover:underline"}`}
                         >
@@ -588,7 +596,7 @@ const Checkout = () => {
           <div className="space-y-2.5 text-sm">
             {hasSubscriptionInCart ? (
               <div className="flex justify-between text-muted-foreground">
-                <span>Per Delivery Cost ({items.filter(i => i.purchase_type==='subscription').reduce((s,i)=>s+i.qty,0)} items)</span>
+                <span>Per Delivery Cost ({items.filter(i => i.purchase_type === 'subscription').reduce((s, i) => s + i.qty, 0)} items)</span>
                 <span className="font-semibold text-brown">₹{perDeliveryCost}</span>
               </div>
             ) : (
@@ -661,7 +669,7 @@ const Checkout = () => {
               <div className="text-xs text-muted-foreground">{hasSubscriptionInCart ? 'Per Delivery' : 'Total'}</div>
               <div className="font-display font-bold text-brown text-xl">{hasSubscriptionInCart ? `₹${perDeliveryCost}` : `₹${grand}`}</div>
             </div>
-            
+
             {isAddressFormOpen ? null : hasSubscriptionInCart && isShortfundedForFirstDelivery ? (
               <Button
                 variant="hero" size="lg" className="flex-[2] !bg-amber-500 hover:!bg-amber-600 !text-white !border-amber-600"
