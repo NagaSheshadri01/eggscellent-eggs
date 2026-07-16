@@ -11,6 +11,18 @@ import { useAuth } from "@/context/AuthContext";
 import { useInvalidateProfile } from "@/hooks/useProfileCompleteness";
 import { userService } from "@/lib/services/user.service";
 
+
+const extractErrorMsg = async (error: any, data: any, defaultMsg: string) => {
+  if (data?.error) return data.error;
+  if (!error) return defaultMsg;
+  if (error.context && typeof error.context.json === 'function') {
+    try {
+      const errData = await error.context.json();
+      if (errData?.error) return errData.error;
+    } catch (e) {}
+  }
+  return error.message || defaultMsg;
+};
 type Missing = "phone" | null;
 
 type Props = {

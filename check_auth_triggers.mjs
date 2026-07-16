@@ -7,8 +7,8 @@ const pool = new Pool({
 
 async function run() {
   try {
-    const res = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
-    console.log(res.rows.map(t=>t.table_name).join(", "));
+    const res = await pool.query("SELECT trigger_name, event_object_table FROM information_schema.triggers WHERE event_object_table='users' AND event_object_schema='auth'");
+    console.log(res.rows);
   } catch (error) {
     console.error("ERROR:", error.message);
   } finally {

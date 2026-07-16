@@ -7,8 +7,8 @@ const pool = new Pool({
 
 async function run() {
   try {
-    const res = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
-    console.log(res.rows.map(t=>t.table_name).join(", "));
+    const res = await pool.query("SELECT routine_definition FROM information_schema.routines WHERE routine_name = 'handle_new_user'");
+    console.log(res.rows[0]?.routine_definition);
   } catch (error) {
     console.error("ERROR:", error.message);
   } finally {

@@ -1,11 +1,14 @@
-import { useState, useMemo } from "react";
+import fs from 'fs';
+
+const currentCode = fs.readFileSync('src/pages/admin/AdminLogistics.tsx', 'utf-8');
+
+const newCode = `import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Package, Truck, Calendar, RefreshCw, AlertCircle, MapPin, Box } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
 import {
   Accordion,
   AccordionContent,
@@ -20,18 +23,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export const AdminLogistics = () => {
   const [activeTab, setActiveTab] = useState("live-dispatch");
   const [selectedDrops, setSelectedDrops] = useState<string[]>([]);
-  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
   const queryClient = useQueryClient();
 
   const handleSelectAll = (ids: string[], isChecked: boolean) => {
@@ -56,7 +51,7 @@ export const AdminLogistics = () => {
     const year = t.getFullYear();
     const month = String(t.getMonth() + 1).padStart(2, '0');
     const day = String(t.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return \`\${year}-\${month}-\${day}\`;
   };
 
   const tomorrowStr = getTomorrowString();
@@ -66,12 +61,12 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("one_time_orders")
-        .select(`
+        .select(\`
           *,
           profiles:user_id (id, full_name, phone, email),
           one_time_order_items (*, products (name)),
           addresses:delivery_address_id (*)
-        `)
+        \`)
         .in("status", ["pending", "confirmed", "out_for_delivery"]);
       if (error) throw error;
       return data || [];
@@ -83,7 +78,7 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("manifests")
-        .select(`
+        .select(\`
           id, delivery_date, status, driver_id,
           manifest_drops (
             id, product_slug, quantity, status, user_id, escrow_amount,
@@ -91,20 +86,8 @@ export const AdminLogistics = () => {
             profiles:user_id (full_name, phone),
             products (name)
           )
-        `)
+        \`)
         .eq("delivery_date", tomorrowStr);
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  const driversQ = useQuery({
-    queryKey: ["admin-logistics-drivers"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("delivery_partners")
-        .select("id, user_id, full_name")
-        .eq("active", true);
       if (error) throw error;
       return data || [];
     }
@@ -122,68 +105,6 @@ export const AdminLogistics = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-logistics-morning-manifests"] });
     }
   });
-
-  const toggleRetailStockMutation = useMutation({
-    mutationFn: async ({ itemId, isOutOfStock }: { itemId: string; isOutOfStock: boolean }) => {
-      const { error } = await supabase.rpc("toggle_retail_stock_status", {
-        p_item_id: itemId,
-        p_is_out_of_stock: isOutOfStock
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-logistics-live-dispatch"] });
-    }
-  });
-
-  const assignRetailDriverMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc("assign_retail_driver", {
-        p_driver_id: selectedDriverId,
-        p_order_ids: selectedDrops
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Driver successfully assigned to retail orders!");
-      setSelectedDrops([]);
-      setSelectedDriverId("");
-      queryClient.invalidateQueries({ queryKey: ["admin-logistics-live-dispatch"] });
-    },
-    onError: (err) => {
-      toast.error(`Failed to assign driver: ${err.message}`);
-    }
-  });
-
-  const assignManifestDriverMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc("assign_manifest_driver", {
-        p_driver_id: selectedDriverId,
-        p_drop_ids: selectedDrops,
-        p_date: tomorrowStr
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Driver successfully assigned to subscription drops!");
-      setSelectedDrops([]);
-      setSelectedDriverId("");
-      queryClient.invalidateQueries({ queryKey: ["admin-logistics-morning-manifests"] });
-    },
-    onError: (err) => {
-      toast.error(`Failed to assign driver: ${err.message}`);
-    }
-  });
-
-  const handleAssignDriver = () => {
-    if (!selectedDriverId || selectedDrops.length === 0) return;
-    
-    if (activeTab === "live-dispatch") {
-      assignRetailDriverMutation.mutate();
-    } else {
-      assignManifestDriverMutation.mutate();
-    }
-  };
 
   const productTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -224,8 +145,6 @@ export const AdminLogistics = () => {
     }, {});
   }, [liveDispatchQ.data]);
 
-  const isAssigning = assignRetailDriverMutation.isPending || assignManifestDriverMutation.isPending;
-
   return (
     <div className="space-y-6 pb-28">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -238,10 +157,10 @@ export const AdminLogistics = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-secondary/40 p-1 mb-6">
           <TabsTrigger value="live-dispatch" className="flex items-center gap-2">
-            <Package className="w-4 h-4" /> Live Dispatch (Retail Orders)
+            <Package className="w-4 h-4" /> Live Dispatch
           </TabsTrigger>
           <TabsTrigger value="morning-manifests" className="flex items-center gap-2">
-            <Truck className="w-4 h-4" /> Morning Manifests (Subscriptions)
+            <Truck className="w-4 h-4" /> Morning Manifests
           </TabsTrigger>
         </TabsList>
 
@@ -330,39 +249,14 @@ export const AdminLogistics = () => {
                                       <TableCell>
                                         <div className="flex items-center gap-2 mb-2">
                                           <div className="bg-black text-white text-[10px] font-mono px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 w-fit">
-                                            <Box className="w-3 h-3" /> ORDER ID: {order.display_id || order.id.slice(0, 8)}
+                                            <Box className="w-3 h-3" /> BOX ID: {order.display_id || order.id.slice(0, 8)}
                                           </div>
                                         </div>
-                                        <div className="space-y-4">
+                                        <div className="space-y-1">
                                           {order.one_time_order_items?.map((item: any) => (
-                                            <div key={item.id} className="flex flex-col gap-2">
-                                              <div className="text-sm font-medium flex gap-2 items-center">
-                                                <span>{item.quantity}x</span>
-                                                <span>{item.products?.name || item.product_slug}</span>
-                                              </div>
-                                              <div className="flex">
-                                                {item.status === 'out_of_stock' ? (
-                                                  <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="bg-white border-dashed border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700 h-8"
-                                                    onClick={() => toggleRetailStockMutation.mutate({ itemId: item.id, isOutOfStock: false })}
-                                                    disabled={toggleRetailStockMutation.isPending}
-                                                  >
-                                                    <RefreshCw className="w-3 h-3 mr-1" /> Restore Stock
-                                                  </Button>
-                                                ) : (
-                                                  <Button
-                                                    size="sm"
-                                                    variant="destructive"
-                                                    className="shadow-sm hover:shadow-md transition-shadow h-8"
-                                                    onClick={() => toggleRetailStockMutation.mutate({ itemId: item.id, isOutOfStock: true })}
-                                                    disabled={toggleRetailStockMutation.isPending}
-                                                  >
-                                                    <AlertCircle className="w-3 h-3 mr-1" /> Mark Out of Stock
-                                                  </Button>
-                                                )}
-                                              </div>
+                                            <div key={item.id} className="text-sm font-medium flex gap-2 items-center">
+                                              <span>{item.quantity}x</span>
+                                              <span>{item.products?.name || item.product_slug}</span>
                                             </div>
                                           ))}
                                         </div>
@@ -372,7 +266,7 @@ export const AdminLogistics = () => {
                                           {order.addresses?.address_line_1 || 'No Address Provided'}
                                         </div>
                                         <a
-                                          href={`https://www.google.com/maps?q=${order.addresses?.latitude},${order.addresses?.longitude}`}
+                                          href={\`https://www.google.com/maps?q=\${order.addresses?.latitude},\${order.addresses?.longitude}\`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all text-xs font-bold"
@@ -553,7 +447,7 @@ export const AdminLogistics = () => {
                                           {drop.addresses?.address_line_1 || 'No Address Provided'}
                                         </div>
                                         <a
-                                          href={`https://www.google.com/maps?q=${drop.addresses?.latitude},${drop.addresses?.longitude}`}
+                                          href={\`https://www.google.com/maps?q=\${drop.addresses?.latitude},\${drop.addresses?.longitude}\`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all text-xs font-bold"
@@ -596,28 +490,13 @@ export const AdminLogistics = () => {
               </Button>
             </div>
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
-                <SelectTrigger className="w-full sm:w-64 bg-white border-stone-300">
-                  <SelectValue placeholder="Select Delivery Partner..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {driversQ.data?.map(driver => (
-                    <SelectItem key={driver.id} value={driver.user_id}>
-                      Driver: {driver.full_name}
-                    </SelectItem>
-                  ))}
-                  {(!driversQ.data || driversQ.data.length === 0) && (
-                    <SelectItem value="none" disabled>No drivers found</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-              <Button 
-                className="w-full sm:w-auto whitespace-nowrap shadow-md hover:shadow-lg transition-all" 
-                size="lg"
-                disabled={!selectedDriverId || isAssigning}
-                onClick={handleAssignDriver}
-              >
-                {isAssigning ? "Assigning..." : "Assign Driver"}
+              <select className="flex h-10 w-full sm:w-64 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                <option value="">Select Delivery Partner...</option>
+                <option value="driver-1">Driver: Raj Kumar (Zone A)</option>
+                <option value="driver-2">Driver: Amit Singh (Zone B)</option>
+              </select>
+              <Button className="w-full sm:w-auto whitespace-nowrap shadow-md hover:shadow-lg transition-all" size="lg">
+                Assign Driver
               </Button>
             </div>
           </div>
@@ -628,3 +507,7 @@ export const AdminLogistics = () => {
 };
 
 export default AdminLogistics;
+`;
+
+fs.writeFileSync('src/pages/admin/AdminLogistics.tsx', newCode, 'utf-8');
+console.log("SUCCESS");

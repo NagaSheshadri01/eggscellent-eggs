@@ -7,8 +7,8 @@ const pool = new Pool({
 
 async function run() {
   try {
-    const res = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
-    console.log(res.rows.map(t=>t.table_name).join(", "));
+    const res = await pool.query("SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class c ON t.tgrelid = c.oid WHERE c.relname = 'user_roles'");
+    console.log(res.rows);
   } catch (error) {
     console.error("ERROR:", error.message);
   } finally {

@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import fs from 'fs';
+
+const newCode = `import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Package, Truck, Calendar, RefreshCw, AlertCircle, MapPin, Box } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
 import {
   Accordion,
   AccordionContent,
@@ -31,7 +32,6 @@ import {
 export const AdminLogistics = () => {
   const [activeTab, setActiveTab] = useState("live-dispatch");
   const [selectedDrops, setSelectedDrops] = useState<string[]>([]);
-  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
   const queryClient = useQueryClient();
 
   const handleSelectAll = (ids: string[], isChecked: boolean) => {
@@ -56,7 +56,7 @@ export const AdminLogistics = () => {
     const year = t.getFullYear();
     const month = String(t.getMonth() + 1).padStart(2, '0');
     const day = String(t.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return \`\${year}-\${month}-\${day}\`;
   };
 
   const tomorrowStr = getTomorrowString();
@@ -66,12 +66,12 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("one_time_orders")
-        .select(`
+        .select(\`
           *,
           profiles:user_id (id, full_name, phone, email),
           one_time_order_items (*, products (name)),
           addresses:delivery_address_id (*)
-        `)
+        \`)
         .in("status", ["pending", "confirmed", "out_for_delivery"]);
       if (error) throw error;
       return data || [];
@@ -83,7 +83,7 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("manifests")
-        .select(`
+        .select(\`
           id, delivery_date, status, driver_id,
           manifest_drops (
             id, product_slug, quantity, status, user_id, escrow_amount,
@@ -91,7 +91,7 @@ export const AdminLogistics = () => {
             profiles:user_id (full_name, phone),
             products (name)
           )
-        `)
+        \`)
         .eq("delivery_date", tomorrowStr);
       if (error) throw error;
       return data || [];
@@ -102,9 +102,9 @@ export const AdminLogistics = () => {
     queryKey: ["admin-logistics-drivers"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("delivery_partners")
-        .select("id, user_id, full_name")
-        .eq("active", true);
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "driver");
       if (error) throw error;
       return data || [];
     }
@@ -135,55 +135,6 @@ export const AdminLogistics = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-logistics-live-dispatch"] });
     }
   });
-
-  const assignRetailDriverMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc("assign_retail_driver", {
-        p_driver_id: selectedDriverId,
-        p_order_ids: selectedDrops
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Driver successfully assigned to retail orders!");
-      setSelectedDrops([]);
-      setSelectedDriverId("");
-      queryClient.invalidateQueries({ queryKey: ["admin-logistics-live-dispatch"] });
-    },
-    onError: (err) => {
-      toast.error(`Failed to assign driver: ${err.message}`);
-    }
-  });
-
-  const assignManifestDriverMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc("assign_manifest_driver", {
-        p_driver_id: selectedDriverId,
-        p_drop_ids: selectedDrops,
-        p_date: tomorrowStr
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Driver successfully assigned to subscription drops!");
-      setSelectedDrops([]);
-      setSelectedDriverId("");
-      queryClient.invalidateQueries({ queryKey: ["admin-logistics-morning-manifests"] });
-    },
-    onError: (err) => {
-      toast.error(`Failed to assign driver: ${err.message}`);
-    }
-  });
-
-  const handleAssignDriver = () => {
-    if (!selectedDriverId || selectedDrops.length === 0) return;
-    
-    if (activeTab === "live-dispatch") {
-      assignRetailDriverMutation.mutate();
-    } else {
-      assignManifestDriverMutation.mutate();
-    }
-  };
 
   const productTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -223,8 +174,6 @@ export const AdminLogistics = () => {
       return groups;
     }, {});
   }, [liveDispatchQ.data]);
-
-  const isAssigning = assignRetailDriverMutation.isPending || assignManifestDriverMutation.isPending;
 
   return (
     <div className="space-y-6 pb-28">
@@ -372,7 +321,7 @@ export const AdminLogistics = () => {
                                           {order.addresses?.address_line_1 || 'No Address Provided'}
                                         </div>
                                         <a
-                                          href={`https://www.google.com/maps?q=${order.addresses?.latitude},${order.addresses?.longitude}`}
+                                          href={\`https://www.google.com/maps?q=\${order.addresses?.latitude},\${order.addresses?.longitude}\`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all text-xs font-bold"
@@ -553,7 +502,7 @@ export const AdminLogistics = () => {
                                           {drop.addresses?.address_line_1 || 'No Address Provided'}
                                         </div>
                                         <a
-                                          href={`https://www.google.com/maps?q=${drop.addresses?.latitude},${drop.addresses?.longitude}`}
+                                          href={\`https://www.google.com/maps?q=\${drop.addresses?.latitude},\${drop.addresses?.longitude}\`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all text-xs font-bold"
@@ -596,13 +545,13 @@ export const AdminLogistics = () => {
               </Button>
             </div>
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
+              <Select>
                 <SelectTrigger className="w-full sm:w-64 bg-white border-stone-300">
                   <SelectValue placeholder="Select Delivery Partner..." />
                 </SelectTrigger>
                 <SelectContent>
                   {driversQ.data?.map(driver => (
-                    <SelectItem key={driver.id} value={driver.user_id}>
+                    <SelectItem key={driver.id} value={driver.id}>
                       Driver: {driver.full_name}
                     </SelectItem>
                   ))}
@@ -611,13 +560,8 @@ export const AdminLogistics = () => {
                   )}
                 </SelectContent>
               </Select>
-              <Button 
-                className="w-full sm:w-auto whitespace-nowrap shadow-md hover:shadow-lg transition-all" 
-                size="lg"
-                disabled={!selectedDriverId || isAssigning}
-                onClick={handleAssignDriver}
-              >
-                {isAssigning ? "Assigning..." : "Assign Driver"}
+              <Button className="w-full sm:w-auto whitespace-nowrap shadow-md hover:shadow-lg transition-all" size="lg">
+                Assign Driver
               </Button>
             </div>
           </div>
@@ -628,3 +572,7 @@ export const AdminLogistics = () => {
 };
 
 export default AdminLogistics;
+`;
+
+fs.writeFileSync('src/pages/admin/AdminLogistics.tsx', newCode, 'utf-8');
+console.log("SUCCESS");

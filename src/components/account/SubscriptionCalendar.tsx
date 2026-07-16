@@ -185,12 +185,28 @@ const HorizontalCalendarLedger = () => {
   };
 
   const handleUpdateQuantity = async (item: any, newQuantity: number) => {
-    if (newQuantity < 1 || item.is_manifest || !item.subscription_id) return;
+    // Prevent invalid quantities
+    if (newQuantity < 1) return;
+
+    // Un-manifested Days: 
+    // Because the schema lacks a `subscription_overrides` table or quantity deviation array,
+    // we block the action until the delivery is actually materialized into the `manifest_drops` table.
+    if (!item.is_manifest || !item.id) {
+      toast.info("Quantity can only be adjusted after the delivery schedule is locked in (typically 24-48 hours before delivery). To skip the delivery entirely, use the delete icon.");
+      return;
+    }
+
     setActionLoading(true);
     try {
-      const { error } = await (supabase as any).from('subscriptions').update({ quantity: newQuantity }).eq('id', item.subscription_id);
+      // Manifested Days: Target the materialized drop, leaving the master subscription untouched.
+      const { error } = await (supabase as any)
+        .from('manifest_drops')
+        .update({ quantity: newQuantity })
+        .eq('id', item.id);
+        
       if (error) throw error;
-      toast.success("Quantity updated successfully.");
+      
+      toast.success("Delivery quantity updated successfully.");
       await fetchDynamicLedger(userId);
     } catch (e: any) {
       toast.error(e.message);

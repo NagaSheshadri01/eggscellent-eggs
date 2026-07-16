@@ -10,6 +10,18 @@ import { useAuth } from "@/context/AuthContext";
 import Seo from "@/components/Seo";
 import { Loader2, Phone } from "lucide-react";
 
+
+const extractErrorMsg = async (error: any, data: any, defaultMsg: string) => {
+  if (data?.error) return data.error;
+  if (!error) return defaultMsg;
+  if (error.context && typeof error.context.json === 'function') {
+    try {
+      const errData = await error.context.json();
+      if (errData?.error) return errData.error;
+    } catch (e) {}
+  }
+  return error.message || defaultMsg;
+};
 // Normalize input to E.164. Adds +91 default for 10-digit Indian mobiles.
 const toE164 = (raw: string): string | null => {
   const cleaned = raw.replace(/[^\d+]/g, "");
@@ -55,7 +67,7 @@ const Auth = () => {
     });
     setBusy(false);
     if (error || !data?.ok) {
-      toast.error((error?.message) || (data?.error) || "Could not send OTP");
+      toast.error(await extractErrorMsg(error, data, "Could not send OTP"));
       return;
     }
     setOtpStage("code");
@@ -70,7 +82,7 @@ const Auth = () => {
       body: { action: "verify-otp", phone: normalized, code: otp },
     });
     if (error || !data?.ok || !data.access_token) {
-      toast.error((error?.message) || (data?.error) || "Invalid or expired OTP");
+      toast.error(await extractErrorMsg(error, data, "Invalid or expired OTP"));
       setBusy(false);
       return;
     }

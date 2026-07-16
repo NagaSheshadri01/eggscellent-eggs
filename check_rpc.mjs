@@ -6,12 +6,13 @@ const pool = new Pool({
 });
 
 async function run() {
-  const res = await pool.query(`
-    SELECT prosrc
-    FROM pg_proc
-    WHERE proname = 'deduct_wallet';
-  `);
-  console.log(res.rows[0]?.prosrc);
-  pool.end();
+  try {
+    const res = await pool.query("SELECT routine_name FROM information_schema.routines WHERE routine_type='FUNCTION' AND routine_schema='public'");
+    console.log(res.rows.map(x=>x.routine_name).join(", "));
+  } catch (error) {
+    console.error("ERROR:", error.message);
+  } finally {
+    pool.end();
+  }
 }
 run();

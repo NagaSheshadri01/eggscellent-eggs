@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import fs from 'fs';
+
+const newCode = `import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -56,7 +58,7 @@ export const AdminLogistics = () => {
     const year = t.getFullYear();
     const month = String(t.getMonth() + 1).padStart(2, '0');
     const day = String(t.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return \`\${year}-\${month}-\${day}\`;
   };
 
   const tomorrowStr = getTomorrowString();
@@ -66,12 +68,12 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("one_time_orders")
-        .select(`
+        .select(\`
           *,
           profiles:user_id (id, full_name, phone, email),
           one_time_order_items (*, products (name)),
           addresses:delivery_address_id (*)
-        `)
+        \`)
         .in("status", ["pending", "confirmed", "out_for_delivery"]);
       if (error) throw error;
       return data || [];
@@ -83,7 +85,7 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("manifests")
-        .select(`
+        .select(\`
           id, delivery_date, status, driver_id,
           manifest_drops (
             id, product_slug, quantity, status, user_id, escrow_amount,
@@ -91,7 +93,7 @@ export const AdminLogistics = () => {
             profiles:user_id (full_name, phone),
             products (name)
           )
-        `)
+        \`)
         .eq("delivery_date", tomorrowStr);
       if (error) throw error;
       return data || [];
@@ -103,7 +105,7 @@ export const AdminLogistics = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("delivery_partners")
-        .select("id, user_id, full_name")
+        .select("id, full_name")
         .eq("active", true);
       if (error) throw error;
       return data || [];
@@ -151,7 +153,7 @@ export const AdminLogistics = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-logistics-live-dispatch"] });
     },
     onError: (err) => {
-      toast.error(`Failed to assign driver: ${err.message}`);
+      toast.error(\`Failed to assign driver: \${err.message}\`);
     }
   });
 
@@ -171,7 +173,7 @@ export const AdminLogistics = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-logistics-morning-manifests"] });
     },
     onError: (err) => {
-      toast.error(`Failed to assign driver: ${err.message}`);
+      toast.error(\`Failed to assign driver: \${err.message}\`);
     }
   });
 
@@ -372,7 +374,7 @@ export const AdminLogistics = () => {
                                           {order.addresses?.address_line_1 || 'No Address Provided'}
                                         </div>
                                         <a
-                                          href={`https://www.google.com/maps?q=${order.addresses?.latitude},${order.addresses?.longitude}`}
+                                          href={\`https://www.google.com/maps?q=\${order.addresses?.latitude},\${order.addresses?.longitude}\`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all text-xs font-bold"
@@ -553,7 +555,7 @@ export const AdminLogistics = () => {
                                           {drop.addresses?.address_line_1 || 'No Address Provided'}
                                         </div>
                                         <a
-                                          href={`https://www.google.com/maps?q=${drop.addresses?.latitude},${drop.addresses?.longitude}`}
+                                          href={\`https://www.google.com/maps?q=\${drop.addresses?.latitude},\${drop.addresses?.longitude}\`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 hover:scale-105 transition-all text-xs font-bold"
@@ -602,7 +604,7 @@ export const AdminLogistics = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {driversQ.data?.map(driver => (
-                    <SelectItem key={driver.id} value={driver.user_id}>
+                    <SelectItem key={driver.id} value={driver.id}>
                       Driver: {driver.full_name}
                     </SelectItem>
                   ))}
@@ -628,3 +630,7 @@ export const AdminLogistics = () => {
 };
 
 export default AdminLogistics;
+`;
+
+fs.writeFileSync('src/pages/admin/AdminLogistics.tsx', newCode, 'utf-8');
+console.log("SUCCESS");
