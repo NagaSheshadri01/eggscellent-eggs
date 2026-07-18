@@ -185,28 +185,67 @@ const HorizontalCalendarLedger = () => {
   };
 
   const handleUpdateQuantity = async (item: any, newQuantity: number) => {
-    // Prevent invalid quantities
-    if (newQuantity < 1) return;
-
-    // Un-manifested Days: 
-    // Because the schema lacks a `subscription_overrides` table or quantity deviation array,
-    // we block the action until the delivery is actually materialized into the `manifest_drops` table.
-    if (!item.is_manifest || !item.id) {
-      toast.info("Quantity can only be adjusted after the delivery schedule is locked in (typically 24-48 hours before delivery). To skip the delivery entirely, use the delete icon.");
+    // If it's a locked manifest drop, update the manifest_drops table
+    if (item.is_manifest) {
+      if (!item.id || newQuantity < 1) return;
+      setActionLoading(true);
+      try {
+        const { error } = await (supabase as any)
+          .from('manifest_drops')
+          .update({ quantity: newQuantity })
+          .eq('id', item.id);
+          
+        if (error) throw error;
+        toast.success("Delivery quantity updated successfully.");
+        await fetchDynamicLedger(userId);
+      } catch (e: any) {
+        toast.error(e.message);
+      } finally {
+        setActionLoading(false);
+      }
       return;
     }
 
+    // Un-manifested Days
+    if (!item.subscription_id || !item.delivery_date) return;
     setActionLoading(true);
     try {
-      // Manifested Days: Target the materialized drop, leaving the master subscription untouched.
-      const { error } = await (supabase as any)
-        .from('manifest_drops')
-        .update({ quantity: newQuantity })
-        .eq('id', item.id);
+      if (newQuantity === 0) {
+        // Skip action
+        const { data: subData, error: subError } = await (supabase as any)
+          .from('subscriptions')
+          .select('paused_dates')
+          .eq('id', item.subscription_id)
+          .single();
+          
+        if (subError) throw subError;
         
-      if (error) throw error;
-      
-      toast.success("Delivery quantity updated successfully.");
+        let currentPaused = Array.isArray(subData.paused_dates) ? subData.paused_dates : [];
+        if (!currentPaused.includes(item.delivery_date)) {
+          currentPaused.push(item.delivery_date);
+          const { error: updateError } = await (supabase as any)
+            .from('subscriptions')
+            .update({ paused_dates: currentPaused })
+            .eq('id', item.subscription_id);
+          if (updateError) throw updateError;
+        }
+        toast.success("Delivery skipped for this day.");
+      } else {
+        // Override action
+        const { error: upsertError } = await (supabase as any)
+          .from('subscription_overrides')
+          .upsert(
+            { 
+              subscription_id: item.subscription_id, 
+              target_date: item.delivery_date, 
+              new_quantity: newQuantity 
+            },
+            { onConflict: 'subscription_id, target_date' }
+          );
+          
+        if (upsertError) throw upsertError;
+        toast.success(`Quantity for ${item.delivery_date} updated to ${newQuantity}.`);
+      }
       await fetchDynamicLedger(userId);
     } catch (e: any) {
       toast.error(e.message);

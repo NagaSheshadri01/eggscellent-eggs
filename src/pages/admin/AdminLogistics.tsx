@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Package, Truck, Calendar, RefreshCw, AlertCircle, MapPin, Box } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { executeGodModeOverride } from "@/lib/subscriptionUtils";
 import { toast } from "sonner";
 import {
   Accordion,
@@ -32,6 +34,33 @@ export const AdminLogistics = () => {
   const [activeTab, setActiveTab] = useState("live-dispatch");
   const [selectedDrops, setSelectedDrops] = useState<string[]>([]);
   const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  const [updatingDropId, setUpdatingDropId] = useState<string | null>(null);
+  const [editQuantities, setEditQuantities] = useState<Record<string, string>>({});
+
+  const handleGodModeOverride = async (drop: any, operation: 'UPDATE_QUANTITY' | 'REMOVE', qty: number) => {
+    if (operation === 'REMOVE') {
+      const confirmed = window.confirm("Are you sure you want to FORCE SKIP this delivery? This will bypass all normal validations.");
+      if (!confirmed) return;
+    }
+    
+    setUpdatingDropId(drop.id);
+    try {
+      await executeGodModeOverride(supabase, {
+        userId: drop.user_id,
+        subscriptionId: drop.subscription_id,
+        overrideDate: tomorrowStr,
+        productId: drop.products?.id || drop.product_slug, 
+        operation,
+        quantity: qty,
+      });
+      toast.success(`God Mode ${operation} successful!`);
+      queryClient.invalidateQueries({ queryKey: ["admin-logistics-morning-manifests"] });
+    } catch (err: any) {
+      toast.error(`God Mode failed: ${err.message}`);
+    } finally {
+      setUpdatingDropId(null);
+    }
+  };
   const queryClient = useQueryClient();
 
   const handleSelectAll = (ids: string[], isChecked: boolean) => {
@@ -86,10 +115,10 @@ export const AdminLogistics = () => {
         .select(`
           id, delivery_date, status, driver_id,
           manifest_drops (
-            id, product_slug, quantity, status, user_id, escrow_amount,
+            id, subscription_id, product_slug, quantity, status, user_id, escrow_amount,
             addresses:address_id (pincode, latitude, longitude, address_line_1, city),
             profiles:user_id (full_name, phone),
-            products (name)
+            products (id, name)
           )
         `)
         .eq("delivery_date", tomorrowStr);
@@ -520,32 +549,70 @@ export const AdminLogistics = () => {
                                             <Box className="w-3 h-3" /> BOX ID: {drop.id.slice(0, 8)}
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                          <div className="text-sm font-medium flex gap-2 items-center">
-                                            <span>{drop.quantity}x</span>
-                                            <span>{drop.products?.name || drop.product_slug}</span>
+                                        <div className="flex flex-col gap-3">
+                                          <div className="flex items-center gap-4">
+                                            <div className="text-sm font-medium flex gap-2 items-center">
+                                              <span>{drop.quantity}x</span>
+                                              <span>{drop.products?.name || drop.product_slug}</span>
+                                            </div>
+                                            {drop.status === 'out_of_stock' ? (
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="bg-white border-dashed border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700 h-8"
+                                                onClick={() => toggleStockMutation.mutate({ dropId: drop.id, isOutOfStock: false })}
+                                                disabled={toggleStockMutation.isPending}
+                                              >
+                                                <RefreshCw className="w-3 h-3 mr-1" /> Restore Stock
+                                              </Button>
+                                            ) : (
+                                              <Button
+                                                size="sm"
+                                                variant="destructive"
+                                                className="shadow-sm hover:shadow-md transition-shadow h-8"
+                                                onClick={() => toggleStockMutation.mutate({ dropId: drop.id, isOutOfStock: true })}
+                                                disabled={toggleStockMutation.isPending}
+                                              >
+                                                <AlertCircle className="w-3 h-3 mr-1" /> Mark Out of Stock
+                                              </Button>
+                                            )}
                                           </div>
-                                          {drop.status === 'out_of_stock' ? (
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              className="bg-white border-dashed border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700 h-8"
-                                              onClick={() => toggleStockMutation.mutate({ dropId: drop.id, isOutOfStock: false })}
-                                              disabled={toggleStockMutation.isPending}
+                                          
+                                          {/* Admin God Mode Controls */}
+                                          <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-100 rounded-lg w-fit">
+                                            <span className="text-[10px] font-bold text-red-700 uppercase mr-2 flex items-center gap-1">
+                                              <AlertCircle className="w-3 h-3" /> God Mode
+                                            </span>
+                                            <Input 
+                                              type="number" 
+                                              min="1"
+                                              className="w-16 h-7 text-xs px-2"
+                                              placeholder={String(drop.quantity)}
+                                              value={editQuantities[drop.id] !== undefined ? editQuantities[drop.id] : String(drop.quantity)}
+                                              onChange={(e) => setEditQuantities(prev => ({ ...prev, [drop.id]: e.target.value }))}
+                                              disabled={updatingDropId === drop.id}
+                                            />
+                                            <Button 
+                                              size="sm" 
+                                              className="h-7 text-xs px-3 bg-red-600 hover:bg-red-700 text-white"
+                                              onClick={() => {
+                                                const val = parseInt(editQuantities[drop.id] || String(drop.quantity));
+                                                if (val > 0) handleGodModeOverride(drop, 'UPDATE_QUANTITY', val);
+                                              }}
+                                              disabled={updatingDropId === drop.id}
                                             >
-                                              <RefreshCw className="w-3 h-3 mr-1" /> Restore Stock
+                                              {updatingDropId === drop.id ? '...' : 'Save Qty'}
                                             </Button>
-                                          ) : (
-                                            <Button
-                                              size="sm"
+                                            <Button 
+                                              size="sm" 
                                               variant="destructive"
-                                              className="shadow-sm hover:shadow-md transition-shadow h-8"
-                                              onClick={() => toggleStockMutation.mutate({ dropId: drop.id, isOutOfStock: true })}
-                                              disabled={toggleStockMutation.isPending}
+                                              className="h-7 text-xs px-3 ml-2"
+                                              onClick={() => handleGodModeOverride(drop, 'REMOVE', 0)}
+                                              disabled={updatingDropId === drop.id}
                                             >
-                                              <AlertCircle className="w-3 h-3 mr-1" /> Mark Out of Stock
+                                              Force Skip
                                             </Button>
-                                          )}
+                                          </div>
                                         </div>
                                       </TableCell>
                                       <TableCell>
