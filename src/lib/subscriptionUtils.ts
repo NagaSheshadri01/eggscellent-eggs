@@ -103,15 +103,7 @@ export async function executeUserAddon(
     throw new Error('Insufficient Funds');
   }
 
-  // Proceed with deduction and insertion
-  const { error: deductErr } = await (supabase as any).rpc('deduct_wallet', {
-    uid: params.userId,
-    amount: totalCost
-  });
-
-  if (deductErr) {
-    throw new Error(`Failed to deduct wallet: ${deductErr.message}`);
-  }
+  // Authorization only - actual deduction deferred to delivery phase
 
   const { error: insertErr } = await (supabase as any).from('subscription_calendar_overrides').insert({
     user_id: params.userId,
