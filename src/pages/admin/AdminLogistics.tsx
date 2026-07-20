@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Package, Truck, Calendar, RefreshCw, AlertCircle, MapPin, Box } from "lucide-react";
+import { Package, Truck, Calendar, RefreshCw, AlertCircle, MapPin, Box, ClipboardList } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { executeGodModeOverride } from "@/lib/subscriptionUtils";
@@ -130,7 +130,7 @@ export const AdminLogistics = () => {
   const driversQ = useQuery({
     queryKey: ["admin-logistics-drivers"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("delivery_partners")
         .select("id, user_id, full_name")
         .eq("active", true);
@@ -139,9 +139,20 @@ export const AdminLogistics = () => {
     }
   });
 
+  const procurementTotalsQ = useQuery({
+    queryKey: ["admin-logistics-procurement-totals", tomorrowStr],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_procurement_totals", {
+        p_date: tomorrowStr
+      });
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
   const toggleStockMutation = useMutation({
     mutationFn: async ({ dropId, isOutOfStock }: { dropId: string; isOutOfStock: boolean }) => {
-      const { error } = await supabase.rpc("toggle_drop_stock_status", {
+      const { error } = await (supabase as any).rpc("toggle_drop_stock_status", {
         p_drop_id: dropId,
         p_is_out_of_stock: isOutOfStock
       });
@@ -154,7 +165,7 @@ export const AdminLogistics = () => {
 
   const toggleRetailStockMutation = useMutation({
     mutationFn: async ({ itemId, isOutOfStock }: { itemId: string; isOutOfStock: boolean }) => {
-      const { error } = await supabase.rpc("toggle_retail_stock_status", {
+      const { error } = await (supabase as any).rpc("toggle_retail_stock_status", {
         p_item_id: itemId,
         p_is_out_of_stock: isOutOfStock
       });
@@ -167,7 +178,7 @@ export const AdminLogistics = () => {
 
   const assignRetailDriverMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc("assign_retail_driver", {
+      const { error } = await (supabase as any).rpc("assign_retail_driver", {
         p_driver_id: selectedDriverId,
         p_order_ids: selectedDrops
       });
@@ -186,7 +197,7 @@ export const AdminLogistics = () => {
 
   const assignManifestDriverMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc("assign_manifest_driver", {
+      const { error } = await (supabase as any).rpc("assign_manifest_driver", {
         p_driver_id: selectedDriverId,
         p_drop_ids: selectedDrops,
         p_date: tomorrowStr
@@ -271,6 +282,9 @@ export const AdminLogistics = () => {
           </TabsTrigger>
           <TabsTrigger value="morning-manifests" className="flex items-center gap-2">
             <Truck className="w-4 h-4" /> Morning Manifests (Subscriptions)
+          </TabsTrigger>
+          <TabsTrigger value="procurement-totals" className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" /> Procurement Totals
           </TabsTrigger>
         </TabsList>
 
@@ -648,6 +662,49 @@ export const AdminLogistics = () => {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="procurement-totals" className="space-y-6">
+          <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-border bg-secondary/20">
+              <h2 className="text-xl font-bold font-display text-brown flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-primary" />
+                Master Prep Sheet for {tomorrowStr}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">Aggregated totals including active base subscriptions and all daily overrides.</p>
+            </div>
+            
+            {procurementTotalsQ.isLoading ? (
+              <div className="p-12 text-center text-muted-foreground animate-pulse">Calculating master totals...</div>
+            ) : procurementTotalsQ.error ? (
+              <div className="p-12 text-center text-destructive">Failed to load procurement totals: {(procurementTotalsQ.error as any).message}</div>
+            ) : !procurementTotalsQ.data?.length ? (
+              <div className="p-12 text-center text-muted-foreground">No items required for tomorrow's dispatch.</div>
+            ) : (
+              <Table>
+                <TableHeader className="bg-secondary/40">
+                  <TableRow>
+                    <TableHead className="w-[60%] font-bold">Product Name</TableHead>
+                    <TableHead className="text-right font-bold">Master Quantity Required</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {procurementTotalsQ.data.map((item: any) => (
+                    <TableRow key={item.product_id} className="hover:bg-secondary/20 transition-colors">
+                      <TableCell className="font-medium text-base">
+                        {item.product_name}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="inline-flex items-center justify-center bg-primary/10 text-primary font-bold text-lg px-4 py-1.5 rounded-full min-w-[3rem]">
+                          {item.master_quantity_required}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Driver Assignment Action Bar */}
@@ -668,7 +725,7 @@ export const AdminLogistics = () => {
                   <SelectValue placeholder="Select Delivery Partner..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {driversQ.data?.map(driver => (
+                  {driversQ.data?.map((driver: any) => (
                     <SelectItem key={driver.id} value={driver.user_id}>
                       Driver: {driver.full_name}
                     </SelectItem>

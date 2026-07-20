@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ProductImageModal from "./ProductImageModal";
 import { useWallet } from "@/hooks/useWallet";
+import { executeUserAddon } from "@/lib/subscriptionUtils";
 import {
   FREQUENCY_META,
   type SubFrequency,
@@ -151,6 +152,45 @@ const UnifiedProductCard = ({ product, index }: Props) => {
 
   const [selectedAltOption, setSelectedAltOption] = useState<'A' | 'B'>('A');
   const [selectedWeeklyDay, setSelectedWeeklyDay] = useState<number>(1); // Default to Monday [1]
+  const [isAdding, setIsAdding] = useState(false);
+
+  const handleAddForTomorrow = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (!user) {
+      toast.error("Please sign in to add for tomorrow.");
+      nav("/auth");
+      return;
+    }
+
+    setIsAdding(true);
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+      
+      await executeUserAddon(supabase, {
+        userId: user.id,
+        overrideDate: tomorrowStr,
+        productId: product.id,
+        quantity: 1,
+      });
+      
+      toast.success("Added to tomorrow's delivery!");
+    } catch (err: any) {
+      if (err.message.includes("Insufficient Funds")) {
+        toast.error("Insufficient Funds for Add-on.");
+        nav("/account/wallet");
+      } else if (err.message.includes("Time Lock")) {
+        toast.error(err.message);
+      } else {
+        toast.error(`Failed to add: ${err.message}`);
+      }
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   const executeSubscriptionTemplate = async (selectedDaysArray: number[]) => {
     // Add to cart instead of direct DB insert
@@ -462,15 +502,26 @@ const UnifiedProductCard = ({ product, index }: Props) => {
               ⚙️ Manage Current Ongoing Plan
             </Button>
           ) : (
-            <Button
-              size="sm" variant="hero"
-              className="h-11 rounded-full px-5"
-              onClick={subscribe}
-              disabled={busy || isSoldOut}
-            >
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (!isSoldOut && <Sparkles className="w-4 h-4" />)}
-              {busy ? "…" : (isSoldOut ? "Out of Stock" : "Subscribe")}
-            </Button>
+            <div className="flex flex-col gap-2 shrink-0">
+              <Button
+                size="sm" variant="hero"
+                className="h-9 rounded-full px-5 w-full"
+                onClick={subscribe}
+                disabled={busy || isSoldOut}
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (!isSoldOut && <Sparkles className="w-4 h-4" />)}
+                {busy ? "…" : (isSoldOut ? "Out of Stock" : "Subscribe")}
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                className="h-9 rounded-full px-5 text-xs font-bold border-primary text-primary hover:bg-primary/10 w-full"
+                onClick={handleAddForTomorrow}
+                disabled={isAdding || isSoldOut}
+              >
+                {isAdding ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+                {isAdding ? "Adding..." : "Add for Tomorrow"}
+              </Button>
+            </div>
           )}
         </div>
       </div>
