@@ -253,7 +253,8 @@ const Account = ({ defaultTab }: AccountProps) => {
                 ) : (
                   <div className="space-y-3.5 max-h-[320px] overflow-y-auto pr-1 no-scrollbar">
                     {transactions.map((tx) => {
-                      const isPositive = tx.amount > 0;
+                      const isPositive = ["recharge", "refund", "compensation"].includes(tx.transaction_type);
+                      const displayAmount = Math.abs(tx.amount);
                       const formattedDate = new Date(tx.created_at).toLocaleDateString("en-IN", {
                         day: "2-digit",
                         month: "short",
@@ -286,7 +287,7 @@ const Account = ({ defaultTab }: AccountProps) => {
                             </div>
                           </div>
                           <div className={`font-mono font-bold text-sm shrink-0 ${isPositive ? "text-emerald-600" : "text-brown"}`}>
-                            {isPositive ? "+" : ""}₹{tx.amount.toFixed(2)}
+                            {isPositive ? "+" : "-"}₹{displayAmount.toFixed(2)}
                           </div>
                         </div>
                       );

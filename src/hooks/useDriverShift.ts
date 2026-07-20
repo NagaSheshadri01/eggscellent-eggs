@@ -7,13 +7,19 @@ export const useDriverShift = (partnerId?: string, todayStr?: string) => {
 
   const updateStopStatus = useMutation({
     mutationFn: async ({ stopId, type, status }: { stopId: string; type: 'instant' | 'subscription'; status: "delivered" | "skipped" | "failed" }) => {
-      const table = type === 'instant' ? 'one_time_orders' : 'manifest_drops';
-      const { error } = await supabase
-        .from(table)
-        .update({ status })
-        .eq("id", stopId);
-
-      if (error) throw error;
+      if (type === 'subscription') {
+        const { error } = await (supabase as any).rpc('partner_update_drop_status', {
+          p_drop_id: stopId,
+          p_new_status: status
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('one_time_orders')
+          .update({ status })
+          .eq("id", stopId);
+        if (error) throw error;
+      }
       return { stopId, type, status };
     },
     onSuccess: (data) => {
